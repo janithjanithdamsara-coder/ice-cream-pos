@@ -189,8 +189,39 @@ function initDatabaseTables($pdo) {
         `value` TEXT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+    // Auto-migrate schema columns for pure inventory
+    migrateSchema($pdo);
+
     // Ensure Super Admin & Default Branch exist
     ensureBaseAccounts($pdo);
+}
+
+function migrateSchema($pdo) {
+    try {
+        // 1. Ensure total_delivered_qty exists in lorry_dispatches
+        $cols = $pdo->query("SHOW COLUMNS FROM `lorry_dispatches` LIKE 'total_delivered_qty'")->fetchAll();
+        if (empty($cols)) {
+            $hasOld = $pdo->query("SHOW COLUMNS FROM `lorry_dispatches` LIKE 'total_sold_qty'")->fetchAll();
+            if (!empty($hasOld)) {
+                $pdo->exec("ALTER TABLE `lorry_dispatches` CHANGE `total_sold_qty` `total_delivered_qty` INT DEFAULT 0");
+            } else {
+                $pdo->exec("ALTER TABLE `lorry_dispatches` ADD COLUMN `total_delivered_qty` INT DEFAULT 0 AFTER `total_loaded_qty`");
+            }
+        }
+
+        // 2. Ensure delivered_qty exists in lorry_dispatch_items
+        $colsItem = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'delivered_qty'")->fetchAll();
+        if (empty($colsItem)) {
+            $hasOldItem = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'sold_qty'")->fetchAll();
+            if (!empty($hasOldItem)) {
+                $pdo->exec("ALTER TABLE `lorry_dispatch_items` CHANGE `sold_qty` `delivered_qty` INT NOT NULL DEFAULT 0");
+            } else {
+                $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `delivered_qty` INT NOT NULL DEFAULT 0 AFTER `damage_qty`");
+            }
+        }
+    } catch (Exception $e) {
+        // Non-blocking fallback
+    }
 }
 
 function ensureBaseAccounts($pdo) {
