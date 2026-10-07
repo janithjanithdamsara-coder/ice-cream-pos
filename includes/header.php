@@ -100,28 +100,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 </button>
             </div>
 
-            <!-- Active Branch Indicator -->
+            <!-- Active Warehouse Hub -->
             <div class="p-3.5 border-b border-slate-800/60 bg-slate-950/20">
-                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
-                    <span class="flex items-center">
-                        <i class="fa-solid fa-warehouse text-cyan-400 mr-1.5"></i> Active Warehouse
-                    </span>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center">
+                    <i class="fa-solid fa-snowflake text-cyan-400 mr-1.5"></i> Warehouse Hub
                 </div>
-
-                <?php if ($user['role'] === 'super_admin' && count($allBranches) > 1): ?>
-                    <select onchange="window.location.href='?switch_branch=' + this.value" 
-                            class="w-full bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer">
-                        <?php foreach ($allBranches as $b): ?>
-                            <option value="<?= $b['id'] ?>" <?= $b['id'] == $user['branch_id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($b['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                <?php else: ?>
-                    <div class="text-xs font-bold text-slate-200 bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700/60 truncate">
-                        <?= htmlspecialchars($user['branch_name']) ?>
-                    </div>
-                <?php endif; ?>
+                <div class="text-xs font-bold text-slate-200 bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700/60 truncate flex items-center justify-between">
+                    <span class="truncate"><?= htmlspecialchars($user['branch_name'] ?? 'Main Cold Room Hub') ?></span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1.5 shrink-0" title="Operational"></span>
+                </div>
             </div>
 
             <!-- Navigation Links Scroll Area -->
@@ -146,6 +133,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <!-- Group 2: Distribution & Outflow -->
                 <div>
                     <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dispatches & Returns</div>
+                    <div class="space-y-1">
                         <a href="pos.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
                             <div class="flex items-center">
                                 <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
@@ -185,11 +173,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div>
                     <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">System Admin</div>
                     <div class="space-y-1">
-                        <a href="branches.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'branches.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-building-flag w-5 text-sm"></i>
-                            <span class="ml-2.5">Branches Management</span>
-                        </a>
-
                         <a href="users.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'users.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-users w-5 text-sm"></i>
                             <span class="ml-2.5">User Accounts</span>
@@ -198,6 +181,24 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <a href="settings.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'settings.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-gear w-5 text-sm"></i>
                             <span class="ml-2.5">Settings & Clear All</span>
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- Group 5: Master Developer Portal (Master Role Only) -->
+                <?php if ($user['role'] === 'master'): ?>
+                <div class="pt-3 border-t border-slate-800/80">
+                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center">
+                        <i class="fa-solid fa-crown mr-1.5"></i> Master Portal (Developer)
+                    </div>
+                    <div class="space-y-1">
+                        <a href="master.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all <?= $currentPage === 'master.php' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg' : 'text-amber-300 hover:text-white hover:bg-slate-800/80' ?>">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-shield-halved w-5 text-sm text-amber-400"></i>
+                                <span class="ml-2.5">Master Control & Logs</span>
+                            </div>
+                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase bg-amber-500/20 text-amber-300">Root</span>
                         </a>
                     </div>
                 </div>

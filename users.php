@@ -34,12 +34,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all users with branch info
-$stmt = $pdo->query("SELECT u.*, b.name as branch_name, b.code as branch_code 
+// Fetch all users with branch info (Hide Master from non-master accounts)
+$isMasterUser = isMaster();
+$sqlUsers = "SELECT u.*, b.name as branch_name, b.code as branch_code 
     FROM users u 
-    LEFT JOIN branches b ON u.branch_id = b.id 
-    ORDER BY u.id ASC");
-$users = $stmt->fetchAll();
+    LEFT JOIN branches b ON u.branch_id = b.id ";
+if (!$isMasterUser) {
+    $sqlUsers .= " WHERE u.role != 'master' ";
+}
+$sqlUsers .= " ORDER BY u.id ASC";
+$users = $pdo->query($sqlUsers)->fetchAll();
 
 // Fetch branches for modal
 $branches = $pdo->query("SELECT id, name, code FROM branches ORDER BY id ASC")->fetchAll();

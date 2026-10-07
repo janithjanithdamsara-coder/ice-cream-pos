@@ -36,7 +36,22 @@ function requireLogin() {
 function hasRole($roles) {
     if (!isLoggedIn()) return false;
     if (is_string($roles)) $roles = [$roles];
-    return in_array($_SESSION['user_role'] ?? '', $roles);
+    $currentRole = $_SESSION['user_role'] ?? '';
+    // Master role has access to all admin and super_admin operations
+    if ($currentRole === 'master') return true;
+    return in_array($currentRole, $roles);
+}
+
+function isMaster() {
+    return isLoggedIn() && (($_SESSION['user_role'] ?? '') === 'master');
+}
+
+function requireMaster() {
+    requireLogin();
+    if (!isMaster()) {
+        header("Location: dashboard.php?error=master_required");
+        exit;
+    }
 }
 
 function requireRole($roles) {

@@ -40,12 +40,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Mark system as initialized so auto-seed does not re-insert items automatically
             $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('initial_seed_done', 'yes') ON DUPLICATE KEY UPDATE `value` = 'yes'");
 
-            // Retain Super Admin account so user doesn't get locked out
-            $pdo->exec("DELETE FROM `users` WHERE `role` != 'super_admin'");
+            // Retain Master and Super Admin accounts so neither gets locked out
+            $pdo->exec("DELETE FROM `users` WHERE `role` NOT IN ('master', 'super_admin')");
+
+            // Ensure Master Account exists
+            $masterCount = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'master'")->fetchColumn();
+            if ($masterCount == 0) {
+                $masterPass = password_hash('master123', PASSWORD_DEFAULT);
+                $pdo->exec("INSERT INTO `users` (`id`, `branch_id`, `name`, `username`, `password`, `role`, `phone`) VALUES
+                    (99, 1, 'Master System Controller', 'master', '$masterPass', 'master', '077-9999999')");
+            }
+
+            // Ensure Super Admin Account exists
             $adminCount = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'super_admin'")->fetchColumn();
             if ($adminCount == 0) {
                 $passHash = password_hash('admin123', PASSWORD_DEFAULT);
-                $pdo->exec("INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`) VALUES (1, 'Inventory Administrator', 'admin', '$passHash', 'super_admin')");
+                $pdo->exec("INSERT INTO `users` (`id`, `branch_id`, `name`, `username`, `password`, `role`, `phone`) VALUES
+                    (1, 1, 'Business Owner (Super Admin)', 'admin', '$passHash', 'super_admin', '077-1234567')");
             }
 
             // Ensure Main Branch exists
@@ -57,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
             $pdo->commit();
 
+            logActivity('wipe_system', 'system', 'System wiped clean: all products, dispatches, stock cleared');
             setFlash('success', 'SUCCESS: System completely cleared! All items (0 products), stock (0 units), dispatches, GRN, and lorries have been deleted.');
         } catch (Exception $e) {
             $pdo->rollBack();

@@ -27,11 +27,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_role'] = $user['role'];
             $_SESSION['user_branch_id'] = $user['branch_id'] ?? 1;
             $_SESSION['active_branch_id'] = $user['branch_id'] ?? 1;
-            $_SESSION['active_branch_name'] = $user['branch_name'] ?? 'Main Warehouse';
+            $_SESSION['active_branch_name'] = $user['branch_name'] ?? 'Main Cold Room Hub';
 
-            header("Location: dashboard.php");
+            logActivity('login_success', 'auth', "User '{$user['username']}' ({$user['role']}) signed in successfully", $user['id']);
+
+            if ($user['role'] === 'master') {
+                header("Location: master.php");
+            } else {
+                header("Location: dashboard.php");
+            }
             exit;
         } else {
+            logActivity('login_failed', 'auth', "Failed sign in attempt for username: '{$username}'");
             $error = "Invalid username or password. Please try again.";
         }
     }
@@ -124,18 +131,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
                     Quick Demo Logins (Tap to fill)
                 </div>
-                <div class="grid grid-cols-3 gap-2">
+                <div class="grid grid-cols-2 gap-2.5">
                     <button type="button" onclick="setDemo('admin', 'admin123')" class="p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-center transition-all border border-purple-100 active:scale-95">
-                        <div class="text-xs font-extrabold">Admin</div>
-                        <div class="text-[10px] text-purple-500 font-mono">admin</div>
+                        <div class="text-xs font-black">Super Admin</div>
+                        <div class="text-[10px] text-purple-500 font-mono">admin &bull; admin123</div>
                     </button>
-                    <button type="button" onclick="setDemo('branch_admin', 'admin123')" class="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-center transition-all border border-blue-100 active:scale-95">
-                        <div class="text-xs font-extrabold">Branch</div>
-                        <div class="text-[10px] text-blue-500 font-mono">manager</div>
-                    </button>
-                    <button type="button" onclick="setDemo('cashier', 'cashier123')" class="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-center transition-all border border-emerald-100 active:scale-95">
-                        <div class="text-xs font-extrabold">Cashier</div>
-                        <div class="text-[10px] text-emerald-500 font-mono">cashier</div>
+                    <button type="button" onclick="setDemo('master', 'master123')" class="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-center transition-all border border-amber-200 active:scale-95">
+                        <div class="text-xs font-black flex items-center justify-center">
+                            <i class="fa-solid fa-crown text-[10px] mr-1 text-amber-600"></i> Master
+                        </div>
+                        <div class="text-[10px] text-amber-600 font-mono">master &bull; master123</div>
                     </button>
                 </div>
             </div>

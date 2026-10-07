@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
+                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$totalItems} units into Cold Room from '{$supplier}'");
                 setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$totalItems} units added to Cold Room warehouse.");
                 header("Location: stock.php");
                 exit;
@@ -92,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ON DUPLICATE KEY UPDATE quantity = GREATEST(0, quantity + VALUES(quantity))");
             $stmt->execute([$branchId, $prodId, $delta]);
 
+            logActivity('stock_adjust', 'stock', "Stock adjusted for product #{$prodId}: {$type} {$adjustQty} units (Reason: {$reason})");
             setFlash('success', "Warehouse stock adjusted successfully.");
             header("Location: stock.php");
             exit;

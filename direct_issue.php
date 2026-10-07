@@ -81,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
+                logActivity('direct_issue', 'store_out', "Goods Issue Note #{$issueNo}: {$totalUnits} units issued to '{$recipient}'");
                 setFlash('success', "Goods Issue Note #{$issueNo} created successfully! {$totalUnits} units issued out of Cold Room.");
                 header("Location: direct_issue.php?view_id=" . $dispatchId);
                 exit;

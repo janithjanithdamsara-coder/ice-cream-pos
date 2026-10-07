@@ -83,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
+            logActivity('pos_issue', 'pos', "Issued {$totalUnits} units on Slip #{$issueNo} to '{$recipient}'");
             setFlash('success', "Slip #{$issueNo} issued! {$totalUnits} units deducted from Cold Room.");
             header("Location: pos.php?print_id=" . $dispatchId);
             exit;

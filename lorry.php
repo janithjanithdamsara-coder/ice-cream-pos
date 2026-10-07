@@ -86,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE lorries SET status = 'on_route' WHERE id = ?")->execute([$lorryId]);
 
                 $pdo->commit();
+                logActivity('lorry_dispatch', 'lorry', "Morning dispatch #{$dispatchNo}: {$totalLoaded} units loaded from Cold Room onto Lorry");
                 setFlash('success', "Morning Dispatch #{$dispatchNo} created! {$totalLoaded} units loaded from Cold Room onto Lorry.");
                 header("Location: lorry.php");
                 exit;
@@ -186,6 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE lorries SET status = 'available' WHERE id = ?")->execute([$dispatch['lorry_id']]);
 
                 $pdo->commit();
+                logActivity('lorry_settle', 'lorry', "3PM Settlement for Dispatch #{$dispatch['dispatch_no']}: {$totalDelivered} units delivered, {$totalReturnStore} returned, {$totalDamage} damaged");
                 setFlash('success', "3:00 PM Lorry Settlement Completed! {$totalReturnStore} units returned to Cold Room, {$totalDamage} damaged, {$totalDelivered} delivered.");
                 header("Location: lorry.php?view_dispatch=" . $dispatchId);
                 exit;

@@ -48,7 +48,7 @@ function initDatabaseTables($pdo) {
         `name` VARCHAR(100) NOT NULL,
         `username` VARCHAR(50) NOT NULL UNIQUE,
         `password` VARCHAR(255) NOT NULL,
-        `role` ENUM('super_admin', 'admin', 'operator') NOT NULL DEFAULT 'operator',
+        `role` ENUM('master', 'super_admin', 'admin', 'operator') NOT NULL DEFAULT 'operator',
         `phone` VARCHAR(50) NULL,
         `status` ENUM('active', 'inactive') DEFAULT 'active',
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -183,21 +183,40 @@ function initDatabaseTables($pdo) {
         INDEX (`dispatch_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+    // Activity Logs Table (System Audit Trail)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `activity_logs` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `user_id` INT NULL,
+        `user_name` VARCHAR(100) NULL,
+        `user_role` VARCHAR(50) NULL,
+        `action` VARCHAR(50) NOT NULL,
+        `module` VARCHAR(50) NOT NULL,
+        `description` TEXT NOT NULL,
+        `ip_address` VARCHAR(50) NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX (`user_id`),
+        INDEX (`action`),
+        INDEX (`created_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
     // System Settings Table to prevent re-seeding deleted items
     $pdo->exec("CREATE TABLE IF NOT EXISTS `system_settings` (
         `key_name` VARCHAR(50) PRIMARY KEY,
         `value` TEXT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-    // Auto-migrate schema columns for pure inventory
+    // Auto-migrate schema columns for pure inventory & roles
     migrateSchema($pdo);
 
-    // Ensure Super Admin & Default Branch exist
+    // Ensure Master, Super Admin & Default Branch exist
     ensureBaseAccounts($pdo);
 }
 
 function migrateSchema($pdo) {
     try {
+        // Ensure user role enum supports 'master'
+        $pdo->exec("ALTER TABLE `users` MODIFY COLUMN `role` ENUM('master', 'super_admin', 'admin', 'operator') NOT NULL DEFAULT 'operator'");
+
         // 1. Ensure total_delivered_qty exists in lorry_dispatches
         $cols = $pdo->query("SHOW COLUMNS FROM `lorry_dispatches` LIKE 'total_delivered_qty'")->fetchAll();
         if (empty($cols)) {
@@ -232,13 +251,42 @@ function ensureBaseAccounts($pdo) {
             (1, 'Main Cold Room & Distribution Hub', 'HUB-01', 'Distribution Center', '011-2345678');");
     }
 
-    // Check super admin user
+    // Check Master user (System Maintainer / Developer)
+    $stmtMaster = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'master'");
+    if ($stmtMaster->fetchColumn() == 0) {
+        $masterPass = password_hash('master123', PASSWORD_DEFAULT);
+        $pdo->exec("INSERT INTO `users` (`id`, `branch_id`, `name`, `username`, `password`, `role`, `phone`) VALUES
+            (99, 1, 'Master System Controller', 'master', '$masterPass', 'master', '077-9999999');");
+    }
+
+    // Check Super Admin user (Business Owner)
     $stmt = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'super_admin'");
     if ($stmt->fetchColumn() == 0) {
         $passHash = password_hash('admin123', PASSWORD_DEFAULT);
         $pdo->exec("INSERT INTO `users` (`id`, `branch_id`, `name`, `username`, `password`, `role`, `phone`) VALUES
-            (1, 1, 'Inventory Administrator', 'admin', '$passHash', 'super_admin', '077-1234567');");
+            (1, 1, 'Business Owner (Super Admin)', 'admin', '$passHash', 'super_admin', '077-1234567');");
     }
+}
+
+function logActivity($action, $module, $description, $userId = null) {
+    global $pdo;
+    if (!$pdo) return;
+    try {
+        $uName = 'System';
+        $uRole = 'system';
+        $uId = $userId;
+
+        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
+            $uName = $_SESSION['user_name'] ?? 'User';
+            $uRole = $_SESSION['user_role'] ?? 'user';
+            $uId = $_SESSION['user_id'];
+        }
+
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, user_name, user_role, action, module, description, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$uId, $uName, $uRole, $action, $module, $description, $ip]);
+    } catch (Exception $e) {}
 }
 
 // Function to populate sample demo ice creams (Only called if user clicks 'Restore Demo' in Settings)
