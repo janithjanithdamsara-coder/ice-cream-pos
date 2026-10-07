@@ -1,0 +1,15 @@
+# Environment & OS files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+
+# IDE & Editor folders
+.vscode/
+.idea/
+
+# Local cache & cookies
+cookies.txt
+response.html
+test_out.html
