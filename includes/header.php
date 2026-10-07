@@ -38,6 +38,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             }
         }
     </script>
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
         @media print {
@@ -51,9 +53,22 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         @media (max-width: 768px) {
             body { padding-bottom: 65px; }
         }
+        @keyframes toastIn {
+            from { transform: translateY(-16px) scale(0.95); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes toastOut {
+            from { transform: translateY(0) scale(1); opacity: 1; }
+            to { transform: translateY(-12px) scale(0.9); opacity: 0; }
+        }
+        .toast-animate-in { animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-animate-out { animation: toastOut 0.2s ease-out forwards; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- Global Floating Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-[99999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
 
     <!-- Mobile Sidebar Backdrop -->
     <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 hidden md:hidden transition-opacity duration-300"></div>

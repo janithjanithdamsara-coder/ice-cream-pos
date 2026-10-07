@@ -630,7 +630,7 @@ require_once __DIR__ . '/includes/header.php';
         if (rows.length > 1) {
             btn.closest('tr').remove();
         } else {
-            alert('At least one product is required.');
+            showToast('At least one product is required.', 'warning', 'Required Items');
         }
     }
 </script>

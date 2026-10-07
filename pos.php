@@ -475,12 +475,12 @@ function addToCart(productId) {
         if (cart[productId].qty < p.stock) {
             cart[productId].qty++;
         } else {
-            alert(`Maximum available stock in Cold Room reached (${p.stock} units).`);
+            showToast(`Maximum available stock in Cold Room reached (${p.stock} units).`, 'warning', 'Stock Limit Reached');
             return;
         }
     } else {
         if (p.stock <= 0) {
-            alert("This item is currently out of stock.");
+            showToast("This flavor is currently out of stock in Cold Room.", 'error', 'Out of Stock');
             return;
         }
         cart[productId] = {
@@ -503,7 +503,7 @@ function updateQty(productId, delta) {
     if (newQty <= 0) {
         delete cart[productId];
     } else if (newQty > cart[productId].stock) {
-        alert(`Cannot issue more than available stock (${cart[productId].stock} units).`);
+        showToast(`Cannot issue more than available stock (${cart[productId].stock} units).`, 'warning', 'Stock Limit Exceeded');
     } else {
         cart[productId].qty = newQty;
     }
@@ -517,7 +517,7 @@ function setManualQty(productId, inputElem) {
     }
     if (cart[productId]) {
         if (val > cart[productId].stock) {
-            alert(`Stock limit is ${cart[productId].stock} units.`);
+            showToast(`Stock limit in Cold Room is ${cart[productId].stock} units.`, 'warning', 'Stock Limit Reached');
             val = cart[productId].stock;
         }
         cart[productId].qty = val;
@@ -533,6 +533,21 @@ function removeFromCart(productId) {
 function clearCart() {
     cart = {};
     renderCart();
+}
+
+function submitPosCheckout() {
+    const itemKeys = Object.keys(cart);
+    if (itemKeys.length === 0) {
+        showToast("Your cart is empty. Please tap an ice cream to add to slip.", 'warning', 'Cart Empty');
+        return;
+    }
+
+    const recipient = document.getElementById('recipientInput').value.trim() || 'Counter Walk-in Pickup';
+    const cartArray = Object.values(cart).map(it => ({ id: it.id, qty: it.qty }));
+
+    document.getElementById('formRecipientName').value = recipient;
+    document.getElementById('formCartData').value = JSON.stringify(cartArray);
+    document.getElementById('posCheckoutForm').submit();
 }
 
 function renderCart() {
@@ -590,18 +605,6 @@ function renderCart() {
     listContainer.innerHTML = html;
     totalUnitsBadge.innerText = totalUnits.toLocaleString() + ' Units';
     checkoutBtn.innerHTML = `<i class="fa-solid fa-receipt text-sm mr-1.5"></i> Issue Stock & Print Slip (${totalUnits.toLocaleString()} Units)`;
-}
-
-function submitPosCheckout() {
-    const itemKeys = Object.keys(cart);
-    if (itemKeys.length === 0) return;
-
-    const recipient = document.getElementById('recipientInput').value.trim() || 'Counter Walk-in Pickup';
-    const cartArray = Object.values(cart).map(it => ({ id: it.id, qty: it.qty }));
-
-    document.getElementById('formRecipientName').value = recipient;
-    document.getElementById('formCartData').value = JSON.stringify(cartArray);
-    document.getElementById('posCheckoutForm').submit();
 }
 
 function filterProducts() {

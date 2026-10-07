@@ -762,7 +762,7 @@ require_once __DIR__ . '/includes/header.php';
         if (rows.length > 1) {
             btn.closest('tr').remove();
         } else {
-            alert('At least one product is required for dispatch.');
+            showToast('At least one product is required for dispatch.', 'warning', 'Required Items');
         }
     }
 
@@ -774,7 +774,7 @@ require_once __DIR__ . '/includes/header.php';
 
         let delivered = loaded - (retStore + damage);
         if (delivered < 0) {
-            alert('Returns + Damages cannot exceed Loaded units (' + loaded + ')!');
+            showToast('Returns + Damages cannot exceed Loaded units (' + loaded + ')!', 'error', 'Quantity Exceeded');
             inputEl.value = 0;
             delivered = loaded;
         }
