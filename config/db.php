@@ -230,12 +230,24 @@ function initDatabaseTables($pdo) {
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-    // Seed Initial Data if empty
+    // System Settings Table to prevent re-seeding deleted items
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `system_settings` (
+        `key_name` VARCHAR(50) PRIMARY KEY,
+        `value` TEXT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+    // Seed Initial Data if brand new installation
     seedInitialData($pdo);
 }
 
-function seedInitialData($pdo) {
-    // Check branches
+function seedInitialData($pdo, $force = false) {
+    // Check if already seeded once (unless forced)
+    if (!$force) {
+        $stmt = $pdo->query("SELECT `value` FROM `system_settings` WHERE `key_name` = 'initial_seed_done'");
+        if ($stmt && $stmt->fetchColumn() === 'yes') {
+            return; // System already initialized. Do not auto re-add deleted items!
+        }
+    }
     $stmt = $pdo->query("SELECT COUNT(*) FROM `branches`");
     if ($stmt->fetchColumn() == 0) {
         $pdo->exec("INSERT INTO `branches` (`id`, `name`, `code`, `address`, `phone`) VALUES
@@ -313,4 +325,7 @@ function seedInitialData($pdo) {
             (3, 2, 'CP BC-1234', 'Nuwan Silva', '075-8899001', 'Kandy - Peradeniya Line', 'available');
         ");
     }
+
+    // Mark that initial seeding is complete so subsequent deletions are permanent
+    $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('initial_seed_done', 'yes') ON DUPLICATE KEY UPDATE `value` = 'yes'");
 }

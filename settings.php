@@ -9,97 +9,131 @@ $user = currentUser();
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $confirmation = trim($_POST['confirmation_text'] ?? '');
+    $confirmed = isset($_POST['confirm_checkbox']) || !empty($_POST['confirmation_text']);
 
-    // Action 1: Clear All Transactions & Operational Data (Fresh Business Start)
-    if ($action === 'clear_transactions' && hasRole('super_admin')) {
-        if ($confirmation !== 'CLEAR') {
-            setFlash('danger', 'Confirmation word did not match! Type "CLEAR" to confirm.');
-        } else {
-            try {
-                $pdo->beginTransaction();
+    // ACTION 1: WIPE ABSOLUTELY EVERYTHING (Delete All Items, Stock, Sales, Lorries)
+    if ($action === 'wipe_everything' && hasRole('super_admin')) {
+        try {
+            $pdo->beginTransaction();
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
-                // 1. Truncate / Delete POS sales
-                $pdo->exec("DELETE FROM `pos_sale_items`");
-                $pdo->exec("DELETE FROM `pos_sales`");
-                $pdo->exec("ALTER TABLE `pos_sale_items` AUTO_INCREMENT = 1");
-                $pdo->exec("ALTER TABLE `pos_sales` AUTO_INCREMENT = 1");
+            // Delete all operational transactions
+            $pdo->exec("TRUNCATE TABLE `pos_sale_items`");
+            $pdo->exec("TRUNCATE TABLE `pos_sales`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
+            $pdo->exec("TRUNCATE TABLE `daily_cash_register`");
+            $pdo->exec("TRUNCATE TABLE `cash_transactions`");
 
-                // 2. Truncate / Delete Lorry dispatches & returns
-                $pdo->exec("DELETE FROM `lorry_dispatch_items`");
-                $pdo->exec("DELETE FROM `lorry_dispatches`");
-                $pdo->exec("ALTER TABLE `lorry_dispatch_items` AUTO_INCREMENT = 1");
-                $pdo->exec("ALTER TABLE `lorry_dispatches` AUTO_INCREMENT = 1");
+            // Delete all products, categories, stock, and lorries
+            $pdo->exec("TRUNCATE TABLE `branch_stock`");
+            $pdo->exec("TRUNCATE TABLE `products`");
+            $pdo->exec("TRUNCATE TABLE `categories`");
+            $pdo->exec("TRUNCATE TABLE `lorries`");
 
-                // 3. Reset Lorry status to available
-                $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
-
-                // 4. Truncate / Delete Stock In invoices
-                $pdo->exec("DELETE FROM `stock_invoice_items`");
-                $pdo->exec("DELETE FROM `stock_invoices`");
-                $pdo->exec("ALTER TABLE `stock_invoice_items` AUTO_INCREMENT = 1");
-                $pdo->exec("ALTER TABLE `stock_invoices` AUTO_INCREMENT = 1");
-
-                // 5. Truncate / Delete Daily Cash registers & Expenses
-                $pdo->exec("DELETE FROM `cash_transactions`");
-                $pdo->exec("DELETE FROM `daily_cash_register`");
-                $pdo->exec("ALTER TABLE `cash_transactions` AUTO_INCREMENT = 1");
-                $pdo->exec("ALTER TABLE `daily_cash_register` AUTO_INCREMENT = 1");
-
-                // 6. Reset Branch Store stock quantities to 0
-                $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
-
-                $pdo->commit();
-                setFlash('success', 'ALL TRANSACTIONS CLEARED! Sales, Dispatches, Invoices, Cash records, and Store Stocks have been reset to 0.');
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                setFlash('danger', 'Error clearing transactions: ' . $e->getMessage());
+            // Retain Super Admin account so user doesn't get locked out
+            $pdo->exec("DELETE FROM `users` WHERE `role` != 'super_admin'");
+            $adminCount = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'super_admin'")->fetchColumn();
+            if ($adminCount == 0) {
+                $passHash = password_hash('admin123', PASSWORD_DEFAULT);
+                $pdo->exec("INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`) VALUES (1, 'Super Administrator', 'admin', '$passHash', 'super_admin')");
             }
+
+            // Ensure Main Branch exists
+            $branchCount = $pdo->query("SELECT COUNT(*) FROM `branches`")->fetchColumn();
+            if ($branchCount == 0) {
+                $pdo->exec("INSERT INTO `branches` (`id`, `name`, `code`) VALUES (1, 'Main Warehouse & Distribution', 'BR-01')");
+            }
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+            $pdo->commit();
+
+            setFlash('success', 'SUCCESS: System completely cleared! All products (0 items), stock (0 units), sales, bills, and lorries have been deleted.');
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            setFlash('danger', 'Error wiping system: ' . $e->getMessage());
         }
         header("Location: settings.php");
         exit;
     }
 
-    // Action 2: Full Factory Reset & Re-Seed Default Demo Data
-    if ($action === 'factory_reset' && hasRole('super_admin')) {
-        if ($confirmation !== 'RESET') {
-            setFlash('danger', 'Confirmation word did not match! Type "RESET" to confirm.');
-        } else {
-            try {
-                $pdo->beginTransaction();
+    // ACTION 2: CLEAR TRANSACTIONS ONLY (Keep products, reset stock to 0)
+    if ($action === 'clear_transactions' && hasRole('super_admin')) {
+        try {
+            $pdo->beginTransaction();
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
-                // Drop all system tables
-                $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-                $tables = [
-                    'pos_sale_items', 'pos_sales',
-                    'lorry_dispatch_items', 'lorry_dispatches', 'lorries',
-                    'stock_invoice_items', 'stock_invoices',
-                    'daily_cash_register', 'cash_transactions',
-                    'branch_stock', 'products', 'categories', 'users', 'branches'
-                ];
-                foreach ($tables as $tbl) {
-                    $pdo->exec("DROP TABLE IF EXISTS `$tbl`;");
-                }
-                $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+            $pdo->exec("TRUNCATE TABLE `pos_sale_items`");
+            $pdo->exec("TRUNCATE TABLE `pos_sales`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
+            $pdo->exec("TRUNCATE TABLE `daily_cash_register`");
+            $pdo->exec("TRUNCATE TABLE `cash_transactions`");
 
-                // Re-initialize tables & seed data
-                initDatabaseTables($pdo);
+            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
+            $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
 
-                $pdo->commit();
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+            $pdo->commit();
 
-                // Re-establish session for admin
-                $_SESSION['user_id'] = 1;
-                $_SESSION['user_name'] = 'Super Administrator';
-                $_SESSION['user_username'] = 'admin';
-                $_SESSION['user_role'] = 'super_admin';
-                $_SESSION['active_branch_id'] = 1;
-                $_SESSION['active_branch_name'] = 'Main Warehouse & Colombo Branch';
+            setFlash('success', 'All sales, invoices, lorry runs, and cash records cleared! Store stock reset to 0.');
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            setFlash('danger', 'Error: ' . $e->getMessage());
+        }
+        header("Location: settings.php");
+        exit;
+    }
 
-                setFlash('success', 'FACTORY RESET COMPLETED! Database tables recreated and initial demo records restored.');
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                setFlash('danger', 'Error during factory reset: ' . $e->getMessage());
+    // ACTION 3: RESTORE DEMO PRODUCTS & LORRIES
+    if ($action === 'restore_demo' && hasRole('super_admin')) {
+        try {
+            // Check categories
+            $stmt = $pdo->query("SELECT COUNT(*) FROM `categories`");
+            if ($stmt->fetchColumn() == 0) {
+                $pdo->exec("INSERT INTO `categories` (`id`, `name`) VALUES
+                    (1, '1L Tubs & Family Packs'),
+                    (2, '500ml Tubs'),
+                    (3, 'Cones & Waffles'),
+                    (4, 'Cups & Single Servings'),
+                    (5, 'Ice Chocs & Sticks');");
             }
+
+            // Insert products if 0
+            $stmt = $pdo->query("SELECT COUNT(*) FROM `products`");
+            if ($stmt->fetchColumn() == 0) {
+                $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `cost_price`, `selling_price`, `alert_quantity`) VALUES
+                    (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 550.00, 750.00, 20),
+                    (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 600.00, 800.00, 20),
+                    (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 580.00, 780.00, 15),
+                    (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 650.00, 900.00, 15),
+                    (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 300.00, 420.00, 25),
+                    (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 320.00, 450.00, 25),
+                    (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 130.00, 180.00, 50),
+                    (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 120.00, 160.00, 50),
+                    (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 65.00, 90.00, 60),
+                    (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 70.00, 100.00, 60);");
+
+                $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) VALUES
+                    (1, 1, 160), (1, 2, 120), (1, 3, 90), (1, 4, 80), (1, 5, 100),
+                    (1, 6, 100), (1, 7, 200), (1, 8, 200), (1, 9, 300), (1, 10, 300);");
+            }
+
+            // Insert lorries if 0
+            $stmt = $pdo->query("SELECT COUNT(*) FROM `lorries`");
+            if ($stmt->fetchColumn() == 0) {
+                $pdo->exec("INSERT INTO `lorries` (`id`, `branch_id`, `plate_no`, `driver_name`, `contact_no`, `route_name`, `status`) VALUES
+                    (1, 1, 'WP CAB-4521', 'Kamal Perera', '077-1122334', 'Colombo North / Gampaha Route', 'available'),
+                    (2, 1, 'WP ND-8890', 'Sunil Shantha', '071-4455667', 'Colombo South / Moratuwa Route', 'available');");
+            }
+
+            setFlash('success', 'Demo products (Vanilla 1L, etc.) and Lorries restored successfully.');
+        } catch (Exception $e) {
+            setFlash('danger', 'Error restoring demo: ' . $e->getMessage());
         }
         header("Location: settings.php");
         exit;
@@ -111,8 +145,8 @@ $countSales = $pdo->query("SELECT COUNT(*) FROM pos_sales")->fetchColumn();
 $countDispatches = $pdo->query("SELECT COUNT(*) FROM lorry_dispatches")->fetchColumn();
 $countInvoices = $pdo->query("SELECT COUNT(*) FROM stock_invoices")->fetchColumn();
 $countCashRecords = $pdo->query("SELECT COUNT(*) FROM daily_cash_register")->fetchColumn();
-$countExpenses = $pdo->query("SELECT COUNT(*) FROM cash_transactions")->fetchColumn();
 $countProducts = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+$countLorries = $pdo->query("SELECT COUNT(*) FROM lorries")->fetchColumn();
 $totalStoreUnits = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM branch_stock")->fetchColumn();
 
 require_once __DIR__ . '/includes/header.php';
@@ -131,7 +165,7 @@ require_once __DIR__ . '/includes/header.php';
 
     <div>
         <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span> MySQL Database Active: ice_cream_db
+            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span> MySQL Connected &bull; ice_cream_db
         </span>
     </div>
 </div>
@@ -144,219 +178,155 @@ require_once __DIR__ . '/includes/header.php';
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">POS Bills</span>
-            <span class="text-xl font-extrabold font-mono text-slate-800 mt-1 block"><?= number_format($countSales) ?></span>
-            <span class="text-[10px] text-slate-400">Total Receipts</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Ice Cream Items</span>
+            <span class="text-2xl font-black font-mono <?= $countProducts == 0 ? 'text-slate-400' : 'text-slate-800' ?> mt-1 block"><?= number_format($countProducts) ?></span>
+            <span class="text-[10px] text-slate-400"><?= $countProducts == 0 ? 'Empty (0 items)' : 'Products in catalog' ?></span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Lorry Trips</span>
-            <span class="text-xl font-extrabold font-mono text-purple-700 mt-1 block"><?= number_format($countDispatches) ?></span>
-            <span class="text-[10px] text-slate-400">Dispatches</span>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Invoices (GRN)</span>
-            <span class="text-xl font-extrabold font-mono text-blue-700 mt-1 block"><?= number_format($countInvoices) ?></span>
-            <span class="text-[10px] text-slate-400">Stock In Records</span>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Store Stock</span>
-            <span class="text-xl font-extrabold font-mono text-amber-700 mt-1 block"><?= number_format($totalStoreUnits) ?></span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Warehouse Stock</span>
+            <span class="text-2xl font-black font-mono <?= $totalStoreUnits == 0 ? 'text-slate-400' : 'text-amber-700' ?> mt-1 block"><?= number_format($totalStoreUnits) ?></span>
             <span class="text-[10px] text-slate-400">Total Units</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Cash Registers</span>
-            <span class="text-xl font-extrabold font-mono text-emerald-700 mt-1 block"><?= number_format($countCashRecords) ?></span>
-            <span class="text-[10px] text-slate-400">Daily Balances</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">POS Bills</span>
+            <span class="text-2xl font-black font-mono <?= $countSales == 0 ? 'text-slate-400' : 'text-slate-800' ?> mt-1 block"><?= number_format($countSales) ?></span>
+            <span class="text-[10px] text-slate-400">Total Receipts</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Active Flavors</span>
-            <span class="text-xl font-extrabold font-mono text-slate-800 mt-1 block"><?= number_format($countProducts) ?></span>
-            <span class="text-[10px] text-slate-400">Catalog Products</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Lorry Fleet</span>
+            <span class="text-2xl font-black font-mono <?= $countLorries == 0 ? 'text-slate-400' : 'text-purple-700' ?> mt-1 block"><?= number_format($countLorries) ?></span>
+            <span class="text-[10px] text-slate-400">Vehicles</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Invoices (GRN)</span>
+            <span class="text-2xl font-black font-mono <?= $countInvoices == 0 ? 'text-slate-400' : 'text-blue-700' ?> mt-1 block"><?= number_format($countInvoices) ?></span>
+            <span class="text-[10px] text-slate-400">Stock In Records</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Daily Cash Sheets</span>
+            <span class="text-2xl font-black font-mono <?= $countCashRecords == 0 ? 'text-slate-400' : 'text-emerald-700' ?> mt-1 block"><?= number_format($countCashRecords) ?></span>
+            <span class="text-[10px] text-slate-400">Cash Balances</span>
         </div>
     </div>
 </div>
 
-<!-- ==================== DANGER ZONE: CLEAR ALL SYSTEM DATA ==================== -->
-<div class="bg-white rounded-3xl border-2 border-rose-200 shadow-md p-6 sm:p-8 relative overflow-hidden">
-    <div class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
-        Danger Zone &bull; Administrator Only
+<!-- ==================== CLEAR ALL CONTROLS ==================== -->
+<div class="bg-white rounded-3xl border-2 border-rose-200 shadow-md p-6 sm:p-8 relative overflow-hidden mb-6">
+    <div class="absolute top-0 right-0 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-bl-xl shadow-xs">
+        Danger Zone &bull; Super Admin Only
     </div>
 
     <div class="flex items-start space-x-4 mb-6">
         <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl flex-shrink-0 shadow-inner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+            <i class="fa-solid fa-trash-can"></i>
         </div>
         <div>
             <h3 class="text-lg font-black text-slate-900 tracking-tight">System Data Reset &bull; Clear All</h3>
             <p class="text-xs text-slate-500 mt-1">
-                You can clear out test sales, bills, lorry runs, and cash records when you are ready to start using the system for real business.
+                Use the buttons below to delete existing demo items and sales so you can use the system fresh with your own products.
             </p>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
         
-        <!-- Option 1: Clear All Transactions (Fresh Business Start) -->
-        <div class="p-5 rounded-2xl bg-rose-50/50 border border-rose-200 flex flex-col justify-between">
+        <!-- CARD 1: DELETE ABSOLUTELY EVERYTHING (What user requested) -->
+        <div class="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex flex-col justify-between shadow-xs">
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-extrabold text-sm text-rose-900 flex items-center">
-                        <i class="fa-solid fa-broom text-rose-500 mr-2"></i> 1. Clear All Transactions (Recommended)
+                    <span class="font-black text-sm text-rose-950 flex items-center">
+                        <i class="fa-solid fa-bomb text-rose-600 mr-2 text-base"></i> 1. Delete EVERYTHING (0 Items)
                     </span>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-200/80 text-rose-800">Fresh Start</span>
+                    <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-200 text-rose-900">Total Wipe</span>
                 </div>
-                <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-                    Wipes out all test transactions so you can start fresh.
+                <p class="text-xs text-slate-700 mb-3 leading-relaxed font-medium">
+                    Deletes <strong>ALL items and products</strong>, sales, stock, and lorries. Leaves the system completely empty!
                 </p>
-                <ul class="text-xs text-slate-600 space-y-1.5 mb-5 font-medium">
-                    <li class="flex items-center text-rose-700">
-                        <i class="fa-solid fa-check text-rose-500 mr-2 text-[10px]"></i> Clears all Counter POS bills & receipts
-                    </li>
-                    <li class="flex items-center text-rose-700">
-                        <i class="fa-solid fa-check text-rose-500 mr-2 text-[10px]"></i> Clears all Lorry dispatches, sales & returns
-                    </li>
-                    <li class="flex items-center text-rose-700">
-                        <i class="fa-solid fa-check text-rose-500 mr-2 text-[10px]"></i> Clears all In Come Stock invoices
-                    </li>
-                    <li class="flex items-center text-rose-700">
-                        <i class="fa-solid fa-check text-rose-500 mr-2 text-[10px]"></i> Clears all Daily cash registers & expenses
-                    </li>
-                    <li class="flex items-center text-rose-700">
-                        <i class="fa-solid fa-check text-rose-500 mr-2 text-[10px]"></i> Resets all Store Stock counts to 0
-                    </li>
-                    <li class="flex items-center text-emerald-700 font-bold">
-                        <i class="fa-solid fa-shield-halved text-emerald-500 mr-2 text-[10px]"></i> Keeps Products, Lorries, Branches & Users safe!
-                    </li>
+                <ul class="text-xs text-rose-900 space-y-1 mb-4 font-semibold">
+                    <li>&bull; All Ice Cream Products: <strong>DELETED</strong></li>
+                    <li>&bull; All Store Stock: <strong>DELETED (0)</strong></li>
+                    <li>&bull; All POS Bills: <strong>DELETED</strong></li>
+                    <li>&bull; All Lorries: <strong>DELETED</strong></li>
+                    <li>&bull; All Invoices & Cash: <strong>DELETED</strong></li>
+                    <li class="text-emerald-700 font-bold">&bull; Admin Login: <strong>Preserved (`admin`)</strong></li>
                 </ul>
             </div>
 
-            <button type="button" onclick="openClearModal('clear_transactions')" 
-                    class="w-full py-3 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-rose-200 transition-all flex items-center justify-center space-x-2">
-                <i class="fa-solid fa-trash-can"></i>
-                <span>Clear All Transactions Now</span>
-            </button>
+            <form method="POST" action="settings.php" onsubmit="return confirm('WARNING: Are you 100% sure you want to DELETE ALL ITEMS AND DATA? Everything will become 0!');">
+                <input type="hidden" name="action" value="wipe_everything">
+                <button type="submit" 
+                        class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-rose-300 transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                    <span>Delete All Items & Data Now</span>
+                </button>
+            </form>
         </div>
 
-        <!-- Option 2: Full Factory Reset -->
+        <!-- CARD 2: Clear Sales & Stock Only (Keep Product Catalog) -->
+        <div class="p-5 rounded-2xl bg-amber-50/70 border border-amber-300 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-extrabold text-sm text-amber-950 flex items-center">
+                        <i class="fa-solid fa-broom text-amber-600 mr-2"></i> 2. Clear Sales & Stock Only
+                    </span>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">Keep Items</span>
+                </div>
+                <p class="text-xs text-slate-700 mb-3 leading-relaxed">
+                    Clears bills, sales, dispatches, and sets stock to 0, but <strong>keeps your product names</strong>.
+                </p>
+                <ul class="text-xs text-slate-700 space-y-1 mb-4">
+                    <li>&bull; POS Bills & Cash: <strong>Cleared</strong></li>
+                    <li>&bull; Lorry dispatches: <strong>Cleared</strong></li>
+                    <li>&bull; Store Stock counts: <strong>Reset to 0</strong></li>
+                    <li>&bull; Products (Flavors): <strong>Kept Intact</strong></li>
+                </ul>
+            </div>
+
+            <form method="POST" action="settings.php" onsubmit="return confirm('Clear all sales and reset stock to 0?');">
+                <input type="hidden" name="action" value="clear_transactions">
+                <button type="submit" 
+                        class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-eraser"></i>
+                    <span>Clear Sales & Stock (0)</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- CARD 3: Restore Default Demo Data -->
         <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <span class="font-extrabold text-sm text-slate-800 flex items-center">
-                        <i class="fa-solid fa-rotate-left text-slate-600 mr-2"></i> 2. Full Factory Reset
+                        <i class="fa-solid fa-rotate-left text-slate-600 mr-2"></i> 3. Restore Demo Data
                     </span>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Re-Seed</span>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Re-Seed</span>
                 </div>
                 <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-                    Resets the entire database back to default initial state.
+                    If you cleared the items and ever want the sample ice cream products (Vanilla 1L, etc.) back to test again.
                 </p>
-                <ul class="text-xs text-slate-600 space-y-1.5 mb-5 font-medium">
-                    <li class="flex items-center text-slate-700">
-                        <i class="fa-solid fa-arrows-rotate text-slate-400 mr-2 text-[10px]"></i> Wipes and drops all existing tables
-                    </li>
-                    <li class="flex items-center text-slate-700">
-                        <i class="fa-solid fa-arrows-rotate text-slate-400 mr-2 text-[10px]"></i> Re-creates fresh clean table schemas
-                    </li>
-                    <li class="flex items-center text-slate-700">
-                        <i class="fa-solid fa-arrows-rotate text-slate-400 mr-2 text-[10px]"></i> Restores default demo products (Vanilla 1L, etc.)
-                    </li>
-                    <li class="flex items-center text-slate-700">
-                        <i class="fa-solid fa-arrows-rotate text-slate-400 mr-2 text-[10px]"></i> Restores default Branches & Demo Lorries
-                    </li>
-                    <li class="flex items-center text-emerald-700 font-bold">
-                        <i class="fa-solid fa-shield-halved text-emerald-500 mr-2 text-[10px]"></i> Re-creates default Super Admin (`admin`/`admin123`)
-                    </li>
+                <ul class="text-xs text-slate-600 space-y-1 mb-4">
+                    <li>&bull; 10 Sample Ice Creams</li>
+                    <li>&bull; Demo Store Stocks</li>
+                    <li>&bull; 2 Sample Lorries</li>
                 </ul>
             </div>
 
-            <button type="button" onclick="openClearModal('factory_reset')" 
-                    class="w-full py-3 px-4 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
-                <i class="fa-solid fa-arrows-rotate"></i>
-                <span>Full Factory Reset (Re-Seed)</span>
-            </button>
+            <form method="POST" action="settings.php" onsubmit="return confirm('Restore sample demo products and lorries?');">
+                <input type="hidden" name="action" value="restore_demo">
+                <button type="submit" 
+                        class="w-full py-3 px-4 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Restore Demo Items</span>
+                </button>
+            </form>
         </div>
 
     </div>
 </div>
-
-<!-- ==================== CONFIRMATION MODAL ==================== -->
-<div id="clearConfirmModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 border border-slate-200 animate-in fade-in duration-200">
-        
-        <div class="w-14 h-14 mx-auto rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mb-4">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-        </div>
-
-        <div class="text-center mb-5">
-            <h3 class="text-lg font-black text-slate-900" id="modalTitle">Confirm Action</h3>
-            <p class="text-xs text-slate-500 mt-1" id="modalDescription">
-                This action is irreversible. All selected data will be permanently cleared.
-            </p>
-        </div>
-
-        <form method="POST" action="settings.php" class="space-y-4">
-            <input type="hidden" name="action" id="modalActionInput" value="">
-
-            <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold leading-relaxed" id="modalWarningText">
-                Please type the word <strong class="font-mono text-rose-700 font-black text-sm" id="confirmWordDisplay">CLEAR</strong> below to confirm.
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Type Confirmation Word</label>
-                <input type="text" name="confirmation_text" id="confirmationInput" required autocomplete="off"
-                       class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono font-extrabold text-center text-sm uppercase tracking-wider text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white"
-                       placeholder="TYPE HERE">
-            </div>
-
-            <div class="pt-2 flex space-x-2.5">
-                <button type="button" onclick="closeClearModal()" class="flex-1 py-3 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
-                    Cancel
-                </button>
-                <button type="submit" id="modalSubmitBtn" class="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-rose-200 transition-all flex items-center justify-center space-x-1.5">
-                    <i class="fa-solid fa-trash-can text-xs"></i>
-                    <span>Confirm & Clear</span>
-                </button>
-            </div>
-        </form>
-
-    </div>
-</div>
-
-<script>
-    function openClearModal(type) {
-        const modal = document.getElementById('clearConfirmModal');
-        const title = document.getElementById('modalTitle');
-        const desc = document.getElementById('modalDescription');
-        const actionInput = document.getElementById('modalActionInput');
-        const confirmWordDisplay = document.getElementById('confirmWordDisplay');
-        const input = document.getElementById('confirmationInput');
-
-        input.value = '';
-        actionInput.value = type;
-
-        if (type === 'clear_transactions') {
-            title.innerText = 'Clear All Transactions?';
-            desc.innerText = 'This will delete all POS sales, bills, lorry runs, invoices, and cash register records. Store stock will be reset to 0.';
-            confirmWordDisplay.innerText = 'CLEAR';
-            input.placeholder = 'Type CLEAR to confirm';
-        } else {
-            title.innerText = 'Full Factory Reset?';
-            desc.innerText = 'This will recreate all database tables and restore default demo products and accounts.';
-            confirmWordDisplay.innerText = 'RESET';
-            input.placeholder = 'Type RESET to confirm';
-        }
-
-        modal.classList.remove('hidden');
-        input.focus();
-    }
-
-    function closeClearModal() {
-        document.getElementById('clearConfirmModal').classList.add('hidden');
-    }
-</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

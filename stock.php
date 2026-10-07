@@ -113,10 +113,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
+
+    // Action 3: Add New Product
+    if ($action === 'create_product') {
+        $code = strtoupper(trim($_POST['code'] ?? ''));
+        $name = trim($_POST['name'] ?? '');
+        $category_id = !empty($_POST['category_id']) ? intval($_POST['category_id']) : 1;
+        $flavor = trim($_POST['flavor'] ?? '');
+        $size = trim($_POST['size'] ?? '');
+        $cost = floatval($_POST['cost_price'] ?? 0);
+        $sell = floatval($_POST['selling_price'] ?? 0);
+        $initialStock = intval($_POST['initial_stock'] ?? 0);
+        $alertQty = intval($_POST['alert_quantity'] ?? 10);
+
+        if (!empty($name) && !empty($code)) {
+            try {
+                // Ensure categories exist
+                $catCount = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
+                if ($catCount == 0) {
+                    $pdo->exec("INSERT INTO categories (id, name) VALUES (1, 'General Ice Cream')");
+                }
+
+                $stmt = $pdo->prepare("INSERT INTO products (category_id, code, name, flavor, size, cost_price, selling_price, alert_quantity) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$category_id, $code, $name, $flavor, $size, $cost, $sell, $alertQty]);
+                $newId = $pdo->lastInsertId();
+
+                if ($initialStock > 0) {
+                    $stmtS = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, ?)");
+                    $stmtS->execute([$branchId, $newId, $initialStock]);
+                }
+
+                setFlash('success', "New Product [{$name}] created successfully!");
+            } catch (Exception $e) {
+                setFlash('danger', "Error adding product: " . $e->getMessage());
+            }
+        }
+        header("Location: stock.php");
+        exit;
+    }
+
+    // Action 4: Delete Single Product
+    if ($action === 'delete_product') {
+        $pId = intval($_POST['product_id'] ?? 0);
+        if ($pId > 0 && hasRole(['super_admin', 'admin'])) {
+            try {
+                $pdo->prepare("DELETE FROM branch_stock WHERE product_id = ?")->execute([$pId]);
+                $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$pId]);
+                setFlash('success', "Product removed successfully.");
+            } catch (Exception $e) {
+                setFlash('danger', "Error deleting product: " . $e->getMessage());
+            }
+        }
+        header("Location: stock.php");
+        exit;
+    }
 }
 
 // Fetch all branches (for Super Admin selector)
 $branches = $pdo->query("SELECT id, name FROM branches ORDER BY id ASC")->fetchAll();
+
+// Fetch categories
+$categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll();
 
 // Fetch products with their categories & current branch stock
 $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity, 0) as store_stock 
@@ -151,7 +209,10 @@ require_once __DIR__ . '/includes/header.php';
             Incoming Stock (GRN), Live Store Inventory & Stock Dispatches for <strong><?= htmlspecialchars($user['branch_name']) ?></strong>
         </p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="openNewProductModal()" class="px-3.5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center">
+            <i class="fa-solid fa-plus mr-1.5"></i> + Add Product
+        </button>
         <button type="button" onclick="openNewGrnModal()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-200 transition-all flex items-center">
             <i class="fa-solid fa-file-invoice mr-2"></i> + In Come Stock (New GRN)
         </button>
@@ -198,48 +259,71 @@ require_once __DIR__ . '/includes/header.php';
                         <th class="py-3 px-4 text-center">Size / Volume</th>
                         <th class="py-3 px-4 text-right">Cost Price (Rs)</th>
                         <th class="py-3 px-4 text-right">Selling Price (Rs)</th>
-                        <th class="py-3 px-4 text-center">Store Stock (Warehouse)</th>
+                        <th class="py-3 px-4 text-center">Store Stock</th>
                         <th class="py-3 px-4 text-center">Stock Status</th>
+                        <th class="py-3 px-4 text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-slate-700">
-                    <?php foreach ($inventory as $prod): 
-                        $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
-                        $isZero = $prod['store_stock'] <= 0;
-                    ?>
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-3 px-4 font-bold text-slate-800">
-                                <div class="text-sm"><?= htmlspecialchars($prod['name']) ?></div>
-                                <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($prod['code']) ?> &bull; <?= htmlspecialchars($prod['flavor'] ?? '') ?></div>
-                            </td>
-                            <td class="py-3 px-4 text-slate-500">
-                                <?= htmlspecialchars($prod['category_name'] ?? 'General') ?>
-                            </td>
-                            <td class="py-3 px-4 text-center text-slate-600 font-medium">
-                                <?= htmlspecialchars($prod['size'] ?? '-') ?>
-                            </td>
-                            <td class="py-3 px-4 text-right font-mono text-slate-500">
-                                <?= number_format($prod['cost_price'], 2) ?>
-                            </td>
-                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-800">
-                                <?= number_format($prod['selling_price'], 2) ?>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <span class="inline-block px-3 py-1 rounded-xl font-extrabold text-sm font-mono <?= $isZero ? 'bg-rose-100 text-rose-700 border border-rose-200' : ($isLow ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200') ?>">
-                                    <?= number_format($prod['store_stock']) ?> <?= htmlspecialchars($prod['unit'] ?? 'Nos') ?>
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <?php if ($isZero): ?>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 border border-rose-200">Out of Stock</span>
-                                <?php elseif ($isLow): ?>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">Low Stock Alert</span>
-                                <?php else: ?>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">Optimal Stock</span>
-                                <?php endif; ?>
+                    <?php if (empty($inventory)): ?>
+                        <tr>
+                            <td colspan="8" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-boxes-stacked text-3xl mb-2 text-slate-300"></i>
+                                <p class="font-bold text-slate-700 text-sm">No Products Found in Store</p>
+                                <p class="text-xs text-slate-400 mt-1">The system is clean. Click "+ Add Product" to add your flavors, or restore demo items in Settings.</p>
+                                <button type="button" onclick="openNewProductModal()" class="mt-3 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold inline-flex items-center">
+                                    <i class="fa-solid fa-plus mr-1.5"></i> + Add First Product
+                                </button>
                             </td>
                         </tr>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($inventory as $prod): 
+                            $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
+                            $isZero = $prod['store_stock'] <= 0;
+                        ?>
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-4 font-bold text-slate-800">
+                                    <div class="text-sm"><?= htmlspecialchars($prod['name']) ?></div>
+                                    <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($prod['code']) ?> &bull; <?= htmlspecialchars($prod['flavor'] ?? '') ?></div>
+                                </td>
+                                <td class="py-3 px-4 text-slate-500">
+                                    <?= htmlspecialchars($prod['category_name'] ?? 'General') ?>
+                                </td>
+                                <td class="py-3 px-4 text-center text-slate-600 font-medium">
+                                    <?= htmlspecialchars($prod['size'] ?? '-') ?>
+                                </td>
+                                <td class="py-3 px-4 text-right font-mono text-slate-500">
+                                    <?= number_format($prod['cost_price'], 2) ?>
+                                </td>
+                                <td class="py-3 px-4 text-right font-mono font-bold text-slate-800">
+                                    <?= number_format($prod['selling_price'], 2) ?>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="inline-block px-3 py-1 rounded-xl font-extrabold text-sm font-mono <?= $isZero ? 'bg-rose-100 text-rose-700 border border-rose-200' : ($isLow ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200') ?>">
+                                        <?= number_format($prod['store_stock']) ?> <?= htmlspecialchars($prod['unit'] ?? 'Nos') ?>
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <?php if ($isZero): ?>
+                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 border border-rose-200">Out of Stock</span>
+                                    <?php elseif ($isLow): ?>
+                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">Low Stock Alert</span>
+                                    <?php else: ?>
+                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">Optimal Stock</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                                        <input type="hidden" name="action" value="delete_product">
+                                        <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
+                                        <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors" title="Delete Product">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -500,7 +584,94 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
+<!-- MODAL: Add New Product -->
+<div id="newProductModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 animate-in fade-in duration-200">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <h3 class="font-extrabold text-base text-slate-800 flex items-center">
+                <i class="fa-solid fa-ice-cream text-rose-500 mr-2"></i> Add New Ice Cream Flavor / Product
+            </h3>
+            <button type="button" onclick="closeNewProductModal()" class="text-slate-400 hover:text-slate-600 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="stock.php" class="space-y-3.5 text-xs">
+            <input type="hidden" name="action" value="create_product">
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Product Name (Ex: Vanilla 1L Tub) *</label>
+                <input type="text" name="name" required placeholder="e.g. Chocolate 1L Tub" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Product Code (SKU) *</label>
+                    <input type="text" name="code" required placeholder="e.g. CHOC-1L" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono uppercase font-bold">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Flavor / Variant</label>
+                    <input type="text" name="flavor" placeholder="e.g. Chocolate" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Pack Size / Volume</label>
+                    <input type="text" name="size" placeholder="e.g. 1 Litre / 500ml / Cone" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Category</label>
+                    <select name="category_id" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+                        <?php foreach ($categories as $c): ?>
+                            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Cost Price (Rs) *</label>
+                    <input type="number" step="0.01" name="cost_price" required placeholder="550.00" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Selling Price (Rs) *</label>
+                    <input type="number" step="0.01" name="selling_price" required placeholder="750.00" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-extrabold text-rose-600">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Initial Store Stock (Units)</label>
+                    <input type="number" name="initial_stock" value="0" min="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Low Stock Warning Level</label>
+                    <input type="number" name="alert_quantity" value="15" min="1" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono">
+                </div>
+            </div>
+
+            <div class="pt-3 flex justify-end space-x-2 border-t border-slate-100">
+                <button type="button" onclick="closeNewProductModal()" class="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-xs">
+                    Save Product
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+    function openNewProductModal() {
+        document.getElementById('newProductModal').classList.remove('hidden');
+    }
+    function closeNewProductModal() {
+        document.getElementById('newProductModal').classList.add('hidden');
+    }
+
     function switchTab(tabId, el) {
         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
         document.querySelectorAll('.tab-btn').forEach(b => {
