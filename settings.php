@@ -1,5 +1,6 @@
 <?php
 // settings.php - System Settings & Data Reset ("Clear All")
+// Pure Inventory Tracking (Zero Money)
 $pageTitle = "System Settings & Reset";
 require_once __DIR__ . '/config/auth.php';
 requireRole(['super_admin', 'admin']);
@@ -9,23 +10,26 @@ $user = currentUser();
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $confirmed = isset($_POST['confirm_checkbox']) || !empty($_POST['confirmation_text']);
 
-    // ACTION 1: WIPE ABSOLUTELY EVERYTHING (Delete All Items, Stock, Sales, Lorries)
+    // ACTION 1: WIPE ABSOLUTELY EVERYTHING (Delete All Items, Stock, Dispatches, Lorries)
     if ($action === 'wipe_everything' && hasRole('super_admin')) {
         try {
             $pdo->beginTransaction();
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             // Delete all operational transactions
-            $pdo->exec("TRUNCATE TABLE `pos_sale_items`");
-            $pdo->exec("TRUNCATE TABLE `pos_sales`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
             $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
             $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
             $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
             $pdo->exec("TRUNCATE TABLE `stock_invoices`");
-            $pdo->exec("TRUNCATE TABLE `daily_cash_register`");
-            $pdo->exec("TRUNCATE TABLE `cash_transactions`");
+
+            // Clean up legacy tables if present
+            @$pdo->exec("TRUNCATE TABLE `pos_sale_items`");
+            @$pdo->exec("TRUNCATE TABLE `pos_sales`");
+            @$pdo->exec("TRUNCATE TABLE `daily_cash_register`");
+            @$pdo->exec("TRUNCATE TABLE `cash_transactions`");
 
             // Delete all products, categories, stock, and lorries
             $pdo->exec("TRUNCATE TABLE `branch_stock`");
@@ -33,24 +37,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("TRUNCATE TABLE `categories`");
             $pdo->exec("TRUNCATE TABLE `lorries`");
 
+            // Mark system as initialized so auto-seed does not re-insert items automatically
+            $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('initial_seed_done', 'yes') ON DUPLICATE KEY UPDATE `value` = 'yes'");
+
             // Retain Super Admin account so user doesn't get locked out
             $pdo->exec("DELETE FROM `users` WHERE `role` != 'super_admin'");
             $adminCount = $pdo->query("SELECT COUNT(*) FROM `users` WHERE `role` = 'super_admin'")->fetchColumn();
             if ($adminCount == 0) {
                 $passHash = password_hash('admin123', PASSWORD_DEFAULT);
-                $pdo->exec("INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`) VALUES (1, 'Super Administrator', 'admin', '$passHash', 'super_admin')");
+                $pdo->exec("INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`) VALUES (1, 'Inventory Administrator', 'admin', '$passHash', 'super_admin')");
             }
 
             // Ensure Main Branch exists
             $branchCount = $pdo->query("SELECT COUNT(*) FROM `branches`")->fetchColumn();
             if ($branchCount == 0) {
-                $pdo->exec("INSERT INTO `branches` (`id`, `name`, `code`) VALUES (1, 'Main Warehouse & Distribution', 'BR-01')");
+                $pdo->exec("INSERT INTO `branches` (`id`, `name`, `code`) VALUES (1, 'Main Cold Room & Distribution Hub', 'HUB-01')");
             }
 
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
             $pdo->commit();
 
-            setFlash('success', 'SUCCESS: System completely cleared! All products (0 items), stock (0 units), sales, bills, and lorries have been deleted.');
+            setFlash('success', 'SUCCESS: System completely cleared! All items (0 products), stock (0 units), dispatches, GRN, and lorries have been deleted.');
         } catch (Exception $e) {
             $pdo->rollBack();
             setFlash('danger', 'Error wiping system: ' . $e->getMessage());
@@ -65,14 +72,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
-            $pdo->exec("TRUNCATE TABLE `pos_sale_items`");
-            $pdo->exec("TRUNCATE TABLE `pos_sales`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
             $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
             $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
             $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
             $pdo->exec("TRUNCATE TABLE `stock_invoices`");
-            $pdo->exec("TRUNCATE TABLE `daily_cash_register`");
-            $pdo->exec("TRUNCATE TABLE `cash_transactions`");
+
+            @$pdo->exec("TRUNCATE TABLE `pos_sale_items`");
+            @$pdo->exec("TRUNCATE TABLE `pos_sales`");
+            @$pdo->exec("TRUNCATE TABLE `daily_cash_register`");
+            @$pdo->exec("TRUNCATE TABLE `cash_transactions`");
 
             $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
             $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
@@ -80,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
             $pdo->commit();
 
-            setFlash('success', 'All sales, invoices, lorry runs, and cash records cleared! Store stock reset to 0.');
+            setFlash('success', 'All dispatches, store issues, and GRN records cleared! Cold Room stock reset to 0 units.');
         } catch (Exception $e) {
             $pdo->rollBack();
             setFlash('danger', 'Error: ' . $e->getMessage());
@@ -103,20 +113,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (5, 'Ice Chocs & Sticks');");
             }
 
-            // Insert products if 0
+            // Insert products if 0 (Pure Inventory: code, name, flavor, size, alert_quantity - No prices)
             $stmt = $pdo->query("SELECT COUNT(*) FROM `products`");
             if ($stmt->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `cost_price`, `selling_price`, `alert_quantity`) VALUES
-                    (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 550.00, 750.00, 20),
-                    (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 600.00, 800.00, 20),
-                    (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 580.00, 780.00, 15),
-                    (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 650.00, 900.00, 15),
-                    (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 300.00, 420.00, 25),
-                    (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 320.00, 450.00, 25),
-                    (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 130.00, 180.00, 50),
-                    (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 120.00, 160.00, 50),
-                    (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 65.00, 90.00, 60),
-                    (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 70.00, 100.00, 60);");
+                $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `alert_quantity`) VALUES
+                    (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 20),
+                    (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 20),
+                    (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 15),
+                    (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 15),
+                    (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 25),
+                    (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 25),
+                    (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 50),
+                    (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 50),
+                    (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 60),
+                    (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
 
                 $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) VALUES
                     (1, 1, 160), (1, 2, 120), (1, 3, 90), (1, 4, 80), (1, 5, 100),
@@ -131,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (2, 1, 'WP ND-8890', 'Sunil Shantha', '071-4455667', 'Colombo South / Moratuwa Route', 'available');");
             }
 
-            setFlash('success', 'Demo products (Vanilla 1L, etc.) and Lorries restored successfully.');
+            setFlash('success', 'Demo ice cream products (Vanilla 1L, etc.) and Lorries restored successfully.');
         } catch (Exception $e) {
             setFlash('danger', 'Error restoring demo: ' . $e->getMessage());
         }
@@ -140,32 +150,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch System Counts
-$countSales = $pdo->query("SELECT COUNT(*) FROM pos_sales")->fetchColumn();
-$countDispatches = $pdo->query("SELECT COUNT(*) FROM lorry_dispatches")->fetchColumn();
-$countInvoices = $pdo->query("SELECT COUNT(*) FROM stock_invoices")->fetchColumn();
-$countCashRecords = $pdo->query("SELECT COUNT(*) FROM daily_cash_register")->fetchColumn();
+// Fetch Pure Inventory System Counts
 $countProducts = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
-$countLorries = $pdo->query("SELECT COUNT(*) FROM lorries")->fetchColumn();
 $totalStoreUnits = $pdo->query("SELECT COALESCE(SUM(quantity), 0) FROM branch_stock")->fetchColumn();
+$countLorryDispatches = $pdo->query("SELECT COUNT(*) FROM lorry_dispatches")->fetchColumn();
+$countDirectIssues = $pdo->query("SELECT COUNT(*) FROM store_dispatches")->fetchColumn();
+$countInvoices = $pdo->query("SELECT COUNT(*) FROM stock_invoices")->fetchColumn();
+$countLorries = $pdo->query("SELECT COUNT(*) FROM lorries")->fetchColumn();
 
 require_once __DIR__ . '/includes/header.php';
 ?>
 
 <!-- Header -->
-<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-3">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-3 no-print">
     <div>
-        <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center">
-            <i class="fa-solid fa-gear text-rose-500 mr-2.5"></i> System Settings & Maintenance
+        <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center">
+            <span class="w-10 h-10 rounded-2xl bg-slate-900/10 text-slate-800 flex items-center justify-center mr-3 shadow-inner">
+                <i class="fa-solid fa-gear text-lg"></i>
+            </span>
+            System Settings & Reset
         </h1>
         <p class="text-xs text-slate-500 mt-1">
-            System Overview, Database Utilities & <strong>Clear All (System Reset)</strong>
+            Pure Quantity Tracking System &bull; Database Tools &bull; <strong>Clear All (System Wipe)</strong>
         </p>
     </div>
 
     <div>
         <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span> MySQL Connected &bull; ice_cream_db
+            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span> MySQL Connected &bull; Pure Inventory (Units Only)
         </span>
     </div>
 </div>
@@ -178,39 +190,39 @@ require_once __DIR__ . '/includes/header.php';
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Ice Cream Items</span>
-            <span class="text-2xl font-black font-mono <?= $countProducts == 0 ? 'text-slate-400' : 'text-slate-800' ?> mt-1 block"><?= number_format($countProducts) ?></span>
-            <span class="text-[10px] text-slate-400"><?= $countProducts == 0 ? 'Empty (0 items)' : 'Products in catalog' ?></span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Catalog Products</span>
+            <span class="text-2xl font-black font-mono <?= $countProducts == 0 ? 'text-slate-400' : 'text-slate-900' ?> mt-1 block"><?= number_format($countProducts) ?></span>
+            <span class="text-[10px] text-slate-400"><?= $countProducts == 0 ? 'Empty (0 items)' : 'Flavors / Packs' ?></span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Warehouse Stock</span>
-            <span class="text-2xl font-black font-mono <?= $totalStoreUnits == 0 ? 'text-slate-400' : 'text-amber-700' ?> mt-1 block"><?= number_format($totalStoreUnits) ?></span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Cold Room Stock</span>
+            <span class="text-2xl font-black font-mono <?= $totalStoreUnits == 0 ? 'text-slate-400' : 'text-cyan-700' ?> mt-1 block"><?= number_format($totalStoreUnits) ?></span>
             <span class="text-[10px] text-slate-400">Total Units</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">POS Bills</span>
-            <span class="text-2xl font-black font-mono <?= $countSales == 0 ? 'text-slate-400' : 'text-slate-800' ?> mt-1 block"><?= number_format($countSales) ?></span>
-            <span class="text-[10px] text-slate-400">Total Receipts</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Lorry Dispatches</span>
+            <span class="text-2xl font-black font-mono <?= $countLorryDispatches == 0 ? 'text-slate-400' : 'text-indigo-700' ?> mt-1 block"><?= number_format($countLorryDispatches) ?></span>
+            <span class="text-[10px] text-slate-400">Trip Dispatches</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Lorry Fleet</span>
-            <span class="text-2xl font-black font-mono <?= $countLorries == 0 ? 'text-slate-400' : 'text-purple-700' ?> mt-1 block"><?= number_format($countLorries) ?></span>
-            <span class="text-[10px] text-slate-400">Vehicles</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Direct Store Issues</span>
+            <span class="text-2xl font-black font-mono <?= $countDirectIssues == 0 ? 'text-slate-400' : 'text-emerald-700' ?> mt-1 block"><?= number_format($countDirectIssues) ?></span>
+            <span class="text-[10px] text-slate-400">Store Out GDNs</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Invoices (GRN)</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">In Come Stock (GRN)</span>
             <span class="text-2xl font-black font-mono <?= $countInvoices == 0 ? 'text-slate-400' : 'text-blue-700' ?> mt-1 block"><?= number_format($countInvoices) ?></span>
-            <span class="text-[10px] text-slate-400">Stock In Records</span>
+            <span class="text-[10px] text-slate-400">Factory Invoices</span>
         </div>
 
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Daily Cash Sheets</span>
-            <span class="text-2xl font-black font-mono <?= $countCashRecords == 0 ? 'text-slate-400' : 'text-emerald-700' ?> mt-1 block"><?= number_format($countCashRecords) ?></span>
-            <span class="text-[10px] text-slate-400">Cash Balances</span>
+            <span class="text-[10px] font-bold uppercase text-slate-400 block">Registered Lorries</span>
+            <span class="text-2xl font-black font-mono <?= $countLorries == 0 ? 'text-slate-400' : 'text-purple-700' ?> mt-1 block"><?= number_format($countLorries) ?></span>
+            <span class="text-[10px] text-slate-400">Active Vehicles</span>
         </div>
     </div>
 </div>
@@ -228,14 +240,14 @@ require_once __DIR__ . '/includes/header.php';
         <div>
             <h3 class="text-lg font-black text-slate-900 tracking-tight">System Data Reset &bull; Clear All</h3>
             <p class="text-xs text-slate-500 mt-1">
-                Use the buttons below to delete existing demo items and sales so you can use the system fresh with your own products.
+                Use the buttons below to delete existing demo items and dispatches so you can use the system fresh with your own products.
             </p>
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
         
-        <!-- CARD 1: DELETE ABSOLUTELY EVERYTHING (What user requested) -->
+        <!-- CARD 1: DELETE ABSOLUTELY EVERYTHING -->
         <div class="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex flex-col justify-between shadow-xs">
             <div>
                 <div class="flex items-center justify-between mb-2">
@@ -245,14 +257,14 @@ require_once __DIR__ . '/includes/header.php';
                     <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-200 text-rose-900">Total Wipe</span>
                 </div>
                 <p class="text-xs text-slate-700 mb-3 leading-relaxed font-medium">
-                    Deletes <strong>ALL items and products</strong>, sales, stock, and lorries. Leaves the system completely empty!
+                    Deletes <strong>ALL items and products</strong>, dispatches, stock, and lorries. Leaves the system completely empty!
                 </p>
                 <ul class="text-xs text-rose-900 space-y-1 mb-4 font-semibold">
                     <li>&bull; All Ice Cream Products: <strong>DELETED</strong></li>
-                    <li>&bull; All Store Stock: <strong>DELETED (0)</strong></li>
-                    <li>&bull; All POS Bills: <strong>DELETED</strong></li>
-                    <li>&bull; All Lorries: <strong>DELETED</strong></li>
-                    <li>&bull; All Invoices & Cash: <strong>DELETED</strong></li>
+                    <li>&bull; All Cold Room Stock: <strong>DELETED (0)</strong></li>
+                    <li>&bull; All Direct Store Issues: <strong>DELETED</strong></li>
+                    <li>&bull; All Lorry Runs & 3PM Returns: <strong>DELETED</strong></li>
+                    <li>&bull; All Lorries & Factory GRN: <strong>DELETED</strong></li>
                     <li class="text-emerald-700 font-bold">&bull; Admin Login: <strong>Preserved (`admin`)</strong></li>
                 </ul>
             </div>
@@ -267,32 +279,32 @@ require_once __DIR__ . '/includes/header.php';
             </form>
         </div>
 
-        <!-- CARD 2: Clear Sales & Stock Only (Keep Product Catalog) -->
+        <!-- CARD 2: Clear Dispatches & Stock Only -->
         <div class="p-5 rounded-2xl bg-amber-50/70 border border-amber-300 flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <span class="font-extrabold text-sm text-amber-950 flex items-center">
-                        <i class="fa-solid fa-broom text-amber-600 mr-2"></i> 2. Clear Sales & Stock Only
+                        <i class="fa-solid fa-broom text-amber-600 mr-2"></i> 2. Clear Dispatches & Stock Only
                     </span>
                     <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">Keep Items</span>
                 </div>
                 <p class="text-xs text-slate-700 mb-3 leading-relaxed">
-                    Clears bills, sales, dispatches, and sets stock to 0, but <strong>keeps your product names</strong>.
+                    Clears all dispatches, returns, store issues, and sets stock to 0, but <strong>keeps your product catalog</strong>.
                 </p>
                 <ul class="text-xs text-slate-700 space-y-1 mb-4">
-                    <li>&bull; POS Bills & Cash: <strong>Cleared</strong></li>
-                    <li>&bull; Lorry dispatches: <strong>Cleared</strong></li>
-                    <li>&bull; Store Stock counts: <strong>Reset to 0</strong></li>
-                    <li>&bull; Products (Flavors): <strong>Kept Intact</strong></li>
+                    <li>&bull; Direct Store Issues: <strong>Cleared</strong></li>
+                    <li>&bull; Lorry Dispatches & Returns: <strong>Cleared</strong></li>
+                    <li>&bull; Cold Room Stock counts: <strong>Reset to 0</strong></li>
+                    <li>&bull; Product Catalog: <strong>Kept Intact</strong></li>
                 </ul>
             </div>
 
-            <form method="POST" action="settings.php" onsubmit="return confirm('Clear all sales and reset stock to 0?');">
+            <form method="POST" action="settings.php" onsubmit="return confirm('Clear all dispatches and reset stock to 0?');">
                 <input type="hidden" name="action" value="clear_transactions">
                 <button type="submit" 
                         class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
                     <i class="fa-solid fa-eraser"></i>
-                    <span>Clear Sales & Stock (0)</span>
+                    <span>Clear Dispatches & Stock (0)</span>
                 </button>
             </form>
         </div>
@@ -302,16 +314,16 @@ require_once __DIR__ . '/includes/header.php';
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <span class="font-extrabold text-sm text-slate-800 flex items-center">
-                        <i class="fa-solid fa-rotate-left text-slate-600 mr-2"></i> 3. Restore Demo Data
+                        <i class="fa-solid fa-rotate-left text-slate-600 mr-2"></i> 3. Restore Demo Products
                     </span>
                     <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Re-Seed</span>
                 </div>
                 <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-                    If you cleared the items and ever want the sample ice cream products (Vanilla 1L, etc.) back to test again.
+                    If you cleared all items and ever want sample ice cream products (Vanilla 1L, etc.) back to test or demonstrate.
                 </p>
                 <ul class="text-xs text-slate-600 space-y-1 mb-4">
                     <li>&bull; 10 Sample Ice Creams</li>
-                    <li>&bull; Demo Store Stocks</li>
+                    <li>&bull; Demo Cold Room Stock</li>
                     <li>&bull; 2 Sample Lorries</li>
                 </ul>
             </div>

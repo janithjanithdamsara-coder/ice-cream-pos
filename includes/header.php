@@ -1,5 +1,5 @@
 <?php
-// includes/header.php
+// includes/header.php - Pure Inventory & Distribution Navigation
 require_once __DIR__ . '/../config/auth.php';
 requireLogin();
 
@@ -20,31 +20,19 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' | ' : '' ?>FrostyFlow Ice Cream Distribution & POS</title>
+    <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' | ' : '' ?>FrostyFlow Ice Cream Distribution & Inventory</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Font (Inter) -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- SweetAlert2 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
                         sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                    },
-                    colors: {
-                        brand: {
-                            50: '#fdf4f5',
-                            100: '#fbe8ea',
-                            200: '#f7d6db',
-                            500: '#d9546b',
-                            600: '#c43750',
-                            700: '#a4283e',
-                        }
                     }
                 }
             }
@@ -58,11 +46,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             .print-full-width { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
         }
         .print-only { display: none; }
-        /* Custom scrollbar for sidebar */
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         @media (max-width: 768px) {
-            body { padding-bottom: 60px; }
+            body { padding-bottom: 65px; }
         }
     </style>
 </head>
@@ -80,15 +67,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <!-- Brand Logo & Header -->
             <div class="h-16 px-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40">
                 <a href="dashboard.php" class="flex items-center space-x-3 group">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-400 flex items-center justify-center text-white shadow-lg shadow-rose-900/50 group-hover:scale-105 transition-transform">
-                        <i class="fa-solid fa-ice-cream text-lg"></i>
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-950/50 group-hover:scale-105 transition-transform">
+                        <i class="fa-solid fa-boxes-packing text-lg"></i>
                     </div>
                     <div>
                         <span class="text-lg font-black tracking-tight text-white flex items-center">
                             FrostyFlow
-                            <span class="w-2 h-2 rounded-full bg-rose-500 ml-1.5 animate-pulse"></span>
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 ml-1.5 animate-pulse"></span>
                         </span>
-                        <div class="text-[10px] text-slate-400 font-medium -mt-1 tracking-wider uppercase">Ice Cream System</div>
+                        <div class="text-[10px] text-slate-400 font-medium -mt-1 tracking-wider uppercase">Stock & Distribution</div>
                     </div>
                 </a>
 
@@ -98,26 +85,23 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 </button>
             </div>
 
-            <!-- Active Branch Pill / Switcher inside Sidebar -->
-            <div class="p-4 border-b border-slate-800/60 bg-slate-950/20">
+            <!-- Active Branch Indicator -->
+            <div class="p-3.5 border-b border-slate-800/60 bg-slate-950/20">
                 <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
                     <span class="flex items-center">
-                        <i class="fa-solid fa-location-dot text-rose-500 mr-1.5"></i> Active Branch
+                        <i class="fa-solid fa-warehouse text-cyan-400 mr-1.5"></i> Active Warehouse
                     </span>
-                    <span class="px-1.5 py-0.2 text-[9px] bg-slate-800 text-slate-300 rounded font-mono">Hub</span>
                 </div>
 
                 <?php if ($user['role'] === 'super_admin' && count($allBranches) > 1): ?>
-                    <div class="relative">
-                        <select onchange="window.location.href='?switch_branch=' + this.value" 
-                                class="w-full bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500 cursor-pointer transition-colors">
-                            <?php foreach ($allBranches as $b): ?>
-                                <option value="<?= $b['id'] ?>" <?= $b['id'] == $user['branch_id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($b['name']) ?> (<?= htmlspecialchars($b['code']) ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <select onchange="window.location.href='?switch_branch=' + this.value" 
+                            class="w-full bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer">
+                        <?php foreach ($allBranches as $b): ?>
+                            <option value="<?= $b['id'] ?>" <?= $b['id'] == $user['branch_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($b['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 <?php else: ?>
                     <div class="text-xs font-bold text-slate-200 bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700/60 truncate">
                         <?= htmlspecialchars($user['branch_name']) ?>
@@ -126,55 +110,50 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </div>
 
             <!-- Navigation Links Scroll Area -->
-            <nav class="flex-1 px-3 py-4 space-y-6 overflow-y-auto sidebar-scroll">
+            <nav class="flex-1 px-3 py-4 space-y-5 overflow-y-auto sidebar-scroll">
                 
-                <!-- Group 1: Main -->
+                <!-- Group 1: Overview -->
                 <div>
-                    <div class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Main Menu</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Inventory Operations</div>
                     <div class="space-y-1">
-                        <a href="dashboard.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'dashboard.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-gauge-high w-5 text-sm <?= $currentPage === 'dashboard.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Dashboard</span>
+                        <a href="dashboard.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'dashboard.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-gauge-high w-5 text-sm"></i>
+                            <span class="ml-2.5">Dashboard Overview</span>
                         </a>
 
-                        <a href="pos.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow-md shadow-emerald-900/40' : 'text-emerald-400 hover:text-white hover:bg-slate-800/70' ?>">
+                        <a href="stock.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'stock.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-boxes-stacked w-5 text-sm"></i>
+                            <span class="ml-2.5">Stock & Warehouse</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Group 2: Distribution & Outflow -->
+                <div>
+                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dispatches & Returns</div>
+                    <div class="space-y-1">
+                        <a href="lorry.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'lorry.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-truck-moving w-5 text-sm"></i>
+                            <span class="ml-2.5">Lorry Dispatch & 3PM Returns</span>
+                        </a>
+
+                        <a href="direct_issue.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'direct_issue.php' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md' : 'text-emerald-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <div class="flex items-center">
-                                <i class="fa-solid fa-cash-register w-5 text-sm <?= $currentPage === 'pos.php' ? 'text-white' : 'text-emerald-400' ?>"></i>
-                                <span class="ml-2.5">Counter POS</span>
+                                <i class="fa-solid fa-arrow-up-from-bracket w-5 text-sm"></i>
+                                <span class="ml-2.5">Direct Store Issue (Out)</span>
                             </div>
-                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider <?= $currentPage === 'pos.php' ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-400' ?>">Billing</span>
+                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-emerald-500/20 text-emerald-300">Out</span>
                         </a>
                     </div>
                 </div>
 
-                <!-- Group 2: Inventory & Lorries -->
+                <!-- Group 3: Reports -->
                 <div>
-                    <div class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Stock & Distribution</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Audit & Stock Movement</div>
                     <div class="space-y-1">
-                        <a href="stock.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'stock.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-boxes-stacked w-5 text-sm <?= $currentPage === 'stock.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Stock & Main Store</span>
-                        </a>
-
-                        <a href="lorry.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'lorry.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-truck w-5 text-sm <?= $currentPage === 'lorry.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Lorry Sales & Returns</span>
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Group 3: Finance & Reports -->
-                <div>
-                    <div class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Finance & Analytics</div>
-                    <div class="space-y-1">
-                        <a href="daily_cash.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'daily_cash.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-wallet w-5 text-sm <?= $currentPage === 'daily_cash.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Daily Cash Register</span>
-                        </a>
-
-                        <a href="reports.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'reports.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-chart-pie w-5 text-sm <?= $currentPage === 'reports.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Reports & Ledgers</span>
+                        <a href="reports.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'reports.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-clipboard-list w-5 text-sm"></i>
+                            <span class="ml-2.5">Daily Stock Movement Sheet</span>
                         </a>
                     </div>
                 </div>
@@ -182,21 +161,21 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <!-- Group 4: Administration -->
                 <?php if (hasRole(['super_admin', 'admin'])): ?>
                 <div>
-                    <div class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Administration</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">System Admin</div>
                     <div class="space-y-1">
-                        <a href="branches.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'branches.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-building-flag w-5 text-sm <?= $currentPage === 'branches.php' ? 'text-white' : 'text-slate-400' ?>"></i>
+                        <a href="branches.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'branches.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-building-flag w-5 text-sm"></i>
                             <span class="ml-2.5">Branches Management</span>
                         </a>
 
-                        <a href="users.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'users.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-users w-5 text-sm <?= $currentPage === 'users.php' ? 'text-white' : 'text-slate-400' ?>"></i>
+                        <a href="users.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'users.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-users w-5 text-sm"></i>
                             <span class="ml-2.5">User Accounts</span>
                         </a>
 
-                        <a href="settings.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'settings.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-gear w-5 text-sm <?= $currentPage === 'settings.php' ? 'text-white' : 'text-slate-400' ?>"></i>
-                            <span class="ml-2.5">Settings & Reset</span>
+                        <a href="settings.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'settings.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-gear w-5 text-sm"></i>
+                            <span class="ml-2.5">Settings & Clear All</span>
                         </a>
                     </div>
                 </div>
@@ -209,7 +188,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <div class="p-3 border-t border-slate-800 bg-slate-950/60">
             <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800">
                 <div class="flex items-center space-x-2.5 min-w-0">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-extrabold flex items-center justify-center text-xs flex-shrink-0">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 text-white font-extrabold flex items-center justify-center text-xs flex-shrink-0">
                         <?= strtoupper(substr($user['name'], 0, 1)) ?>
                     </div>
                     <div class="min-w-0 flex-1">
@@ -217,7 +196,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <div class="text-[10px] text-slate-400 capitalize truncate"><?= str_replace('_', ' ', $user['role']) ?></div>
                     </div>
                 </div>
-                <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-lg transition-colors flex-shrink-0">
+                <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors flex-shrink-0">
                     <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                 </a>
             </div>
@@ -232,7 +211,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs no-print">
             <div class="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 
-                <!-- Left: Hamburger (Mobile) + Page Title / Breadcrumb -->
+                <!-- Left: Hamburger (Mobile) + Page Title -->
                 <div class="flex items-center space-x-3">
                     <button type="button" onclick="toggleSidebar()" class="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none transition-colors">
                         <i class="fa-solid fa-bars text-lg"></i>
@@ -243,24 +222,24 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <?= isset($pageTitle) ? htmlspecialchars($pageTitle) : 'Overview' ?>
                         </h2>
                         <div class="hidden sm:flex items-center space-x-1.5 text-[11px] text-slate-400">
-                            <span>FrostyFlow</span>
+                            <span>Warehouse Inventory</span>
                             <span>&rsaquo;</span>
                             <span class="text-slate-600 font-medium"><?= htmlspecialchars($user['branch_name']) ?></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right: Quick POS Action & Info -->
+                <!-- Right: Quick Direct Issue Action & User -->
                 <div class="flex items-center space-x-2 sm:space-x-3">
-                    <!-- Quick Direct POS Button -->
-                    <a href="pos.php" class="inline-flex items-center px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-sm transition-all transform hover:-translate-y-0.5">
-                        <i class="fa-solid fa-cash-register mr-1.5"></i>
-                        <span>POS Billing</span>
+                    <!-- Quick Direct Store Issue Button -->
+                    <a href="direct_issue.php" class="inline-flex items-center px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-sm transition-all transform hover:-translate-y-0.5">
+                        <i class="fa-solid fa-arrow-up-from-bracket mr-1.5"></i>
+                        <span>Direct Issue (Store Out)</span>
                     </a>
 
                     <!-- User Pill -->
                     <div class="hidden sm:flex items-center pl-3 border-l border-slate-200 space-x-2">
-                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="inline-block w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
                         <span class="text-xs text-slate-600 font-semibold"><?= htmlspecialchars($user['name']) ?></span>
                     </div>
                 </div>
