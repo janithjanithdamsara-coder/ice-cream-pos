@@ -193,6 +193,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <i class="fa-solid fa-users w-5 text-sm <?= $currentPage === 'users.php' ? 'text-white' : 'text-slate-400' ?>"></i>
                             <span class="ml-2.5">User Accounts</span>
                         </a>
+
+                        <a href="settings.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'settings.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md shadow-rose-900/40' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-gear w-5 text-sm <?= $currentPage === 'settings.php' ? 'text-white' : 'text-slate-400' ?>"></i>
+                            <span class="ml-2.5">Settings & Reset</span>
+                        </a>
                     </div>
                 </div>
                 <?php endif; ?>
