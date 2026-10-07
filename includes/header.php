@@ -131,18 +131,25 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <!-- Group 2: Distribution & Outflow -->
                 <div>
                     <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dispatches & Returns</div>
-                    <div class="space-y-1">
+                        <a href="pos.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
+                                <span class="ml-2.5">Counter POS (Issue Slip)</span>
+                            </div>
+                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-cyan-500/20 text-cyan-300">Fast</span>
+                        </a>
+
+                        <a href="direct_issue.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'direct_issue.php' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-arrow-up-from-bracket w-5 text-sm"></i>
+                                <span class="ml-2.5">Formal Issue Note (GDN)</span>
+                            </div>
+                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-emerald-500/20 text-emerald-300">Out</span>
+                        </a>
+
                         <a href="lorry.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'lorry.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-truck-moving w-5 text-sm"></i>
                             <span class="ml-2.5">Lorry Dispatch & 3PM Returns</span>
-                        </a>
-
-                        <a href="direct_issue.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'direct_issue.php' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md' : 'text-emerald-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <div class="flex items-center">
-                                <i class="fa-solid fa-arrow-up-from-bracket w-5 text-sm"></i>
-                                <span class="ml-2.5">Direct Store Issue (Out)</span>
-                            </div>
-                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-emerald-500/20 text-emerald-300">Out</span>
                         </a>
                     </div>
                 </div>
