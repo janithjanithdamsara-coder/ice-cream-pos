@@ -4,7 +4,7 @@
         <footer class="bg-white border-t border-slate-200 mt-auto py-4 text-center text-xs text-slate-400 no-print">
             <div class="px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-2">
                 <div>
-                    <span class="font-bold text-slate-600">FrostyFlow System</span> &copy; <?= date('Y') ?> &bull; Ice Cream Distribution & POS
+                    <span class="font-bold text-slate-700">Dhanesha Distributors</span> &copy; <?= date('Y') ?> &bull; Ice Cream Distribution & Cold Room Logistics
                 </div>
                 <div class="flex items-center space-x-3 text-[11px]">
                     <span class="flex items-center text-emerald-600">

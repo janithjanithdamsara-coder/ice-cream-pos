@@ -20,7 +20,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' | ' : '' ?>FrostyFlow Ice Cream Distribution & Inventory</title>
+    <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' | ' : '' ?>Dhanesha Distributors - Ice Cream Logistics</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
@@ -86,11 +86,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <i class="fa-solid fa-boxes-packing text-lg"></i>
                     </div>
                     <div>
-                        <span class="text-lg font-black tracking-tight text-white flex items-center">
-                            FrostyFlow
+                        <span class="text-base font-black tracking-tight text-white flex items-center">
+                            Dhanesha
                             <span class="w-2 h-2 rounded-full bg-cyan-400 ml-1.5 animate-pulse"></span>
                         </span>
-                        <div class="text-[10px] text-slate-400 font-medium -mt-1 tracking-wider uppercase">Stock & Distribution</div>
+                        <div class="text-[10px] text-cyan-300 font-extrabold -mt-0.5 tracking-wider uppercase">Distributors</div>
                     </div>
                 </a>
 
