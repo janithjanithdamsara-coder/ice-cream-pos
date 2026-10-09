@@ -11,6 +11,7 @@ $today = date('Y-m-d');
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // Action 1: Create Direct Store Issue Note (Store Out)
@@ -468,6 +469,7 @@ require_once __DIR__ . '/includes/header.php';
 
                             <?php if (hasRole(['super_admin', 'admin'])): ?>
                             <form method="POST" action="direct_issue.php" class="inline-block" onsubmit="return confirm('Cancel this issue note? The <?= $iss['total_qty'] ?> units will be returned back to Cold Room store.');">
+                                <?= csrfField() ?>
                                 <input type="hidden" name="action" value="cancel_issue">
                                 <input type="hidden" name="issue_id" value="<?= $iss['id'] ?>">
                                 <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[11px] transition">
@@ -525,6 +527,7 @@ require_once __DIR__ . '/includes/header.php';
                             </a>
                             <?php if (hasRole(['super_admin', 'admin'])): ?>
                             <form method="POST" action="direct_issue.php" class="inline" onsubmit="return confirm('Cancel this issue note? Stock will be returned to Cold Room.');">
+                                <?= csrfField() ?>
                                 <input type="hidden" name="action" value="cancel_issue">
                                 <input type="hidden" name="issue_id" value="<?= $iss['id'] ?>">
                                 <button type="submit" class="px-2 py-1 bg-rose-50 text-rose-600 font-bold rounded-lg text-[10px] hover:bg-rose-100 transition">
@@ -564,6 +567,7 @@ require_once __DIR__ . '/includes/header.php';
 
         <!-- Modal Body (Form) -->
         <form method="POST" action="direct_issue.php" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" id="issueForm">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_issue">
 
             <!-- Meta details -->

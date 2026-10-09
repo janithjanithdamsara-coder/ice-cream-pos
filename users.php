@@ -8,6 +8,7 @@ $user = currentUser();
 
 // Handle POST actions
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // Action 1: Create New User
@@ -264,6 +265,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="users.php" class="space-y-3 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_user">
 
             <div>
@@ -328,6 +330,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="users.php" class="space-y-3.5 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="change_my_password">
 
             <div class="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 flex items-center space-x-2">
@@ -371,6 +374,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="users.php" class="space-y-3.5 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="reset_user_password">
             <input type="hidden" name="target_user_id" id="resetTargetUserId">
 

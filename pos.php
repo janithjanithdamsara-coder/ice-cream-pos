@@ -13,6 +13,7 @@ $printIssueId = null;
 
 // Handle POST Checkout
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     if ($action === 'counter_issue') {
@@ -692,6 +693,7 @@ require_once __DIR__ . '/includes/header.php';
 
                     <!-- Hidden Form for Checkout POST -->
                     <form id="posCheckoutForm" method="POST" action="pos.php">
+                        <?= csrfField() ?>
                         <input type="hidden" name="action" value="counter_issue">
                         <input type="hidden" name="recipient_name" id="formRecipientName" value="">
                         <input type="hidden" name="extra_label" id="formExtraLabel" value="">

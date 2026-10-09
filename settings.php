@@ -9,6 +9,7 @@ $user = currentUser();
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // ACTION 1: WIPE ABSOLUTELY EVERYTHING (Delete All Items, Stock, Dispatches, Lorries)
@@ -284,6 +285,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <form method="POST" action="settings.php" onsubmit="return confirm('WARNING: Are you 100% sure you want to DELETE ALL ITEMS AND DATA? Everything will become 0!');">
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="wipe_everything">
                 <button type="submit" 
                         class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-rose-300 transition-all flex items-center justify-center space-x-2">
@@ -314,6 +316,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <form method="POST" action="settings.php" onsubmit="return confirm('Clear all dispatches and reset stock to 0?');">
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="clear_transactions">
                 <button type="submit" 
                         class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
@@ -343,6 +346,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <form method="POST" action="settings.php" onsubmit="return confirm('Restore sample demo products and lorries?');">
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="restore_demo">
                 <button type="submit" 
                         class="w-full py-3 px-4 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">

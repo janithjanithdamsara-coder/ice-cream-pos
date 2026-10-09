@@ -11,6 +11,7 @@ $today = date('Y-m-d');
 
 // Handle POST actions
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // Action 1: Create New External Loan (Issue Stock to External Warehouse / Party)
@@ -695,6 +696,7 @@ require_once __DIR__ . '/includes/header.php';
 
                                         <?php if ($l['status'] === 'pending' && $returned === 0): ?>
                                             <form method="POST" action="warehouse_loans.php" onsubmit="return confirm('Cancel this loan and return all <?= $issued ?> units back to Cold Room store?');" class="inline">
+                                                <?= csrfField() ?>
                                                 <input type="hidden" name="action" value="cancel_loan">
                                                 <input type="hidden" name="loan_id" value="<?= $l['id'] ?>">
                                                 <button type="submit" class="px-2 py-1 rounded-lg text-rose-500 hover:bg-rose-50 font-bold text-xs transition" title="Cancel Loan & Restore Stock">
@@ -731,6 +733,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="warehouse_loans.php" id="loanBulkForm" onsubmit="return validateLoanForm()" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_loan">
 
             <!-- Top Borrower & Logistics Bar -->
@@ -894,6 +897,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="warehouse_loans.php" onsubmit="return validateReceiveForm()" class="flex-1 flex flex-col overflow-hidden p-5 space-y-4">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="receive_return">
             <input type="hidden" name="loan_id" value="<?= $receiveLoan['id'] ?>">
 

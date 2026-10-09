@@ -9,6 +9,7 @@ $branchId = $user['branch_id'];
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // Action: Quick Add Product via AJAX (from GRN modal on-the-fly)
@@ -387,6 +388,7 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
                                     <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                                        <?= csrfField() ?>
                                         <input type="hidden" name="action" value="delete_product">
                                         <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
                                         <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors" title="Delete Product">
@@ -459,6 +461,7 @@ require_once __DIR__ . '/includes/header.php';
 
                         <div class="flex items-center space-x-1">
                             <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                                <?= csrfField() ?>
                                 <input type="hidden" name="action" value="delete_product">
                                 <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
                                 <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Delete Product">
@@ -573,6 +576,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="stock.php" id="grnBulkForm" onsubmit="return validateGrnForm()" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_grn">
 
             <!-- Top Row: Invoice Meta Details -->
@@ -772,6 +776,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="stock.php" class="space-y-3.5 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_product">
 
             <div>
@@ -837,6 +842,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="stock.php" class="space-y-4 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="adjust_stock">
 
             <div>
@@ -1079,6 +1085,7 @@ require_once __DIR__ . '/includes/header.php';
         try {
             const formData = new FormData();
             formData.append('action', 'quick_create_product');
+            formData.append('csrf_token', '<?= getCsrfToken() ?>');
             formData.append('code', code);
             formData.append('name', name);
             formData.append('category_id', catId);

@@ -1,6 +1,12 @@
 <?php
 // config/db.php - Pure Inventory & Stock Distribution Database Schema (Zero Money / Units Only)
 
+// Prevent direct execution via browser URL
+if (isset($_SERVER['SCRIPT_FILENAME']) && realpath(__FILE__) === realpath($_SERVER['SCRIPT_FILENAME'])) {
+    http_response_code(403);
+    exit('Direct access forbidden.');
+}
+
 // Environment Auto-Detection (Localhost vs cPanel Live Server)
 $isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1', '::1']) || (php_sapi_name() === 'cli' && getenv('COMPUTERNAME') !== false);
 

@@ -10,6 +10,7 @@ $today = date('Y-m-d');
 
 // Handle POST actions
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrf();
     $action = $_POST['action'] ?? '';
 
     // Action 1: Add New Lorry
@@ -774,6 +775,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="lorry.php" id="dispatchBulkForm" onsubmit="return validateDispatchForm()" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_dispatch">
 
             <?php if ($availableLorriesCount === 0): ?>
@@ -954,6 +956,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="lorry.php" id="reloadBulkForm" onsubmit="return validateReloadForm()" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="reload_dispatch">
 
             <!-- Top Configuration Bar -->
@@ -1143,6 +1146,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="lorry.php" class="flex-1 overflow-y-auto p-6 space-y-4">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="settle_dispatch">
             <input type="hidden" name="dispatch_id" value="<?= $settleDispatch['id'] ?>">
 
@@ -1337,6 +1341,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <form method="POST" action="lorry.php" class="space-y-3 text-xs">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="create_lorry">
 
             <div>

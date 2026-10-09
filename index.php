@@ -10,36 +10,54 @@ if (isLoggedIn()) {
 $error = '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-    $username = trim($_POST['username'] ?? '');
-    $password = trim($_POST['password'] ?? '');
+    // 1. IP Rate Limiting to prevent brute-force attacks (5 failed attempts per 5 minutes)
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $failCheck = $pdo->prepare("SELECT COUNT(*) FROM activity_logs WHERE action = 'login_failed' AND ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)");
+    $failCheck->execute([$clientIp]);
+    $recentFailures = intval($failCheck->fetchColumn() ?? 0);
 
-    if (empty($username) || empty($password)) {
-        $error = "Please enter both username and password.";
+    if ($recentFailures >= 5) {
+        $error = "Too many failed sign-in attempts from your IP. For security, please wait 5 minutes before trying again.";
     } else {
-        $stmt = $pdo->prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.username = ? AND u.status = 'active' LIMIT 1");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
+        $username = trim($_POST['username'] ?? '');
+        $password = trim($_POST['password'] ?? '');
 
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_name'] = $user['name'];
-            $_SESSION['user_username'] = $user['username'];
-            $_SESSION['user_role'] = $user['role'];
-            $_SESSION['user_branch_id'] = $user['branch_id'] ?? 1;
-            $_SESSION['active_branch_id'] = $user['branch_id'] ?? 1;
-            $_SESSION['active_branch_name'] = $user['branch_name'] ?? 'Main Cold Room Hub';
-
-            logActivity('login_success', 'auth', "User '{$user['username']}' ({$user['role']}) signed in successfully", $user['id']);
-
-            if ($user['role'] === 'master') {
-                header("Location: master.php");
-            } else {
-                header("Location: dashboard.php");
-            }
-            exit;
+        if (empty($username) || empty($password)) {
+            $error = "Please enter both username and password.";
         } else {
-            logActivity('login_failed', 'auth', "Failed sign in attempt for username: '{$username}'");
-            $error = "Invalid username or password. Please try again.";
+            $stmt = $pdo->prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.username = ? AND u.status = 'active' LIMIT 1");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($password, $user['password'])) {
+                // Regenerate session ID to prevent Session Fixation
+                session_regenerate_id(true);
+
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_name'] = $user['name'];
+                $_SESSION['user_username'] = $user['username'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_branch_id'] = $user['branch_id'] ?? 1;
+                $_SESSION['active_branch_id'] = $user['branch_id'] ?? 1;
+                $_SESSION['active_branch_name'] = $user['branch_name'] ?? 'Main Cold Room Hub';
+
+                logActivity('login_success', 'auth', "User '{$user['username']}' ({$user['role']}) signed in successfully", $user['id']);
+
+                if ($user['role'] === 'master') {
+                    header("Location: master.php");
+                } else {
+                    header("Location: dashboard.php");
+                }
+                exit;
+            } else {
+                logActivity('login_failed', 'auth', "Failed sign in attempt for username: '{$username}'");
+                $remaining = max(0, 5 - ($recentFailures + 1));
+                if ($remaining > 0) {
+                    $error = "Invalid username or password. ({$remaining} attempts remaining before temporary lockout).";
+                } else {
+                    $error = "Too many failed sign-in attempts. Your IP has been temporarily locked for 5 minutes.";
+                }
+            }
         }
     }
 }

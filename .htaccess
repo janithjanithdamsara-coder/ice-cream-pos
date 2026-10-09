@@ -1,0 +1,54 @@
+# ==============================================================================
+# FrostyFlow Web Server Security Hardening (.htaccess)
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+</IfModule>
+
+# 1. Disable Directory Browsing
+Options -Indexes
+
+# 2. Block direct web access to sensitive files (.sql, .log, .env, .git, etc.)
+<FilesMatch "\.(sql|bak|log|tmp|env|yml|yaml|jsonl|git|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Specifically protect database.sql and backup files
+<Files "database.sql">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</Files>
+<Files "cpanel_full_backup.sql">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</Files>
+
+# 3. Prevent direct HTTP access to internal include folders
+<IfModule mod_rewrite.c>
+    RewriteRule ^(config|includes)/.*$ - [F,L]
+</IfModule>
+
+# 4. Essential HTTP Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
