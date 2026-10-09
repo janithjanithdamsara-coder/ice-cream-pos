@@ -144,9 +144,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
 
                 $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) VALUES
-                    (1, 1, 160), (1, 2, 120), (1, 3, 90), (1, 4, 80), (1, 5, 100),
-                    (1, 6, 100), (1, 7, 200), (1, 8, 200), (1, 9, 300), (1, 10, 300);");
+                    (1, 1, 0), (1, 2, 0), (1, 3, 0), (1, 4, 0), (1, 5, 0),
+                    (1, 6, 0), (1, 7, 0), (1, 8, 0), (1, 9, 0), (1, 10, 0)
+                    ON DUPLICATE KEY UPDATE `quantity` = 0;");
             }
+
+            // Always ensure all stock is reset to 0 for fresh testing
+            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
+
+            // Clear past dispatches so system is 100% clean
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_return_items`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_returns`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_items`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loans`");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
 
             // Insert lorries if 0
             $stmt = $pdo->query("SELECT COUNT(*) FROM `lorries`");
@@ -154,11 +172,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->exec("INSERT INTO `lorries` (`id`, `branch_id`, `plate_no`, `driver_name`, `contact_no`, `route_name`, `status`) VALUES
                     (1, 1, 'WP CAB-4521', 'Kamal Perera', '077-1122334', 'Colombo North / Gampaha Route', 'available'),
                     (2, 1, 'WP ND-8890', 'Sunil Shantha', '071-4455667', 'Colombo South / Moratuwa Route', 'available');");
+            } else {
+                $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
             }
 
-            setFlash('success', 'Demo ice cream products (Vanilla 1L, etc.) and Lorries restored successfully.');
+            setFlash('success', 'Setup Complete: 10 Ice Cream Products added, 2 Lorries ready, and all Stock Quantities set to ZERO (0 Units). Ready for fresh testing!');
         } catch (Exception $e) {
-            setFlash('danger', 'Error restoring demo: ' . $e->getMessage());
+            setFlash('danger', 'Error setting up test data: ' . $e->getMessage());
         }
         header("Location: settings.php");
         exit;
@@ -326,32 +346,32 @@ require_once __DIR__ . '/includes/header.php';
             </form>
         </div>
 
-        <!-- CARD 3: Restore Default Demo Data -->
-        <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+        <!-- CARD 3: Setup 10 Items + 2 Lorries (0 Qty) -->
+        <div class="p-5 rounded-2xl bg-cyan-50/60 border border-cyan-200 flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-extrabold text-sm text-slate-800 flex items-center">
-                        <i class="fa-solid fa-rotate-left text-slate-600 mr-2"></i> 3. Restore Demo Products
+                    <span class="font-extrabold text-sm text-cyan-950 flex items-center">
+                        <i class="fa-solid fa-boxes-stacked text-cyan-600 mr-2"></i> 3. Setup Test Items (0 Qty)
                     </span>
-                    <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">Re-Seed</span>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-cyan-200 text-cyan-900">Zero Stock</span>
                 </div>
                 <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-                    If you cleared all items and ever want sample ice cream products (Vanilla 1L, etc.) back to test or demonstrate.
+                    Sets up 10 core ice creams and 2 lorries with <strong>0 stock units</strong>, so you can test incoming GRN and dispatches from scratch.
                 </p>
-                <ul class="text-xs text-slate-600 space-y-1 mb-4">
-                    <li>&bull; 10 Sample Ice Creams</li>
-                    <li>&bull; Demo Cold Room Stock</li>
-                    <li>&bull; 2 Sample Lorries</li>
+                <ul class="text-xs text-slate-700 space-y-1 mb-4 font-medium">
+                    <li>&bull; 10 Ice Cream Flavors & Packs</li>
+                    <li>&bull; 2 Available Lorries</li>
+                    <li>&bull; Cold Room Stock: <strong>0 Units</strong></li>
                 </ul>
             </div>
 
-            <form method="POST" action="settings.php" onsubmit="return confirm('Restore sample demo products and lorries?');">
+            <form method="POST" action="settings.php" onsubmit="return confirm('Setup 10 catalog ice creams and 2 lorries with 0 stock units for fresh testing?');">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="restore_demo">
                 <button type="submit" 
-                        class="w-full py-3 px-4 bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                        class="w-full py-3 px-4 bg-cyan-700 hover:bg-cyan-800 active:bg-cyan-900 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
                     <i class="fa-solid fa-arrows-rotate"></i>
-                    <span>Restore Demo Items</span>
+                    <span>Setup 10 Items + 2 Lorries (0 Qty)</span>
                 </button>
             </form>
         </div>

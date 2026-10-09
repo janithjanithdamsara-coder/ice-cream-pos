@@ -372,6 +372,71 @@ function ensureBaseAccounts($pdo) {
         $pdo->exec("INSERT INTO `users` (`id`, `branch_id`, `name`, `username`, `password`, `role`, `phone`) VALUES
             (1, 1, 'Business Owner (Super Admin)', 'admin', '$passHash', 'super_admin', '077-1234567');");
     }
+
+    // Check Categories
+    $stmtCat = $pdo->query("SELECT COUNT(*) FROM `categories`");
+    if ($stmtCat->fetchColumn() == 0) {
+        $pdo->exec("INSERT INTO `categories` (`id`, `name`) VALUES
+            (1, '1L Tubs & Family Packs'),
+            (2, '500ml Tubs'),
+            (3, 'Cones & Waffles'),
+            (4, 'Cups & Single Servings'),
+            (5, 'Ice Chocs & Sticks');");
+    }
+
+    // Check Products: Ensure 10 core items exist
+    $stmtProd = $pdo->query("SELECT COUNT(*) FROM `products`");
+    if ($stmtProd->fetchColumn() == 0) {
+        $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `alert_quantity`) VALUES
+            (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 20),
+            (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 20),
+            (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 15),
+            (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 15),
+            (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 25),
+            (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 25),
+            (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 50),
+            (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 50),
+            (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 60),
+            (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
+    }
+
+    // Check Lorries: Ensure exactly 2 Lorries exist
+    $stmtLorry = $pdo->query("SELECT COUNT(*) FROM `lorries`");
+    if ($stmtLorry->fetchColumn() == 0) {
+        $pdo->exec("INSERT INTO `lorries` (`id`, `branch_id`, `plate_no`, `driver_name`, `contact_no`, `route_name`, `status`) VALUES
+            (1, 1, 'WP CAB-4521', 'Kamal Perera', '077-1122334', 'Colombo North / Gampaha Route', 'available'),
+            (2, 1, 'WP ND-8890', 'Sunil Shantha', '071-4455667', 'Colombo South / Moratuwa Route', 'available');");
+    }
+
+    // Auto-run zero quantity clean test setup once
+    try {
+        $seedCheck = $pdo->query("SELECT `value` FROM `system_settings` WHERE `key_name` = 'fresh_zero_test_v2'")->fetchColumn();
+        if ($seedCheck !== 'done') {
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
+            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
+            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
+            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_return_items`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_returns`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_items`");
+            @$pdo->exec("TRUNCATE TABLE `warehouse_loans`");
+            $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
+            
+            // Ensure 0 stock for all items
+            $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) 
+                SELECT 1, id, 0 FROM `products` 
+                ON DUPLICATE KEY UPDATE `quantity` = 0;");
+            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0;");
+            
+            $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('fresh_zero_test_v2', 'done') ON DUPLICATE KEY UPDATE `value` = 'done'");
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+        }
+    } catch (Exception $e) {
+        // Non-blocking fallback
+    }
 }
 
 function logActivity($action, $module, $description, $userId = null) {
