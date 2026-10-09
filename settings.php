@@ -18,24 +18,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             // Delete all operational transactions
-            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
+            $pdo->exec("DELETE FROM `store_dispatch_items`");
+            $pdo->exec("DELETE FROM `store_dispatches`");
+            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
+            $pdo->exec("DELETE FROM `lorry_dispatches`");
+            $pdo->exec("DELETE FROM `stock_invoice_items`");
+            $pdo->exec("DELETE FROM `stock_invoices`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loans`");
 
             // Clean up legacy tables if present
-            @$pdo->exec("TRUNCATE TABLE `pos_sale_items`");
-            @$pdo->exec("TRUNCATE TABLE `pos_sales`");
-            @$pdo->exec("TRUNCATE TABLE `daily_cash_register`");
-            @$pdo->exec("TRUNCATE TABLE `cash_transactions`");
+            @$pdo->exec("DELETE FROM `pos_sale_items`");
+            @$pdo->exec("DELETE FROM `pos_sales`");
+            @$pdo->exec("DELETE FROM `daily_cash_register`");
+            @$pdo->exec("DELETE FROM `cash_transactions`");
 
             // Delete all products, categories, stock, and lorries
-            $pdo->exec("TRUNCATE TABLE `branch_stock`");
-            $pdo->exec("TRUNCATE TABLE `products`");
-            $pdo->exec("TRUNCATE TABLE `categories`");
-            $pdo->exec("TRUNCATE TABLE `lorries`");
+            $pdo->exec("DELETE FROM `branch_stock`");
+            $pdo->exec("DELETE FROM `products`");
+            $pdo->exec("DELETE FROM `categories`");
+            $pdo->exec("DELETE FROM `lorries`");
 
             // Mark system as initialized so auto-seed does not re-insert items automatically
             $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('initial_seed_done', 'yes') ON DUPLICATE KEY UPDATE `value` = 'yes'");
@@ -85,19 +89,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
-            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
-
-            @$pdo->exec("TRUNCATE TABLE `pos_sale_items`");
-            @$pdo->exec("TRUNCATE TABLE `pos_sales`");
-            @$pdo->exec("TRUNCATE TABLE `daily_cash_register`");
-            @$pdo->exec("TRUNCATE TABLE `cash_transactions`");
-
+            // Reset all stock to 0 immediately
             $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
+
+            $pdo->exec("DELETE FROM `store_dispatch_items`");
+            $pdo->exec("DELETE FROM `store_dispatches`");
+            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
+            $pdo->exec("DELETE FROM `lorry_dispatches`");
+            $pdo->exec("DELETE FROM `stock_invoice_items`");
+            $pdo->exec("DELETE FROM `stock_invoices`");
+
+            @$pdo->exec("DELETE FROM `pos_sale_items`");
+            @$pdo->exec("DELETE FROM `pos_sales`");
+            @$pdo->exec("DELETE FROM `daily_cash_register`");
+            @$pdo->exec("DELETE FROM `cash_transactions`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loans`");
+
             $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
 
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
@@ -154,16 +164,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Clear past dispatches so system is 100% clean
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_return_items`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_returns`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_items`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loans`");
+            $pdo->exec("DELETE FROM `store_dispatch_items`");
+            $pdo->exec("DELETE FROM `store_dispatches`");
+            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
+            $pdo->exec("DELETE FROM `lorry_dispatches`");
+            $pdo->exec("DELETE FROM `stock_invoice_items`");
+            $pdo->exec("DELETE FROM `stock_invoices`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loans`");
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
 
             // Insert lorries if 0

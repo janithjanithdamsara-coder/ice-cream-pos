@@ -410,32 +410,34 @@ function ensureBaseAccounts($pdo) {
 
     // Auto-run zero quantity clean test setup once
     try {
-        $seedCheck = $pdo->query("SELECT `value` FROM `system_settings` WHERE `key_name` = 'fresh_zero_test_v3'")->fetchColumn();
+        $seedCheck = $pdo->query("SELECT `value` FROM `system_settings` WHERE `key_name` = 'fresh_zero_test_v5'")->fetchColumn();
         if ($seedCheck !== 'done') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-            $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `store_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatch_items`");
-            $pdo->exec("TRUNCATE TABLE `lorry_dispatches`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoice_items`");
-            $pdo->exec("TRUNCATE TABLE `stock_invoices`");
-            @$pdo->exec("TRUNCATE TABLE `pos_sale_items`");
-            @$pdo->exec("TRUNCATE TABLE `pos_sales`");
-            @$pdo->exec("TRUNCATE TABLE `daily_cash_register`");
-            @$pdo->exec("TRUNCATE TABLE `cash_transactions`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_return_items`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_returns`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loan_items`");
-            @$pdo->exec("TRUNCATE TABLE `warehouse_loans`");
-            $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
-            
-            // Ensure 0 stock for all items
+
+            // 1. Immediately reset all stock to 0 for all items without deleting items
             $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0;");
             $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) 
                 SELECT 1, id, 0 FROM `products` 
                 ON DUPLICATE KEY UPDATE `quantity` = 0;");
+
+            // 2. Clear all transaction tables using DELETE (TRUNCATE can fail with foreign keys)
+            $pdo->exec("DELETE FROM `store_dispatch_items`");
+            $pdo->exec("DELETE FROM `store_dispatches`");
+            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
+            $pdo->exec("DELETE FROM `lorry_dispatches`");
+            $pdo->exec("DELETE FROM `stock_invoice_items`");
+            $pdo->exec("DELETE FROM `stock_invoices`");
+            @$pdo->exec("DELETE FROM `pos_sale_items`");
+            @$pdo->exec("DELETE FROM `pos_sales`");
+            @$pdo->exec("DELETE FROM `daily_cash_register`");
+            @$pdo->exec("DELETE FROM `cash_transactions`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
+            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
+            @$pdo->exec("DELETE FROM `warehouse_loans`");
+            $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
             
-            $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('fresh_zero_test_v3', 'done') ON DUPLICATE KEY UPDATE `value` = 'done'");
+            $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('fresh_zero_test_v5', 'done') ON DUPLICATE KEY UPDATE `value` = 'done'");
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
         }
     } catch (Exception $e) {
