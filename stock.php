@@ -11,30 +11,129 @@ $branchId = $user['branch_id'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // Action 1: Add New In Come Stock (GRN Invoice)
+    // Action: Quick Add Product via AJAX (from GRN modal on-the-fly)
+    if ($action === 'quick_create_product') {
+        header('Content-Type: application/json');
+        $code = strtoupper(trim($_POST['code'] ?? ''));
+        $name = trim($_POST['name'] ?? '');
+        $flavor = trim($_POST['flavor'] ?? '');
+        $size = trim($_POST['size'] ?? '');
+        $category_id = intval($_POST['category_id'] ?? 1);
+        $alertQty = intval($_POST['alert_quantity'] ?? 15);
+
+        if (empty($code) || empty($name)) {
+            echo json_encode(['success' => false, 'message' => 'Product Code and Description / Name are required.']);
+            exit;
+        }
+
+        try {
+            $stmtCheck = $pdo->prepare("SELECT id, name FROM products WHERE code = ?");
+            $stmtCheck->execute([$code]);
+            $existing = $stmtCheck->fetch();
+            if ($existing) {
+                echo json_encode([
+                    'success' => false, 
+                    'message' => "Product Code '{$code}' already exists (" . htmlspecialchars($existing['name']) . ")."
+                ]);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO products (category_id, code, name, flavor, size, alert_quantity, unit) 
+                VALUES (?, ?, ?, ?, ?, ?, 'Units')");
+            $stmt->execute([$category_id, $code, $name, $flavor, $size, $alertQty]);
+            $newId = $pdo->lastInsertId();
+
+            // Initialize 0 stock row for this branch
+            $pdo->prepare("INSERT IGNORE INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, 0)")
+                ->execute([$branchId, $newId]);
+
+            // Get category name
+            $catStmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+            $catStmt->execute([$category_id]);
+            $catName = $catStmt->fetchColumn() ?: 'General';
+
+            logActivity('create_product', 'product', "Quick-added new product {$code} - {$name} during Stock GRN");
+
+            echo json_encode([
+                'success' => true,
+                'product' => [
+                    'id' => $newId,
+                    'code' => $code,
+                    'name' => $name,
+                    'flavor' => $flavor,
+                    'size' => $size,
+                    'category_id' => $category_id,
+                    'category_name' => $catName,
+                    'store_stock' => 0
+                ]
+            ]);
+            exit;
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+            exit;
+        }
+    }
+
+    // Action 1: Add New In Come Stock (GRN Invoice - Pure Stock Units)
     if ($action === 'create_grn') {
         $invNo = trim($_POST['invoice_no'] ?? '');
         $invDate = trim($_POST['invoice_date'] ?? date('Y-m-d'));
         $targetBranchId = intval($_POST['branch_id'] ?? $branchId);
         $supplier = trim($_POST['supplier_name'] ?? 'Factory Production');
         $notes = trim($_POST['notes'] ?? '');
-        $productIds = $_POST['product_id'] ?? [];
-        $quantities = $_POST['quantity'] ?? [];
-        $batchNos = $_POST['batch_no'] ?? [];
-        $expireDates = $_POST['expire_date'] ?? [];
 
-        if (empty($invNo) || empty($productIds)) {
-            setFlash('danger', 'Invoice number and at least one item are required.');
+        $itemsToProcess = [];
+
+        // Support bulk checklist format: selected_products[] + quantity[pid]
+        if (!empty($_POST['selected_products']) && is_array($_POST['selected_products'])) {
+            foreach ($_POST['selected_products'] as $pid) {
+                $pid = intval($pid);
+                $qty = intval($_POST['quantity'][$pid] ?? 0);
+                $batch = trim($_POST['batch_no'][$pid] ?? '');
+                $exp = !empty($_POST['expire_date'][$pid]) ? $_POST['expire_date'][$pid] : null;
+
+                if ($pid > 0 && $qty > 0) {
+                    $itemsToProcess[] = [
+                        'product_id' => $pid,
+                        'quantity' => $qty,
+                        'batch_no' => $batch,
+                        'expire_date' => $exp
+                    ];
+                }
+            }
+        } elseif (!empty($_POST['product_id']) && is_array($_POST['product_id'])) {
+            // Fallback for row-by-row structure
+            $quantities = $_POST['quantity'] ?? [];
+            $batchNos = $_POST['batch_no'] ?? [];
+            $expireDates = $_POST['expire_date'] ?? [];
+            foreach ($_POST['product_id'] as $idx => $pid) {
+                $pid = intval($pid);
+                $qty = intval($quantities[$idx] ?? 0);
+                $batch = trim($batchNos[$idx] ?? '');
+                $exp = !empty($expireDates[$idx]) ? $expireDates[$idx] : null;
+
+                if ($pid > 0 && $qty > 0) {
+                    $itemsToProcess[] = [
+                        'product_id' => $pid,
+                        'quantity' => $qty,
+                        'batch_no' => $batch,
+                        'expire_date' => $exp
+                    ];
+                }
+            }
+        }
+
+        if (empty($invNo)) {
+            setFlash('danger', 'Invoice / Delivery Note number is required.');
+        } elseif (empty($itemsToProcess)) {
+            setFlash('danger', 'Please select at least one item and enter an incoming quantity greater than 0.');
         } else {
             try {
                 $pdo->beginTransaction();
 
                 $totalItems = 0;
-                foreach ($productIds as $idx => $pid) {
-                    $qty = intval($quantities[$idx] ?? 0);
-                    if ($qty > 0 && !empty($pid)) {
-                        $totalItems += $qty;
-                    }
+                foreach ($itemsToProcess as $item) {
+                    $totalItems += $item['quantity'];
                 }
 
                 // Insert Stock In Invoice
@@ -53,25 +152,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     VALUES (?, ?, ?) 
                     ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
 
-                foreach ($productIds as $idx => $pid) {
-                    $qty = intval($quantities[$idx] ?? 0);
-                    $batch = trim($batchNos[$idx] ?? '');
-                    $exp = !empty($expireDates[$idx]) ? $expireDates[$idx] : null;
-
-                    if ($qty > 0 && !empty($pid)) {
-                        $stmtItem->execute([$invoiceId, $pid, $qty, $batch, $exp]);
-                        $stmtStock->execute([$targetBranchId, $pid, $qty]);
-                    }
+                foreach ($itemsToProcess as $item) {
+                    $stmtItem->execute([$invoiceId, $item['product_id'], $item['quantity'], $item['batch_no'], $item['expire_date']]);
+                    $stmtStock->execute([$targetBranchId, $item['product_id'], $item['quantity']]);
                 }
 
                 $pdo->commit();
-                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$totalItems} units into Cold Room from '{$supplier}'");
-                setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$totalItems} units added to Cold Room warehouse.");
+                $itemCount = count($itemsToProcess);
+                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$totalItems} units across {$itemCount} products into Cold Room from '{$supplier}'");
+                setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$totalItems} units ({$itemCount} products) added to Cold Room warehouse.");
                 header("Location: stock.php");
                 exit;
 
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 setFlash('danger', 'Error adding stock: ' . $e->getMessage());
             }
         }
@@ -166,7 +262,7 @@ $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity
     LEFT JOIN categories c ON p.category_id = c.id 
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
     WHERE p.status = 'active'
-    ORDER BY p.name ASC");
+    ORDER BY p.code ASC, p.name ASC");
 $stmt->execute([$branchId]);
 $inventory = $stmt->fetchAll();
 
@@ -193,26 +289,26 @@ require_once __DIR__ . '/includes/header.php';
             Incoming Stock (GRN), Cold Room Quantities & Reorder Monitoring for <strong><?= htmlspecialchars($user['branch_name']) ?></strong>
         </p>
     </div>
-    <div class="flex flex-wrap gap-2">
-        <button type="button" onclick="openNewProductModal()" class="px-3.5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center">
-            <i class="fa-solid fa-plus mr-1.5"></i> + Add Product
+    <div class="grid grid-cols-3 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
+        <button type="button" onclick="openNewProductModal()" class="px-2 sm:px-3.5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center text-center">
+            <i class="fa-solid fa-plus sm:mr-1.5"></i> <span class="hidden sm:inline">+ Add Product</span><span class="inline sm:hidden text-[11px]">Product</span>
         </button>
-        <button type="button" onclick="openNewGrnModal()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-200 transition-all flex items-center">
-            <i class="fa-solid fa-file-invoice mr-2"></i> + In Come Stock (New GRN)
+        <button type="button" onclick="openNewGrnModal()" class="px-2 sm:px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-200 transition-all flex items-center justify-center text-center">
+            <i class="fa-solid fa-file-invoice sm:mr-2"></i> <span class="hidden sm:inline">+ In Come Stock (New GRN)</span><span class="inline sm:hidden text-[11px]">+ GRN</span>
         </button>
-        <button type="button" onclick="openAdjustModal()" class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center">
-            <i class="fa-solid fa-sliders mr-1.5"></i> Adjust Stock
+        <button type="button" onclick="openAdjustModal()" class="px-2 sm:px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center text-center border border-slate-200/80">
+            <i class="fa-solid fa-sliders sm:mr-1.5"></i> <span class="hidden sm:inline">Adjust Stock</span><span class="inline sm:hidden text-[11px]">Adjust</span>
         </button>
     </div>
 </div>
 
 <!-- Tabs: Inventory & Invoices -->
-<div class="mb-6 border-b border-slate-200">
-    <nav class="flex space-x-6">
-        <button type="button" onclick="switchTab('inventoryTab', this)" class="tab-btn pb-3 text-xs font-bold text-cyan-600 border-b-2 border-cyan-600 transition-colors">
+<div class="mb-6 border-b border-slate-200 overflow-x-auto scrollbar-none">
+    <nav class="flex space-x-4 sm:space-x-6 min-w-max pb-0.5">
+        <button type="button" onclick="switchTab('inventoryTab', this)" class="tab-btn pb-3 text-xs font-bold text-cyan-600 border-b-2 border-cyan-600 transition-colors whitespace-nowrap">
             <i class="fa-solid fa-warehouse mr-1.5"></i> Cold Room Inventory (<?= count($inventory) ?> Items)
         </button>
-        <button type="button" onclick="switchTab('invoicesTab', this)" class="tab-btn pb-3 text-xs font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent transition-colors">
+        <button type="button" onclick="switchTab('invoicesTab', this)" class="tab-btn pb-3 text-xs font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent transition-colors whitespace-nowrap">
             <i class="fa-solid fa-clock-rotate-left mr-1.5"></i> In Come Stock (GRN History) (<?= count($pastInvoices) ?>)
         </button>
     </nav>
@@ -221,20 +317,21 @@ require_once __DIR__ . '/includes/header.php';
 <!-- TAB 1: Main Store Inventory -->
 <div id="inventoryTab" class="tab-content">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div class="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
             <div class="relative w-full sm:w-72">
                 <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
                     <i class="fa-solid fa-search"></i>
                 </span>
                 <input type="text" id="stockSearch" onkeyup="filterStockTable()" placeholder="Search product or flavor..." 
-                       class="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                       class="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
             </div>
-            <div class="text-xs text-slate-400">
-                Quantity counts in physical Cold Room warehouse
+            <div class="text-[11px] sm:text-xs text-slate-400 w-full sm:w-auto text-left sm:text-right">
+                Physical counts in Cold Room warehouse
             </div>
         </div>
 
-        <div class="overflow-x-auto">
+        <!-- Desktop Table View (Hidden on mobile) -->
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse text-xs" id="stockTable">
                 <thead>
                     <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
@@ -303,16 +400,89 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <!-- Mobile Card List View (Phones) -->
+        <div class="md:hidden divide-y divide-slate-100" id="stockMobileCards">
+            <?php if (empty($inventory)): ?>
+                <div class="py-12 text-center text-slate-400 p-4">
+                    <i class="fa-solid fa-boxes-stacked text-3xl mb-2 text-slate-300"></i>
+                    <p class="font-bold text-slate-700 text-sm">No Products Found</p>
+                    <p class="text-xs text-slate-400 mt-1">Tap "+ Add Product" to add flavors.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($inventory as $prod): 
+                    $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
+                    $isZero = $prod['store_stock'] <= 0;
+                ?>
+                <div class="p-3.5 hover:bg-slate-50 transition-colors stock-mobile-item" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? ''))) ?>">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-extrabold text-slate-900 leading-snug">
+                                <?= htmlspecialchars($prod['name']) ?>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-1">
+                                <span class="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold text-[10px]"><?= htmlspecialchars($prod['code']) ?></span>
+                                <span>&bull;</span>
+                                <span class="text-slate-600"><?= htmlspecialchars($prod['category_name'] ?? 'General') ?></span>
+                                <?php if (!empty($prod['size'])): ?>
+                                    <span>&bull;</span>
+                                    <span><?= htmlspecialchars($prod['size']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- Big Stock Count Badge -->
+                        <div class="text-right shrink-0">
+                            <span class="inline-block px-3 py-1.5 rounded-xl font-black text-sm font-mono tracking-tight <?= $isZero ? 'bg-rose-100 text-rose-700 border border-rose-200' : ($isLow ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-cyan-50 text-cyan-800 border border-cyan-200') ?>">
+                                <?= number_format($prod['store_stock']) ?> <span class="text-[10px] font-semibold"><?= htmlspecialchars($prod['unit'] ?? 'Units') ?></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Row: Stock Level Pill + Delete Action -->
+                    <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div>
+                            <?php if ($isZero): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 text-rose-600 border border-rose-200">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span> Out of Stock (0)
+                                </span>
+                            <?php elseif ($isLow): ?>
+                                <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> Low Stock Alert
+                                </span>
+                            <?php else: ?>
+                                <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span> Sufficient Stock
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="flex items-center space-x-1">
+                            <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                                <input type="hidden" name="action" value="delete_product">
+                                <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
+                                <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Delete Product">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
 <!-- TAB 2: Past In Come Stock Invoices -->
 <div id="invoicesTab" class="tab-content hidden">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div class="p-4 border-b border-slate-100 font-bold text-xs text-slate-700">
+        <div class="p-3.5 sm:p-4 border-b border-slate-100 font-bold text-xs text-slate-700">
             Recent In Come Stock (GRN Records)
         </div>
-        <div class="overflow-x-auto">
+        
+        <!-- Desktop Table View -->
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
                     <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
@@ -350,44 +520,78 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <!-- Mobile Card List View -->
+        <div class="md:hidden divide-y divide-slate-100">
+            <?php if (empty($pastInvoices)): ?>
+                <div class="py-8 text-center text-slate-400 text-xs">No stock receipts recorded yet.</div>
+            <?php else: ?>
+                <?php foreach ($pastInvoices as $inv): ?>
+                <div class="p-3.5 hover:bg-slate-50 transition-colors">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="font-bold font-mono text-cyan-700 text-xs">
+                                <?= htmlspecialchars($inv['invoice_no']) ?>
+                            </div>
+                            <div class="font-bold text-slate-800 text-xs mt-0.5">
+                                <?= htmlspecialchars($inv['supplier_name']) ?>
+                            </div>
+                            <div class="text-[10px] text-slate-400 mt-1 flex items-center space-x-1.5">
+                                <span><?= date('d M Y', strtotime($inv['invoice_date'])) ?></span>
+                                <span>&bull;</span>
+                                <span>By <?= htmlspecialchars($inv['creator_name'] ?? 'Admin') ?></span>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="inline-block px-2.5 py-1 rounded-xl font-black font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                +<?= number_format($inv['total_items']) ?> Units
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
-<!-- MODAL: Add New In Come Stock (GRN - Zero Money) -->
-<div id="newGrnModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+<!-- MODAL: Add New In Come Stock (GRN - Invoice Bulk Checklist - Zero Money) -->
+<div id="newGrnModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
-        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
+        <!-- Modal Header -->
+        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white shrink-0">
             <div>
-                <h3 class="font-extrabold text-base flex items-center">
-                    <i class="fa-solid fa-file-invoice mr-2"></i> In Come Stock (GRN Receipt)
+                <h3 class="font-extrabold text-base flex items-center tracking-tight">
+                    <i class="fa-solid fa-file-invoice text-cyan-200 text-lg mr-2.5"></i> In Come Stock (GRN Invoice Bulk Entry)
                 </h3>
-                <p class="text-cyan-100 text-xs mt-0.5">Receive ice cream stock from factory into Cold Room warehouse</p>
+                <p class="text-cyan-100 text-xs mt-0.5">Quick batch stock receiving into Cold Room &bull; Pure Stock Units (No Prices)</p>
             </div>
-            <button type="button" onclick="closeNewGrnModal()" class="text-white/80 hover:text-white text-lg">
+            <button type="button" onclick="closeNewGrnModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/90 hover:text-white transition cursor-pointer">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
 
-        <form method="POST" action="stock.php" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <form method="POST" action="stock.php" id="grnBulkForm" onsubmit="return validateGrnForm()" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3">
             <input type="hidden" name="action" value="create_grn">
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
-                <div>
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider">INV NO (Invoice / Delivery Note) *</label>
+            <!-- Top Row: Invoice Meta Details -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs shrink-0">
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Invoice / DN # *</label>
                     <input type="text" name="invoice_no" required value="INV-<?= date('ymd') ?>-<?= rand(100, 999) ?>"
-                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-800">
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider">Date *</label>
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Date *</label>
                     <input type="date" name="invoice_date" required value="<?= date('Y-m-d') ?>"
-                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800">
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider">Receiving Warehouse *</label>
-                    <select name="branch_id" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800 font-bold">
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Receiving Hub *</label>
+                    <select name="branch_id" class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 font-bold text-xs focus:ring-1 focus:ring-cyan-500">
                         <?php foreach ($branches as $b): ?>
                             <option value="<?= $b['id'] ?>" <?= $b['id'] == $branchId ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($b['name']) ?>
@@ -396,78 +600,160 @@ require_once __DIR__ . '/includes/header.php';
                     </select>
                 </div>
 
-                <div class="sm:col-span-2">
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider">Supplier / Factory Name</label>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Supplier / Factory</label>
                     <input type="text" name="supplier_name" value="Central Cold Storage Factory" 
-                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800">
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
 
-                <div>
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider">Notes / Batch Remarks</label>
-                    <input type="text" name="notes" placeholder="e.g. Morning delivery" 
-                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800">
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Remarks / Lorry</label>
+                    <input type="text" name="notes" placeholder="e.g. Factory Lorry" 
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
             </div>
 
-            <!-- In Come Stock Line Items -->
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <h4 class="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center">
-                        <i class="fa-solid fa-list-check text-cyan-600 mr-1.5"></i> Products & Incoming Quantity
-                    </h4>
-                    <button type="button" onclick="addGrnRow()" class="px-2.5 py-1 text-[11px] font-bold bg-cyan-50 text-cyan-700 hover:bg-cyan-100 rounded-lg">
-                        <i class="fa-solid fa-plus mr-1"></i> Add Another Product
+            <!-- Toolbar: Search, Select All, Quick Add Product, Live Counters -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
+                <!-- Search Box & Select All -->
+                <div class="flex items-center space-x-2 flex-1">
+                    <div class="relative w-full sm:w-64">
+                        <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-400 text-xs">
+                            <i class="fa-solid fa-search"></i>
+                        </span>
+                        <input type="text" id="grnSearchInput" oninput="filterGrnList()" placeholder="Quick filter code or name..." 
+                               class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                    </div>
+                    <button type="button" onclick="toggleSelectAllGrn(true)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-check-double mr-1 text-cyan-400"></i> Select All
+                    </button>
+                    <button type="button" onclick="toggleSelectAllGrn(false)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200/80 transition shrink-0">
+                        Clear
                     </button>
                 </div>
 
-                <div class="border border-slate-200 rounded-2xl overflow-hidden">
-                    <table class="w-full text-left text-xs" id="grnItemsTable">
-                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold">
+                <!-- Quick Add & Counters -->
+                <div class="flex items-center justify-between sm:justify-end space-x-2 shrink-0">
+                    <button type="button" onclick="toggleQuickAddDrawer()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-xs flex items-center transition cursor-pointer">
+                        <i class="fa-solid fa-plus-circle mr-1.5"></i> + Quick Add Product
+                    </button>
+                    <div class="flex items-center space-x-1.5 text-[11px] font-bold">
+                        <span class="px-2 py-1 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200/70">
+                            Selected: <strong id="grnSelectedCount" class="font-extrabold text-cyan-900">0</strong>
+                        </span>
+                        <span class="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/70">
+                            Units: <strong id="grnTotalQty" class="font-black text-emerald-700 font-mono">0</strong>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inline Quick Add Drawer (Collapsible) -->
+            <div id="quickAddDrawer" class="hidden p-3.5 bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-cyan-50/50 border border-emerald-200 rounded-2xl shrink-0 shadow-xs">
+                <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-emerald-200/60">
+                    <h4 class="font-extrabold text-xs text-slate-800 flex items-center">
+                        <i class="fa-solid fa-wand-magic-sparkles text-emerald-600 mr-1.5"></i> Quick Add New Product (On the fly)
+                    </h4>
+                    <span class="text-[10px] text-slate-500 font-medium">Adds instantly to catalog & this stock list without page reload</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Product Code (SKU) *</label>
+                        <input type="text" id="quickCode" placeholder="e.g. F301019999" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-mono uppercase font-bold text-slate-800 text-xs">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Product Description / Name *</label>
+                        <input type="text" id="quickName" placeholder="e.g. BLUEBERRY MAGIC CONE 120ML" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 text-xs">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Category</label>
+                        <select id="quickCat" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs">
+                            <?php foreach ($categories as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Size / Volume</label>
+                        <input type="text" id="quickSize" placeholder="e.g. 120ml / 1 Litre" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs">
+                    </div>
+                </div>
+                <div class="mt-2.5 pt-2 border-t border-emerald-200/60 flex items-center justify-between">
+                    <span id="quickAddMsg" class="text-xs font-semibold text-rose-600"></span>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="toggleQuickAddDrawer()" class="px-3 py-1 text-xs font-bold text-slate-600 hover:bg-white rounded-xl">Cancel</button>
+                        <button type="button" id="quickSaveBtn" onclick="submitQuickAddProduct()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center">
+                            <i class="fa-solid fa-check mr-1.5"></i> Save & Add to List
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- In Come Stock Bulk Checklist Table -->
+            <div class="flex-1 border border-slate-200 rounded-2xl overflow-hidden shadow-inner flex flex-col bg-white min-h-0">
+                <div class="flex-1 overflow-y-auto">
+                    <table class="w-full text-left text-xs border-collapse" id="grnBulkTable">
+                        <thead class="sticky top-0 bg-slate-100 z-10 text-slate-600 uppercase text-[10px] font-bold border-b border-slate-200 select-none">
                             <tr>
-                                <th class="py-2.5 px-3">Product Name</th>
-                                <th class="py-2.5 px-3 w-36 text-center">Incoming Quantity (Units)</th>
-                                <th class="py-2.5 px-3 w-36">Batch No</th>
-                                <th class="py-2.5 px-3 w-10 text-center"></th>
+                                <th class="py-2.5 px-3 w-10 text-center">
+                                    <input type="checkbox" id="masterGrnCheckbox" onchange="toggleSelectAllGrn(this.checked)" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer">
+                                </th>
+                                <th class="py-2.5 px-3 w-32 font-mono">Product Code</th>
+                                <th class="py-2.5 px-3">Product Description</th>
+                                <th class="py-2.5 px-3 w-28 text-center">Cold Room</th>
+                                <th class="py-2.5 px-3 w-36 text-center text-cyan-800 font-extrabold">Incoming Qty *</th>
+                                <th class="py-2.5 px-3 w-32">Batch No</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100" id="grnTableBody">
-                            <tr class="grn-row">
-                                <td class="p-2.5">
-                                    <select name="product_id[]" required class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 text-xs">
-                                        <option value="">Select Ice Cream Product</option>
-                                        <?php foreach ($inventory as $p): ?>
-                                            <option value="<?= $p['id'] ?>">
-                                                <?= htmlspecialchars($p['name']) ?> (<?= htmlspecialchars($p['code']) ?>)
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                        <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
+                            <?php foreach ($inventory as $prod): ?>
+                            <tr class="grn-item-row hover:bg-slate-50/80 transition-colors" id="grn_row_<?= $prod['id'] ?>" data-search="<?= htmlspecialchars(strtolower($prod['code'] . ' ' . $prod['name'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? ''))) ?>">
+                                <td class="py-2 px-3 text-center">
+                                    <input type="checkbox" name="selected_products[]" value="<?= $prod['id'] ?>" id="chk_<?= $prod['id'] ?>" class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(<?= $prod['id'] ?>)">
                                 </td>
-                                <td class="p-2.5">
-                                    <input type="number" name="quantity[]" min="1" value="160" required 
-                                           class="w-full p-2 text-center bg-slate-50 border border-slate-300 rounded-xl font-mono font-black text-cyan-700 text-sm">
+                                <td class="py-2 px-3 font-mono font-bold text-slate-800">
+                                    <span class="px-2 py-0.5 bg-slate-100 rounded text-[11px] border border-slate-200/70 font-mono"><?= htmlspecialchars($prod['code']) ?></span>
                                 </td>
-                                <td class="p-2.5">
-                                    <input type="text" name="batch_no[]" value="BTH-<?= date('y') ?>01" placeholder="Optional" 
-                                           class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs">
+                                <td class="py-2 px-3">
+                                    <div class="font-bold text-slate-900 text-xs leading-snug"><?= htmlspecialchars($prod['name']) ?></div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">
+                                        <?= htmlspecialchars($prod['category_name'] ?? 'General') ?>
+                                        <?php if (!empty($prod['size'])): ?> &bull; <?= htmlspecialchars($prod['size']) ?><?php endif; ?>
+                                    </div>
                                 </td>
-                                <td class="p-2.5 text-center">
-                                    <button type="button" onclick="removeGrnRow(this)" class="text-slate-400 hover:text-rose-600">
-                                        <i class="fa-solid fa-trash-can"></i>
-                                    </button>
+                                <td class="py-2 px-3 text-center">
+                                    <span class="font-mono font-bold text-slate-600 text-xs"><?= number_format($prod['store_stock']) ?></span>
+                                </td>
+                                <td class="py-2 px-3 text-center">
+                                    <input type="number" name="quantity[<?= $prod['id'] ?>]" id="qty_<?= $prod['id'] ?>" min="0" placeholder="0" 
+                                           class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
+                                           oninput="handleGrnQtyInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                </td>
+                                <td class="py-2 px-3">
+                                    <input type="text" name="batch_no[<?= $prod['id'] ?>]" placeholder="BTH-<?= date('y') ?>" 
+                                           class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 focus:ring-1 focus:ring-cyan-500">
                                 </td>
                             </tr>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
-                <button type="button" onclick="closeNewGrnModal()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl">
-                    Cancel
-                </button>
-                <button type="submit" class="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-200">
-                    <i class="fa-solid fa-check mr-1.5"></i> Add Stock to Cold Room
-                </button>
+            <!-- Modal Footer with Summary -->
+            <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 bg-white">
+                <div class="text-xs text-slate-500 flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-info text-cyan-600"></i>
+                    <span>Ready to receive: <strong id="footerUnits" class="font-black text-emerald-600 text-sm font-mono">0</strong> units across <strong id="footerItems" class="font-bold text-cyan-800">0</strong> products into Cold Room.</span>
+                </div>
+                <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                    <button type="button" onclick="closeNewGrnModal()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="grnSubmitBtn" class="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-cyan-200 flex items-center transition cursor-pointer">
+                        <i class="fa-solid fa-check mr-1.5"></i> Confirm & Add Stock to Cold Room
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -596,9 +882,19 @@ require_once __DIR__ . '/includes/header.php';
 <script>
     function openNewProductModal() { document.getElementById('newProductModal').classList.remove('hidden'); }
     function closeNewProductModal() { document.getElementById('newProductModal').classList.add('hidden'); }
-    function openNewGrnModal() { document.getElementById('newGrnModal').classList.remove('hidden'); }
-    function closeNewGrnModal() { document.getElementById('newGrnModal').classList.add('hidden'); }
     function openAdjustModal() { document.getElementById('adjustModal').classList.remove('hidden'); }
+
+    function openNewGrnModal() { 
+        document.getElementById('newGrnModal').classList.remove('hidden'); 
+        updateGrnTotals();
+        setTimeout(() => {
+            const search = document.getElementById('grnSearchInput');
+            if (search) search.focus();
+        }, 100);
+    }
+    function closeNewGrnModal() { 
+        document.getElementById('newGrnModal').classList.add('hidden'); 
+    }
 
     function switchTab(tabId, el) {
         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -613,27 +909,286 @@ require_once __DIR__ . '/includes/header.php';
 
     function filterStockTable() {
         const input = document.getElementById('stockSearch').value.toLowerCase();
-        const rows = document.querySelectorAll('#stockTable tbody tr');
-        rows.forEach(r => {
+        document.querySelectorAll('#stockTable tbody tr').forEach(r => {
             r.style.display = r.innerText.toLowerCase().includes(input) ? '' : 'none';
+        });
+        document.querySelectorAll('#stockMobileCards .stock-mobile-item').forEach(c => {
+            const text = (c.getAttribute('data-search') || c.innerText).toLowerCase();
+            c.style.display = text.includes(input) ? '' : 'none';
         });
     }
 
-    function addGrnRow() {
-        const tableBody = document.getElementById('grnTableBody');
-        const firstRow = tableBody.querySelector('.grn-row');
-        const newRow = firstRow.cloneNode(true);
-        newRow.querySelector('input[name="quantity[]"]').value = 10;
-        tableBody.appendChild(newRow);
+    // --- Bulk GRN Checklist Interactive Functions ---
+
+    function filterGrnList() {
+        const query = document.getElementById('grnSearchInput').value.toLowerCase().trim();
+        const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
+        rows.forEach(r => {
+            const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
+            r.style.display = text.includes(query) ? '' : 'none';
+        });
     }
 
-    function removeGrnRow(btn) {
-        const rows = document.querySelectorAll('.grn-row');
-        if (rows.length > 1) {
-            btn.closest('tr').remove();
-        } else {
-            showToast('At least one product is required.', 'warning', 'Required Items');
+    function toggleSelectAllGrn(isChecked) {
+        const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
+        rows.forEach(row => {
+            // If row is visible
+            if (row.style.display !== 'none') {
+                const chk = row.querySelector('.grn-checkbox');
+                if (chk) {
+                    chk.checked = isChecked;
+                    applyRowHighlight(row, isChecked);
+                }
+            }
+        });
+        const master = document.getElementById('masterGrnCheckbox');
+        if (master) master.checked = isChecked;
+        updateGrnTotals();
+    }
+
+    function handleGrnCheck(pid) {
+        const row = document.getElementById('grn_row_' + pid);
+        const chk = document.getElementById('chk_' + pid);
+        const qtyInput = document.getElementById('qty_' + pid);
+        if (!row || !chk) return;
+
+        applyRowHighlight(row, chk.checked);
+
+        if (chk.checked && qtyInput && (!qtyInput.value || parseInt(qtyInput.value) <= 0)) {
+            qtyInput.focus();
+            qtyInput.select();
         }
+        updateGrnTotals();
+    }
+
+    function handleGrnQtyInput(pid) {
+        const row = document.getElementById('grn_row_' + pid);
+        const chk = document.getElementById('chk_' + pid);
+        const qtyInput = document.getElementById('qty_' + pid);
+        if (!row || !chk || !qtyInput) return;
+
+        const val = parseInt(qtyInput.value) || 0;
+        if (val > 0) {
+            chk.checked = true;
+            applyRowHighlight(row, true);
+        } else if (val === 0 && !chk.dataset.userChecked) {
+            // Keep checked if user checked it intentionally
+        }
+        updateGrnTotals();
+    }
+
+    function applyRowHighlight(row, isHighlighted) {
+        if (isHighlighted) {
+            row.classList.add('bg-cyan-50/70', 'border-l-4', 'border-l-cyan-600');
+            row.classList.remove('hover:bg-slate-50/80');
+        } else {
+            row.classList.remove('bg-cyan-50/70', 'border-l-4', 'border-l-cyan-600');
+            row.classList.add('hover:bg-slate-50/80');
+        }
+    }
+
+    function updateGrnTotals() {
+        let selectedCount = 0;
+        let totalUnits = 0;
+        const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
+
+        rows.forEach(r => {
+            const chk = r.querySelector('.grn-checkbox');
+            const qtyField = r.querySelector('.grn-qty-field');
+            if (chk && chk.checked) {
+                selectedCount++;
+                if (qtyField) {
+                    const q = parseInt(qtyField.value) || 0;
+                    totalUnits += q;
+                }
+            }
+        });
+
+        const countEl = document.getElementById('grnSelectedCount');
+        const qtyEl = document.getElementById('grnTotalQty');
+        const footerUnits = document.getElementById('footerUnits');
+        const footerItems = document.getElementById('footerItems');
+
+        if (countEl) countEl.innerText = selectedCount;
+        if (qtyEl) qtyEl.innerText = totalUnits.toLocaleString();
+        if (footerUnits) footerUnits.innerText = totalUnits.toLocaleString();
+        if (footerItems) footerItems.innerText = selectedCount;
+    }
+
+    function handleGrnNav(e, input) {
+        // Fast keyboard navigation between quantities (Down Arrow / Enter = Next, Up Arrow = Prev)
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            e.preventDefault();
+            const currentRow = input.closest('tr');
+            let nextRow = currentRow.nextElementSibling;
+            while (nextRow && nextRow.style.display === 'none') {
+                nextRow = nextRow.nextElementSibling;
+            }
+            if (nextRow) {
+                const nextInput = nextRow.querySelector('.grn-qty-field');
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const currentRow = input.closest('tr');
+            let prevRow = currentRow.previousElementSibling;
+            while (prevRow && prevRow.style.display === 'none') {
+                prevRow = prevRow.previousElementSibling;
+            }
+            if (prevRow) {
+                const prevInput = prevRow.querySelector('.grn-qty-field');
+                if (prevInput) {
+                    prevInput.focus();
+                    prevInput.select();
+                }
+            }
+        }
+    }
+
+    function toggleQuickAddDrawer() {
+        const drawer = document.getElementById('quickAddDrawer');
+        if (!drawer) return;
+        drawer.classList.toggle('hidden');
+        document.getElementById('quickAddMsg').innerText = '';
+        if (!drawer.classList.contains('hidden')) {
+            const codeInput = document.getElementById('quickCode');
+            if (codeInput) codeInput.focus();
+        }
+    }
+
+    async function submitQuickAddProduct() {
+        const code = document.getElementById('quickCode').value.trim();
+        const name = document.getElementById('quickName').value.trim();
+        const catId = document.getElementById('quickCat').value;
+        const size = document.getElementById('quickSize').value.trim();
+        const msgEl = document.getElementById('quickAddMsg');
+        const saveBtn = document.getElementById('quickSaveBtn');
+
+        if (!code || !name) {
+            msgEl.innerText = 'Product Code and Description / Name are required.';
+            return;
+        }
+
+        msgEl.innerText = '';
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Saving...';
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'quick_create_product');
+            formData.append('code', code);
+            formData.append('name', name);
+            formData.append('category_id', catId);
+            formData.append('size', size);
+
+            const res = await fetch('stock.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (!data.success) {
+                msgEl.innerText = data.message || 'Error creating product.';
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i> Save & Add to List';
+                return;
+            }
+
+            const p = data.product;
+            // Prepend new row to table
+            const tbody = document.getElementById('grnBulkTableBody');
+            const newTr = document.createElement('tr');
+            newTr.className = 'grn-item-row bg-emerald-50/60 border-l-4 border-l-emerald-600 transition-colors';
+            newTr.id = 'grn_row_' + p.id;
+            newTr.setAttribute('data-search', (p.code + ' ' + p.name + ' ' + p.category_name).toLowerCase());
+
+            newTr.innerHTML = `
+                <td class="py-2 px-3 text-center">
+                    <input type="checkbox" name="selected_products[]" value="${p.id}" id="chk_${p.id}" checked class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(${p.id})">
+                </td>
+                <td class="py-2 px-3 font-mono font-bold text-slate-800">
+                    <span class="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded text-[11px] border border-emerald-300 font-mono">${escapeHtml(p.code)}</span>
+                </td>
+                <td class="py-2 px-3">
+                    <div class="font-bold text-slate-900 text-xs leading-snug flex items-center">
+                        ${escapeHtml(p.name)} 
+                        <span class="ml-1.5 px-1.5 py-0.2 bg-emerald-200 text-emerald-800 rounded text-[9px] font-bold">NEW</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">
+                        ${escapeHtml(p.category_name)} ${p.size ? '&bull; ' + escapeHtml(p.size) : ''}
+                    </div>
+                </td>
+                <td class="py-2 px-3 text-center">
+                    <span class="font-mono font-bold text-slate-600 text-xs">0</span>
+                </td>
+                <td class="py-2 px-3 text-center">
+                    <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" 
+                           class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
+                           oninput="handleGrnQtyInput(${p.id})" onkeydown="handleGrnNav(event, this)">
+                </td>
+                <td class="py-2 px-3">
+                    <input type="text" name="batch_no[${p.id}]" placeholder="BTH-<?= date('y') ?>" 
+                           class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 focus:ring-1 focus:ring-cyan-500">
+                </td>
+            `;
+
+            tbody.insertBefore(newTr, tbody.firstChild);
+
+            // Reset quick form
+            document.getElementById('quickCode').value = '';
+            document.getElementById('quickName').value = '';
+            document.getElementById('quickSize').value = '';
+            toggleQuickAddDrawer();
+
+            // Focus new row qty input
+            setTimeout(() => {
+                const newQty = document.getElementById('qty_' + p.id);
+                if (newQty) newQty.focus();
+            }, 100);
+
+            updateGrnTotals();
+
+        } catch (err) {
+            msgEl.innerText = 'Network / Server error: ' + err.message;
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i> Save & Add to List';
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
+    }
+
+    function validateGrnForm() {
+        let hasItem = false;
+        const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
+        rows.forEach(r => {
+            const chk = r.querySelector('.grn-checkbox');
+            const qtyField = r.querySelector('.grn-qty-field');
+            if (chk && chk.checked) {
+                const q = parseInt(qtyField ? qtyField.value : 0) || 0;
+                if (q > 0) hasItem = true;
+            }
+        });
+
+        if (!hasItem) {
+            alert('Please select at least one product with an incoming quantity greater than 0.');
+            return false;
+        }
+
+        const btn = document.getElementById('grnSubmitBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Saving Stock into Cold Room...';
+        }
+        return true;
     }
 </script>
 

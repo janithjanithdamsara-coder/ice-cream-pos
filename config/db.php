@@ -1,33 +1,52 @@
 <?php
 // config/db.php - Pure Inventory & Stock Distribution Database Schema (Zero Money / Units Only)
 
-$host = '127.0.0.1';
-$port = '3306';
-$db_user = 'root';
-$db_pass = '';
-$db_name = 'ice_cream_db';
+// Environment Auto-Detection (Localhost vs cPanel Live Server)
+$isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1', '::1']) || (php_sapi_name() === 'cli' && getenv('COMPUTERNAME') !== false);
+
+if ($isLocal) {
+    // Localhost / XAMPP Environment
+    $host    = '127.0.0.1';
+    $port    = '3306';
+    $db_user = 'root';
+    $db_pass = '';
+    $db_name = 'ice_cream_db';
+} else {
+    // Live cPanel Server
+    $host    = 'localhost';
+    $port    = '3306';
+    $db_user = 'dhanesha_dhanesha';
+    $db_pass = 'dhanesha2026@';
+    $db_name = 'dhanesha_database';
+}
 
 try {
-    // 1. Connect without database to ensure DB exists
-    $pdo_init = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $db_user, $db_pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ]);
-    
-    // Create DB if not exists
-    $pdo_init->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-    // 2. Connect to the specific database
+    // Connect directly to the specific database
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
 
-    // 3. Initialize Tables
+    // Initialize & verify tables safely
     initDatabaseTables($pdo);
 
 } catch (PDOException $e) {
-    die("Database Connection Error: " . $e->getMessage());
+    // Localhost fallback: If DB does not exist yet on local XAMPP, create it automatically
+    if ($isLocal && strpos($e->getMessage(), 'Unknown database') !== false) {
+        try {
+            $pdo_init = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $db_user, $db_pass);
+            $pdo_init->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $pdo = new PDO("mysql:host=$host;port=$port;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            ]);
+            initDatabaseTables($pdo);
+        } catch (Exception $ex) {
+            die("Database Connection Error: " . $ex->getMessage());
+        }
+    } else {
+        die("Database Connection Error: " . $e->getMessage());
+    }
 }
 
 function initDatabaseTables($pdo) {

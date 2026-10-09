@@ -9,7 +9,7 @@ if (isLoggedIn()) {
 
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -66,8 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="inline-flex w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-400 items-center justify-center text-white shadow-xl shadow-rose-300/60 mb-3.5 transform hover:scale-105 active:scale-95 transition-all">
                 <i class="fa-solid fa-ice-cream text-3xl sm:text-4xl"></i>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">FrostyFlow</h1>
-            <p class="text-slate-600 text-xs sm:text-sm font-medium mt-1">Ice Cream Distribution, Van Sales & POS</p>
+            <div class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full mb-2 shadow-sm">
+                <i class="fa-solid fa-rocket text-emerald-500"></i> <span>CI/CD Live Deployment Active</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">FrostyFlow POS</h1>
+            <p class="text-slate-600 text-xs sm:text-sm font-medium mt-1">Dhanesha Distributors • Ice Cream Distribution & POS</p>
         </div>
 
         <!-- Login Card -->
@@ -126,38 +129,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </form>
 
-            <!-- 1-Click Demo Accounts (Fast Testing) -->
-            <div class="mt-6 pt-5 border-t border-slate-100">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-                    Quick Demo Logins (Tap to fill)
-                </div>
-                <div class="grid grid-cols-2 gap-2.5">
-                    <button type="button" onclick="setDemo('admin', 'admin123')" class="p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-center transition-all border border-purple-100 active:scale-95">
-                        <div class="text-xs font-black">Super Admin</div>
-                        <div class="text-[10px] text-purple-500 font-mono">admin &bull; admin123</div>
-                    </button>
-                    <button type="button" onclick="setDemo('master', 'master123')" class="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-center transition-all border border-amber-200 active:scale-95">
-                        <div class="text-xs font-black flex items-center justify-center">
-                            <i class="fa-solid fa-crown text-[10px] mr-1 text-amber-600"></i> Master
-                        </div>
-                        <div class="text-[10px] text-amber-600 font-mono">master &bull; master123</div>
-                    </button>
-                </div>
-            </div>
-
         </div>
 
         <div class="text-center mt-6 text-xs text-slate-500">
-            FrostyFlow System &bull; Mobile & Desktop Ready
+            FrostyFlow System &bull; Secure Authentication &bull; Mobile & Desktop Ready
         </div>
     </div>
 
     <script>
-        function setDemo(user, pass) {
-            document.getElementById('usernameInput').value = user;
-            document.getElementById('passwordInput').value = pass;
-        }
-
         function togglePasswordVisibility() {
             const passInput = document.getElementById('passwordInput');
             const eyeIcon = document.getElementById('eyeIcon');

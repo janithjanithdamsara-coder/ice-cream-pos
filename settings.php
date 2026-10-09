@@ -14,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ACTION 1: WIPE ABSOLUTELY EVERYTHING (Delete All Items, Stock, Dispatches, Lorries)
     if ($action === 'wipe_everything' && hasRole('super_admin')) {
         try {
-            $pdo->beginTransaction();
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             // Delete all operational transactions
@@ -66,12 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
-            $pdo->commit();
 
             logActivity('wipe_system', 'system', 'System wiped clean: all products, dispatches, stock cleared');
             setFlash('success', 'SUCCESS: System completely cleared! All items (0 products), stock (0 units), dispatches, GRN, and lorries have been deleted.');
         } catch (Exception $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
             setFlash('danger', 'Error wiping system: ' . $e->getMessage());
         }
         header("Location: settings.php");
@@ -81,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ACTION 2: CLEAR TRANSACTIONS ONLY (Keep products, reset stock to 0)
     if ($action === 'clear_transactions' && hasRole('super_admin')) {
         try {
-            $pdo->beginTransaction();
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             $pdo->exec("TRUNCATE TABLE `store_dispatch_items`");
@@ -100,11 +100,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
 
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
-            $pdo->commit();
 
             setFlash('success', 'All dispatches, store issues, and GRN records cleared! Cold Room stock reset to 0 units.');
         } catch (Exception $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
             setFlash('danger', 'Error: ' . $e->getMessage());
         }
         header("Location: settings.php");
@@ -200,40 +202,40 @@ require_once __DIR__ . '/includes/header.php';
         Current Operational Data in System
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Catalog Products</span>
-            <span class="text-2xl font-black font-mono <?= $countProducts == 0 ? 'text-slate-400' : 'text-slate-900' ?> mt-1 block"><?= number_format($countProducts) ?></span>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">Catalog Products</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $countProducts == 0 ? 'text-slate-400' : 'text-slate-900' ?> mt-1 block"><?= number_format($countProducts) ?></span>
             <span class="text-[10px] text-slate-400"><?= $countProducts == 0 ? 'Empty (0 items)' : 'Flavors / Packs' ?></span>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Cold Room Stock</span>
-            <span class="text-2xl font-black font-mono <?= $totalStoreUnits == 0 ? 'text-slate-400' : 'text-cyan-700' ?> mt-1 block"><?= number_format($totalStoreUnits) ?></span>
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">Cold Room Stock</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $totalStoreUnits == 0 ? 'text-slate-400' : 'text-cyan-700' ?> mt-1 block"><?= number_format($totalStoreUnits) ?></span>
             <span class="text-[10px] text-slate-400">Total Units</span>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Lorry Dispatches</span>
-            <span class="text-2xl font-black font-mono <?= $countLorryDispatches == 0 ? 'text-slate-400' : 'text-indigo-700' ?> mt-1 block"><?= number_format($countLorryDispatches) ?></span>
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">Lorry Dispatches</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $countLorryDispatches == 0 ? 'text-slate-400' : 'text-indigo-700' ?> mt-1 block"><?= number_format($countLorryDispatches) ?></span>
             <span class="text-[10px] text-slate-400">Trip Dispatches</span>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Direct Store Issues</span>
-            <span class="text-2xl font-black font-mono <?= $countDirectIssues == 0 ? 'text-slate-400' : 'text-emerald-700' ?> mt-1 block"><?= number_format($countDirectIssues) ?></span>
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">Direct Issues</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $countDirectIssues == 0 ? 'text-slate-400' : 'text-emerald-700' ?> mt-1 block"><?= number_format($countDirectIssues) ?></span>
             <span class="text-[10px] text-slate-400">Store Out GDNs</span>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">In Come Stock (GRN)</span>
-            <span class="text-2xl font-black font-mono <?= $countInvoices == 0 ? 'text-slate-400' : 'text-blue-700' ?> mt-1 block"><?= number_format($countInvoices) ?></span>
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">GRN Inbound</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $countInvoices == 0 ? 'text-slate-400' : 'text-blue-700' ?> mt-1 block"><?= number_format($countInvoices) ?></span>
             <span class="text-[10px] text-slate-400">Factory Invoices</span>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <span class="text-[10px] font-bold uppercase text-slate-400 block">Registered Lorries</span>
-            <span class="text-2xl font-black font-mono <?= $countLorries == 0 ? 'text-slate-400' : 'text-purple-700' ?> mt-1 block"><?= number_format($countLorries) ?></span>
+        <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <span class="text-[9px] sm:text-[10px] font-bold uppercase text-slate-400 block truncate">Lorries</span>
+            <span class="text-xl sm:text-2xl font-black font-mono <?= $countLorries == 0 ? 'text-slate-400' : 'text-purple-700' ?> mt-1 block"><?= number_format($countLorries) ?></span>
             <span class="text-[10px] text-slate-400">Active Vehicles</span>
         </div>
     </div>

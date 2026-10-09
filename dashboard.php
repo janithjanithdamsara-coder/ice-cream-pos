@@ -58,79 +58,182 @@ $stmt = $pdo->prepare("SELECT l.*,
 $stmt->execute([$today, $today, $today, $branchId]);
 $branchLorries = $stmt->fetchAll();
 
+// 7. Active Inter-Warehouse Loans Pending
+$stmtLoans = $pdo->prepare("SELECT COUNT(*) as pending_count, COALESCE(SUM(total_issued_qty - total_returned_qty), 0) as due_units 
+    FROM warehouse_loans WHERE branch_id = ? AND status IN ('pending', 'partial')");
+$stmtLoans->execute([$branchId]);
+$loanStat = $stmtLoans->fetch();
+$pendingLoanCount = intval($loanStat['pending_count'] ?? 0);
+$dueLoanUnits = intval($loanStat['due_units'] ?? 0);
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
 <!-- Welcome Banner -->
-<div class="mb-6 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl shadow-blue-900/20">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+<div class="mb-5 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 relative z-10">
         <div>
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-2">
-                <i class="fa-solid fa-warehouse"></i> Cold Room: <?= htmlspecialchars($user['branch_name']) ?>
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold mb-2">
+                <i class="fa-solid fa-warehouse"></i> Warehouse: <?= htmlspecialchars($user['branch_name']) ?>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Stock & Distribution Control</h1>
-            <p class="text-blue-100 text-xs sm:text-sm mt-1">Real-time Stock In, Van Loadings, 3:00 PM Returns & Dispatches &bull; <?= date('l, d F Y') ?></p>
+            <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white">Ice Cream Distribution & Stock Hub</h1>
+            <p class="text-slate-400 text-xs mt-1">Real-time Stock In, Counter Slips, Van Loadings & 3:00 PM Returns &bull; <?= date('l, d F Y') ?></p>
         </div>
-        <div class="flex flex-wrap gap-2.5">
-            <a href="direct_issue.php" class="inline-flex items-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs rounded-xl shadow-md transition-all">
-                <i class="fa-solid fa-arrow-up-from-bracket mr-2"></i> Issue Stock (Store Out)
-            </a>
-            <a href="lorry.php?action=new_dispatch" class="inline-flex items-center px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-amber-950 font-extrabold text-xs rounded-xl shadow-md transition-all">
-                <i class="fa-solid fa-truck-ramp-box mr-2"></i> Load Lorry (Morning)
-            </a>
-            <a href="stock.php?action=new_grn" class="inline-flex items-center px-4 py-2.5 bg-white/20 hover:bg-white/30 text-white font-extrabold text-xs rounded-xl backdrop-blur-md transition-all">
-                <i class="fa-solid fa-plus mr-2"></i> + In Come Stock (GRN)
-            </a>
+        <div class="flex items-center gap-2 shrink-0">
+            <span class="inline-flex items-center px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold border border-slate-700">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse"></span> System Live &bull; Units Only
+            </span>
         </div>
     </div>
 </div>
 
-<!-- 4 Key Quantity KPI Cards (Zero Money) -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <!-- Card 1: Cold Room Store Balance -->
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
-        <div>
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Cold Room (Warehouse)</p>
-            <h3 class="text-3xl font-black text-slate-800 mt-1 font-mono"><?= number_format($totalStoreStock) ?> <span class="text-sm font-semibold text-slate-500">Units</span></h3>
-            <p class="text-[11px] text-cyan-600 mt-0.5 font-semibold">Available for loading & issue</p>
+<?php if ($pendingLoanCount > 0): ?>
+<!-- Pending External Loans Alert Banner -->
+<div class="mb-5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+    <div class="flex items-center space-x-3.5">
+        <div class="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-lg shadow-xs shrink-0">
+            <i class="fa-solid fa-handshake-angle"></i>
         </div>
-        <div class="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center text-xl">
+        <div>
+            <h4 class="text-sm font-black text-slate-800 flex items-center">
+                External Warehouse Stock Loans Pending
+                <span class="ml-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-mono font-bold"><?= $pendingLoanCount ?> Active</span>
+            </h4>
+            <p class="text-slate-600 mt-0.5">
+                There are <strong class="text-amber-800 font-mono font-black"><?= number_format($dueLoanUnits) ?> ice cream units</strong> lent out to other warehouses awaiting replenishment & return.
+            </p>
+        </div>
+    </div>
+    <a href="warehouse_loans.php?status=pending_partial" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold transition shadow-xs shrink-0 flex items-center justify-center">
+        <span>Review & Receive Stock</span>
+        <i class="fa-solid fa-arrow-right ml-1.5"></i>
+    </a>
+</div>
+<?php endif; ?>
+
+<!-- DAILY QUICK OPERATIONS (4 ACTION CARDS) -->
+<div class="mb-6">
+    <div class="flex items-center justify-between mb-3 px-1">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center">
+            <i class="fa-solid fa-bolt text-amber-500 mr-2"></i> Daily Quick Operations
+        </h2>
+        <span class="text-[11px] text-slate-400 font-medium">Click any action to start</span>
+    </div>
+
+    <?php if ($user['role'] === 'cashier'): ?>
+    <!-- Cashier View: Only Counter Bill -->
+    <a href="pos.php" class="group bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-700 hover:to-blue-800 p-6 rounded-3xl text-white shadow-xl shadow-cyan-600/20 transition-all flex items-center justify-between">
+        <div class="space-y-1">
+            <span class="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/20 text-cyan-100">Quick Counter</span>
+            <h3 class="text-xl font-black tracking-tight group-hover:underline">⚡ Counter Bill & Issue Slip</h3>
+            <p class="text-xs text-cyan-100 font-medium">Issue instant slips for walk-in ice cream pickups</p>
+        </div>
+        <div class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shrink-0 ml-3">
+            <i class="fa-solid fa-cash-register"></i>
+        </div>
+    </a>
+    <?php else: ?>
+    <!-- Admin / Super Admin / Master View: 4 Clear Actions -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
+        
+        <!-- ACTION 1: + Factory Stock In (GRN) -->
+        <a href="stock.php" class="group bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 p-4 sm:p-4.5 rounded-3xl text-white shadow-lg shadow-emerald-600/20 transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-between">
+            <div class="space-y-1 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/20 text-emerald-100">1 • Inbound</span>
+                <h3 class="text-sm sm:text-base font-black tracking-tight group-hover:underline truncate">+ Stock Receive</h3>
+                <p class="text-[11px] text-emerald-100/90 font-medium truncate">Factory invoice GRN</p>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-lg group-hover:scale-110 transition-transform shrink-0 ml-2">
+                <i class="fa-solid fa-boxes-packing"></i>
+            </div>
+        </a>
+
+        <!-- ACTION 2: ⚡ Quick Counter Bill (POS) -->
+        <a href="pos.php" class="group bg-gradient-to-br from-cyan-600 to-blue-700 hover:from-cyan-700 hover:to-blue-800 p-4 sm:p-4.5 rounded-3xl text-white shadow-lg shadow-cyan-600/20 transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-between">
+            <div class="space-y-1 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/20 text-cyan-100">2 • Counter</span>
+                <h3 class="text-sm sm:text-base font-black tracking-tight group-hover:underline truncate">⚡ Counter Bill</h3>
+                <p class="text-[11px] text-cyan-100/90 font-medium truncate">Instant retail slip</p>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-lg group-hover:scale-110 transition-transform shrink-0 ml-2">
+                <i class="fa-solid fa-cash-register"></i>
+            </div>
+        </a>
+
+        <!-- ACTION 3: 🚚 Load Lorry & 3PM Returns -->
+        <a href="lorry.php" class="group bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 p-4 sm:p-4.5 rounded-3xl text-white shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-between">
+            <div class="space-y-1 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/20 text-amber-100">3 • Fleet</span>
+                <h3 class="text-sm sm:text-base font-black tracking-tight group-hover:underline truncate">🚚 Lorry Dispatch</h3>
+                <p class="text-[11px] text-amber-100/90 font-medium truncate">Loading & 3PM return</p>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-lg group-hover:scale-110 transition-transform shrink-0 ml-2">
+                <i class="fa-solid fa-truck-moving"></i>
+            </div>
+        </a>
+
+        <!-- ACTION 4: 🤝 Warehouse Borrow & Return -->
+        <a href="warehouse_loans.php" class="group bg-gradient-to-br from-indigo-600 to-indigo-800 hover:from-indigo-700 hover:to-indigo-900 p-4 sm:p-4.5 rounded-3xl text-white shadow-lg shadow-indigo-600/20 transition-all transform hover:-translate-y-1 active:translate-y-0 flex items-center justify-between">
+            <div class="space-y-1 min-w-0">
+                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-white/20 text-indigo-100">4 • Loans</span>
+                <h3 class="text-sm sm:text-base font-black tracking-tight group-hover:underline truncate">🤝 Borrow & Return</h3>
+                <p class="text-[11px] text-indigo-100/90 font-medium truncate">Inter-warehouse loans</p>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-lg group-hover:scale-110 transition-transform shrink-0 ml-2">
+                <i class="fa-solid fa-handshake-angle"></i>
+            </div>
+        </a>
+
+    </div>
+    <?php endif; ?>
+</div>
+
+<!-- 4 Key Quantity KPI Cards (Zero Money) -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6">
+    <!-- Card 1: Cold Room Store Balance -->
+    <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+            <p class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Cold Room</p>
+            <h3 class="text-xl sm:text-3xl font-black text-slate-800 mt-0.5 sm:mt-1 font-mono"><?= number_format($totalStoreStock) ?> <span class="text-[11px] sm:text-sm font-semibold text-slate-500">Units</span></h3>
+            <p class="text-[10px] sm:text-[11px] text-cyan-600 mt-0.5 font-semibold hidden sm:block">Available for loading & issue</p>
+        </div>
+        <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center text-base sm:text-xl shrink-0">
             <i class="fa-solid fa-boxes-stacked"></i>
         </div>
     </div>
 
     <!-- Card 2: Distributed Out Today -->
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+    <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs flex items-center justify-between">
         <div>
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Distributed Out Today</p>
-            <h3 class="text-3xl font-black text-emerald-700 mt-1 font-mono"><?= number_format($totalDistributedToday) ?> <span class="text-sm font-semibold text-slate-500">Units</span></h3>
-            <p class="text-[11px] text-slate-500 mt-0.5">Lorry: <?= number_format($lorryStats['lorry_delivered_qty'] ?? 0) ?> | Direct: <?= number_format($todayDirectIssueQty) ?></p>
+            <p class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Distributed Out</p>
+            <h3 class="text-xl sm:text-3xl font-black text-emerald-700 mt-0.5 sm:mt-1 font-mono"><?= number_format($totalDistributedToday) ?> <span class="text-[11px] sm:text-sm font-semibold text-slate-500">Units</span></h3>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 hidden sm:block">Lorry: <?= number_format($lorryStats['lorry_delivered_qty'] ?? 0) ?> | Direct: <?= number_format($todayDirectIssueQty) ?></p>
         </div>
-        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+        <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-base sm:text-xl shrink-0">
             <i class="fa-solid fa-dolly"></i>
         </div>
     </div>
 
     <!-- Card 3: Returned Back to Store -->
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+    <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs flex items-center justify-between">
         <div>
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Lorry Returns to Store</p>
-            <h3 class="text-3xl font-black text-purple-700 mt-1 font-mono"><?= number_format($lorryStats['lorry_returned_qty'] ?? 0) ?> <span class="text-sm font-semibold text-slate-500">Units</span></h3>
-            <p class="text-[11px] text-purple-600 mt-0.5 font-semibold">Credited back into Warehouse</p>
+            <p class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">3PM Returns</p>
+            <h3 class="text-xl sm:text-3xl font-black text-purple-700 mt-0.5 sm:mt-1 font-mono"><?= number_format($lorryStats['lorry_returned_qty'] ?? 0) ?> <span class="text-[11px] sm:text-sm font-semibold text-slate-500">Units</span></h3>
+            <p class="text-[10px] sm:text-[11px] text-purple-600 mt-0.5 font-semibold hidden sm:block">Credited back to Warehouse</p>
         </div>
-        <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+        <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-base sm:text-xl shrink-0">
             <i class="fa-solid fa-arrow-rotate-left"></i>
         </div>
     </div>
 
     <!-- Card 4: Damaged / Melted Spoilage -->
-    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+    <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs flex items-center justify-between">
         <div>
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Damaged / Melted Loss</p>
-            <h3 class="text-3xl font-black text-rose-600 mt-1 font-mono"><?= number_format($lorryStats['lorry_damage_qty'] ?? 0) ?> <span class="text-sm font-semibold text-slate-500">Units</span></h3>
-            <p class="text-[11px] text-slate-500 mt-0.5">Defective / melted spoilage</p>
+            <p class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Damaged / Melt</p>
+            <h3 class="text-xl sm:text-3xl font-black text-rose-600 mt-0.5 sm:mt-1 font-mono"><?= number_format($lorryStats['lorry_damage_qty'] ?? 0) ?> <span class="text-[11px] sm:text-sm font-semibold text-slate-500">Units</span></h3>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 hidden sm:block">Defective / melted spoilage</p>
         </div>
-        <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl">
+        <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-base sm:text-xl shrink-0">
             <i class="fa-solid fa-temperature-arrow-up"></i>
         </div>
     </div>

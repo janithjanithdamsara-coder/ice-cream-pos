@@ -87,7 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
 
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 setFlash('danger', "Failed to issue goods: " . $e->getMessage());
                 header("Location: direct_issue.php");
                 exit;
@@ -119,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
             setFlash('success', "Direct Issue cancelled. Units returned back to Cold Room store.");
         } catch (Exception $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             setFlash('danger', "Error cancelling issue: " . $e->getMessage());
         }
         header("Location: direct_issue.php");
@@ -410,7 +414,8 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- Issues Table -->
-        <div class="overflow-x-auto">
+        <!-- Desktop Table View -->
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-xs text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200">
@@ -477,6 +482,63 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <!-- Mobile Direct Issue Cards -->
+        <div class="md:hidden divide-y divide-slate-100">
+            <?php if (empty($recentIssues)): ?>
+                <div class="py-8 text-center text-slate-400 text-xs">No direct store issues found for this period.</div>
+            <?php else: ?>
+                <?php foreach ($recentIssues as $iss): ?>
+                <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-2">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <a href="direct_issue.php?view_id=<?= $iss['id'] ?>" class="font-mono font-bold text-emerald-800 text-xs hover:underline">
+                                <?= htmlspecialchars($iss['issue_no']) ?>
+                            </a>
+                            <div class="font-bold text-slate-900 text-xs mt-0.5">
+                                <?= htmlspecialchars($iss['recipient_name']) ?>
+                            </div>
+                            <?php if (!empty($iss['notes'])): ?>
+                                <div class="text-[10px] text-slate-400 italic mt-0.5 truncate max-w-[220px]">
+                                    <?= htmlspecialchars($iss['notes']) ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="inline-block px-2.5 py-1 rounded-xl font-black font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <?= number_format($iss['total_qty']) ?> Units
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100">
+                        <div>
+                            <span><?= htmlspecialchars($iss['issue_date']) ?></span>
+                            <span>&bull;</span>
+                            <span><?= htmlspecialchars($iss['issue_time']) ?></span>
+                            <span>&bull;</span>
+                            <span>By <?= htmlspecialchars($iss['issued_by_name'] ?? 'System') ?></span>
+                        </div>
+                        <div class="flex items-center space-x-1.5">
+                            <a href="direct_issue.php?view_id=<?= $iss['id'] ?>" class="px-2 py-1 bg-slate-100 text-slate-700 font-bold rounded-lg text-[10px] hover:bg-slate-200 transition">
+                                <i class="fa-solid fa-eye mr-0.5"></i> View
+                            </a>
+                            <?php if (hasRole(['super_admin', 'admin'])): ?>
+                            <form method="POST" action="direct_issue.php" class="inline" onsubmit="return confirm('Cancel this issue note? Stock will be returned to Cold Room.');">
+                                <input type="hidden" name="action" value="cancel_issue">
+                                <input type="hidden" name="issue_id" value="<?= $iss['id'] ?>">
+                                <button type="submit" class="px-2 py-1 bg-rose-50 text-rose-600 font-bold rounded-lg text-[10px] hover:bg-rose-100 transition">
+                                    Cancel
+                                </button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
     </div>
 </div>
 

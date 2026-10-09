@@ -51,7 +51,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         @media (max-width: 768px) {
-            body { padding-bottom: 65px; }
+            body { padding-bottom: 72px; }
         }
         @keyframes toastIn {
             from { transform: translateY(-16px) scale(0.95); opacity: 0; }
@@ -112,15 +112,34 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </div>
 
             <!-- Navigation Links Scroll Area -->
-            <nav class="flex-1 px-3 py-4 space-y-5 overflow-y-auto sidebar-scroll">
+            <!-- Navigation Links Scroll Area -->
+            <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto sidebar-scroll">
                 
-                <!-- Group 1: Overview -->
+                <?php if ($user['role'] === 'cashier'): ?>
+                <!-- Cashier Streamlined View -->
                 <div>
-                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Inventory Operations</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Cashier Counter</div>
                     <div class="space-y-1">
                         <a href="dashboard.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'dashboard.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-gauge-high w-5 text-sm"></i>
-                            <span class="ml-2.5">Dashboard Overview</span>
+                            <span class="ml-2.5">Dashboard</span>
+                        </a>
+
+                        <a href="pos.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
+                            <span class="ml-2.5">Counter Bill (POS)</span>
+                        </a>
+                    </div>
+                </div>
+                <?php else: ?>
+
+                <!-- Section 1: Main (ප්‍රධාන) -->
+                <div>
+                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Main</div>
+                    <div class="space-y-1">
+                        <a href="dashboard.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'dashboard.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-gauge-high w-5 text-sm"></i>
+                            <span class="ml-2.5">Dashboard</span>
                         </a>
 
                         <a href="stock.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'stock.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
@@ -130,49 +149,42 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     </div>
                 </div>
 
-                <!-- Group 2: Distribution & Outflow -->
+                <!-- Section 2: Outflow & Sales (බඩු පිටකිරීම්) -->
                 <div>
-                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Dispatches & Returns</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Outflow & Sales</div>
                     <div class="space-y-1">
-                        <a href="pos.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
-                            <div class="flex items-center">
-                                <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
-                                <span class="ml-2.5">Counter POS (Issue Slip)</span>
-                            </div>
-                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-cyan-500/20 text-cyan-300">Fast</span>
-                        </a>
-
-                        <a href="direct_issue.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'direct_issue.php' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <div class="flex items-center">
-                                <i class="fa-solid fa-arrow-up-from-bracket w-5 text-sm"></i>
-                                <span class="ml-2.5">Formal Issue Note (GDN)</span>
-                            </div>
-                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-emerald-500/20 text-emerald-300">Out</span>
+                        <a href="pos.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
+                            <span class="ml-2.5">Counter Bill (POS)</span>
                         </a>
 
                         <a href="lorry.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'lorry.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-truck-moving w-5 text-sm"></i>
-                            <span class="ml-2.5">Lorry Dispatch & 3PM Returns</span>
+                            <span class="ml-2.5">Lorry Sales & 3PM Returns</span>
+                        </a>
+
+                        <a href="direct_issue.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'direct_issue.php' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-arrow-up-from-bracket w-5 text-sm"></i>
+                            <span class="ml-2.5">Store Issue Note (GDN)</span>
+                        </a>
+
+                        <a href="warehouse_loans.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'warehouse_loans.php' ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-handshake-angle w-5 text-sm text-indigo-400"></i>
+                            <span class="ml-2.5">Warehouse Borrow & Return</span>
                         </a>
                     </div>
                 </div>
 
-                <!-- Group 3: Reports -->
+                <!-- Section 3: Management & Reports (පාලනය සහ වාර්තා) -->
                 <div>
-                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Audit & Stock Movement</div>
+                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Management & Audit</div>
                     <div class="space-y-1">
                         <a href="reports.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'reports.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-clipboard-list w-5 text-sm"></i>
-                            <span class="ml-2.5">Daily Stock Movement Sheet</span>
+                            <span class="ml-2.5">Daily Stock Sheet</span>
                         </a>
-                    </div>
-                </div>
 
-                <!-- Group 4: Administration -->
-                <?php if (hasRole(['super_admin', 'admin'])): ?>
-                <div>
-                    <div class="px-3 mb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">System Admin</div>
-                    <div class="space-y-1">
+                        <?php if (hasRole(['super_admin', 'admin'])): ?>
                         <a href="users.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'users.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-users w-5 text-sm"></i>
                             <span class="ml-2.5">User Accounts</span>
@@ -180,25 +192,23 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                         <a href="settings.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'settings.php' ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-gear w-5 text-sm"></i>
-                            <span class="ml-2.5">Settings & Clear All</span>
+                            <span class="ml-2.5">Settings & Reset</span>
                         </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endif; ?>
 
-                <!-- Group 5: Master Developer Portal (Master Role Only) -->
+                <!-- Master Developer Portal (Master Role Only) -->
                 <?php if ($user['role'] === 'master'): ?>
-                <div class="pt-3 border-t border-slate-800/80">
+                <div class="pt-2 border-t border-slate-800/80">
                     <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center">
-                        <i class="fa-solid fa-crown mr-1.5"></i> Master Portal (Developer)
+                        <i class="fa-solid fa-crown mr-1.5"></i> Master Portal
                     </div>
                     <div class="space-y-1">
-                        <a href="master.php" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all <?= $currentPage === 'master.php' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg' : 'text-amber-300 hover:text-white hover:bg-slate-800/80' ?>">
-                            <div class="flex items-center">
-                                <i class="fa-solid fa-shield-halved w-5 text-sm text-amber-400"></i>
-                                <span class="ml-2.5">Master Control & Logs</span>
-                            </div>
-                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded uppercase bg-amber-500/20 text-amber-300">Root</span>
+                        <a href="master.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-bold transition-all <?= $currentPage === 'master.php' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg' : 'text-amber-300 hover:text-white hover:bg-slate-800/80' ?>">
+                            <i class="fa-solid fa-shield-halved w-5 text-sm text-amber-400"></i>
+                            <span class="ml-2.5">Master Control & Logs</span>
                         </a>
                     </div>
                 </div>
@@ -218,10 +228,16 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <div class="text-xs font-bold text-white truncate"><?= htmlspecialchars($user['name']) ?></div>
                         <div class="text-[10px] text-slate-400 capitalize truncate"><?= str_replace('_', ' ', $user['role']) ?></div>
                     </div>
+                <div class="flex items-center space-x-1 shrink-0">
+                    <?php if (hasRole(['super_admin', 'admin'])): ?>
+                        <a href="users.php" title="Manage Users & Change Password" class="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg transition-colors">
+                            <i class="fa-solid fa-key text-xs"></i>
+                        </a>
+                    <?php endif; ?>
+                    <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors">
+                        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                    </a>
                 </div>
-                <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors flex-shrink-0">
-                    <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
-                </a>
             </div>
         </div>
 
@@ -245,25 +261,29 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <?= isset($pageTitle) ? htmlspecialchars($pageTitle) : 'Overview' ?>
                         </h2>
                         <div class="hidden sm:flex items-center space-x-1.5 text-[11px] text-slate-400">
-                            <span>Warehouse Inventory</span>
+                            <span>Warehouse</span>
                             <span>&rsaquo;</span>
                             <span class="text-slate-600 font-medium"><?= htmlspecialchars($user['branch_name']) ?></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right: Quick Direct Issue Action & User -->
+                <!-- Right: Clean Quick Bill Action & User Status -->
                 <div class="flex items-center space-x-2 sm:space-x-3">
-                    <!-- Quick Direct Store Issue Button -->
-                    <a href="direct_issue.php" class="inline-flex items-center px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-sm transition-all transform hover:-translate-y-0.5">
-                        <i class="fa-solid fa-arrow-up-from-bracket mr-1.5"></i>
-                        <span>Direct Issue (Store Out)</span>
+                    <!-- Universal Quick Bill Button -->
+                    <a href="pos.php" title="Open Counter POS" class="inline-flex items-center px-3 sm:px-3.5 py-2 text-xs font-black rounded-xl text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 shadow-sm transition-all transform hover:-translate-y-0.5 shrink-0">
+                        <i class="fa-solid fa-bolt sm:mr-1.5 text-amber-300"></i>
+                        <span class="hidden sm:inline">Quick Bill (POS)</span>
+                        <span class="inline sm:hidden ml-1">Bill</span>
                     </a>
 
                     <!-- User Pill -->
                     <div class="hidden sm:flex items-center pl-3 border-l border-slate-200 space-x-2">
-                        <span class="inline-block w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
-                        <span class="text-xs text-slate-600 font-semibold"><?= htmlspecialchars($user['name']) ?></span>
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <div class="text-left">
+                            <span class="text-xs text-slate-700 font-bold block leading-tight"><?= htmlspecialchars($user['name']) ?></span>
+                            <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block leading-none"><?= str_replace('_', ' ', $user['role']) ?></span>
+                        </div>
                     </div>
                 </div>
 

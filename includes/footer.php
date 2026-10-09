@@ -18,6 +18,41 @@
 
     </div> <!-- End Right Side Wrapper (md:pl-64) -->
 
+    <!-- ==================== MOBILE BOTTOM APP NAVIGATION BAR ==================== -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 z-40 shadow-lg px-2 py-1.5 flex items-center justify-around no-print">
+        <!-- Dashboard -->
+        <a href="dashboard.php" class="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition <?= $currentPage === 'dashboard.php' ? 'text-cyan-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium' ?>">
+            <i class="fa-solid fa-gauge-high text-base mb-0.5 <?= $currentPage === 'dashboard.php' ? 'scale-110' : '' ?>"></i>
+            <span class="text-[10px] tracking-tight">Overview</span>
+        </a>
+
+        <!-- Stock -->
+        <a href="stock.php" class="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition <?= $currentPage === 'stock.php' ? 'text-cyan-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium' ?>">
+            <i class="fa-solid fa-boxes-stacked text-base mb-0.5 <?= $currentPage === 'stock.php' ? 'scale-110' : '' ?>"></i>
+            <span class="text-[10px] tracking-tight">Stock</span>
+        </a>
+
+        <!-- POS Counter (Quick Issue) -->
+        <a href="pos.php" class="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition <?= $currentPage === 'pos.php' ? 'text-cyan-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium' ?>">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-cyan-600/30 -mt-3.5 border-2 border-white">
+                <i class="fa-solid fa-cash-register text-xs"></i>
+            </div>
+            <span class="text-[10px] tracking-tight mt-0.5">Bill</span>
+        </a>
+
+        <!-- Lorries -->
+        <a href="lorry.php" class="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition <?= $currentPage === 'lorry.php' ? 'text-cyan-600 font-extrabold' : 'text-slate-500 hover:text-slate-800 font-medium' ?>">
+            <i class="fa-solid fa-truck-moving text-base mb-0.5 <?= $currentPage === 'lorry.php' ? 'scale-110' : '' ?>"></i>
+            <span class="text-[10px] tracking-tight">Lorries</span>
+        </a>
+
+        <!-- Menu / More (Toggles Sidebar) -->
+        <button type="button" onclick="toggleSidebar()" class="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl text-slate-500 hover:text-slate-800 font-medium transition focus:outline-none">
+            <i class="fa-solid fa-bars text-base mb-0.5"></i>
+            <span class="text-[10px] tracking-tight">Menu</span>
+        </button>
+    </nav>
+
     <!-- Global Scripts & Modern Toast System -->
     <script>
         // Toggle mobile slide-in sidebar

@@ -9,8 +9,35 @@ $branchId = $user['branch_id'];
 $today = date('Y-m-d');
 
 $tab = $_GET['tab'] ?? 'movement';
-$fromDate = $_GET['from_date'] ?? date('Y-m-01'); // 1st of current month
-$toDate = $_GET['to_date'] ?? $today;
+$preset = $_GET['preset'] ?? '';
+
+$mondayThisWeek = date('Y-m-d', strtotime('monday this week'));
+$firstOfMonth = date('Y-m-01');
+
+if ($preset === 'daily') {
+    $fromDate = $today;
+    $toDate = $today;
+} elseif ($preset === 'weekly') {
+    $fromDate = $mondayThisWeek;
+    $toDate = $today;
+} elseif ($preset === 'monthly') {
+    $fromDate = $firstOfMonth;
+    $toDate = $today;
+} else {
+    $fromDate = $_GET['from_date'] ?? $firstOfMonth;
+    $toDate = $_GET['to_date'] ?? $today;
+}
+
+// Determine active preset
+if ($fromDate === $today && $toDate === $today) {
+    $activePreset = 'daily';
+} elseif ($fromDate === $mondayThisWeek && $toDate === $today) {
+    $activePreset = 'weekly';
+} elseif ($fromDate === $firstOfMonth && $toDate === $today) {
+    $activePreset = 'monthly';
+} else {
+    $activePreset = 'custom';
+}
 
 // 1. OVERALL KPI METRICS (FOR PERIOD & TODAY)
 // Live Cold Room Balance
@@ -180,8 +207,22 @@ $damageList = $stmtDmgLog->fetchAll();
 require_once __DIR__ . '/includes/header.php';
 ?>
 
+<!-- Print Header (Visible only when printed) -->
+<div class="print-only mb-6 pb-4 border-b-2 border-slate-800">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-black text-slate-900 uppercase tracking-tight">FrostyFlow Ice Cream Distribution</h1>
+            <p class="text-xs text-slate-600 font-bold">Stock Movement & Distribution Audit Sheet (Pure Units Tracking)</p>
+        </div>
+        <div class="text-right text-xs">
+            <div class="font-bold text-slate-800">Period: <?= date('d M Y', strtotime($fromDate)) ?> to <?= date('d M Y', strtotime($toDate)) ?></div>
+            <div class="text-[10px] text-slate-500">Printed: <?= date('d M Y, h:i A') ?></div>
+        </div>
+    </div>
+</div>
+
 <!-- Header -->
-<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-3 no-print">
+<div class="flex flex-col xl:flex-row xl:items-center justify-between pb-6 gap-4 no-print">
     <div>
         <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center">
             <span class="w-10 h-10 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mr-3 shadow-inner">
@@ -194,22 +235,41 @@ require_once __DIR__ . '/includes/header.php';
         </p>
     </div>
 
-    <!-- Filter Form -->
-    <form method="GET" action="reports.php" class="flex flex-wrap items-center gap-2 text-xs">
-        <input type="hidden" name="tab" value="<?= htmlspecialchars($tab) ?>">
-        <div class="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-xs">
-            <span class="text-slate-400 font-medium">From:</span>
-            <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" class="font-bold font-mono text-slate-800 focus:outline-none">
-            <span class="text-slate-400 font-medium">To:</span>
-            <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" class="font-bold font-mono text-slate-800 focus:outline-none">
+    <!-- Quick Preset Buttons & Custom Date Filter -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+        <!-- 1-Click Presets: Daily / Weekly / Monthly -->
+        <div class="inline-flex bg-slate-100 p-1 rounded-2xl border border-slate-200/80 shadow-inner shrink-0">
+            <a href="reports.php?tab=<?= urlencode($tab) ?>&preset=daily" 
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 <?= $activePreset === 'daily' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70' ?>">
+                <i class="fa-solid fa-calendar-day text-[11px]"></i> Today (Daily)
+            </a>
+            <a href="reports.php?tab=<?= urlencode($tab) ?>&preset=weekly" 
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 <?= $activePreset === 'weekly' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70' ?>">
+                <i class="fa-solid fa-calendar-week text-[11px]"></i> This Week
+            </a>
+            <a href="reports.php?tab=<?= urlencode($tab) ?>&preset=monthly" 
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 <?= $activePreset === 'monthly' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70' ?>">
+                <i class="fa-solid fa-calendar-days text-[11px]"></i> This Month
+            </a>
         </div>
-        <button type="submit" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition">
-            Filter Audit
-        </button>
-        <button type="button" onclick="window.print()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl shadow-xs transition">
-            <i class="fa-solid fa-print mr-1"></i> Print Sheet
-        </button>
-    </form>
+
+        <!-- Custom Date Range Form -->
+        <form method="GET" action="reports.php" class="flex flex-wrap items-center gap-2 text-xs">
+            <input type="hidden" name="tab" value="<?= htmlspecialchars($tab) ?>">
+            <div class="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-xs">
+                <span class="text-slate-400 font-medium">From:</span>
+                <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" class="font-bold font-mono text-slate-800 focus:outline-none text-xs">
+                <span class="text-slate-400 font-medium">To:</span>
+                <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" class="font-bold font-mono text-slate-800 focus:outline-none text-xs">
+            </div>
+            <button type="submit" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition text-center">
+                Filter
+            </button>
+            <button type="button" onclick="window.print()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl shadow-xs transition shrink-0">
+                <i class="fa-solid fa-print mr-1"></i> Print
+            </button>
+        </form>
+    </div>
 </div>
 
 <!-- ========================= TOP KPI SUMMARY METRICS ========================= -->
@@ -283,19 +343,19 @@ require_once __DIR__ . '/includes/header.php';
 <!-- ========================= TABS NAVIGATION ========================= -->
 <div class="mb-6 border-b border-slate-200 no-print">
     <nav class="flex space-x-4 sm:space-x-8 overflow-x-auto">
-        <a href="?tab=movement&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?>" 
+        <a href="?tab=movement&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?><?= $preset ? '&preset=' . urlencode($preset) : '' ?>" 
            class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'movement' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
             <i class="fa-solid fa-calculator mr-2"></i> 1. Daily Stock Movement Sheet
         </a>
-        <a href="?tab=lorry&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?>" 
+        <a href="?tab=lorry&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?><?= $preset ? '&preset=' . urlencode($preset) : '' ?>" 
            class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'lorry' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
             <i class="fa-solid fa-truck-moving mr-2"></i> 2. Lorry Fleet Dispatches (<?= count($lorryRunsList) ?>)
         </a>
-        <a href="?tab=direct&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?>" 
+        <a href="?tab=direct&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?><?= $preset ? '&preset=' . urlencode($preset) : '' ?>" 
            class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'direct' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
             <i class="fa-solid fa-arrow-up-from-bracket mr-2"></i> 3. Direct Store Outflows (<?= count($directRunsList) ?>)
         </a>
-        <a href="?tab=damage&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?>" 
+        <a href="?tab=damage&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?><?= $preset ? '&preset=' . urlencode($preset) : '' ?>" 
            class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'damage' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
             <i class="fa-solid fa-triangle-exclamation mr-2"></i> 4. Melted & Spoilage Log (<?= count($damageList) ?>)
         </a>
@@ -314,12 +374,16 @@ require_once __DIR__ . '/includes/header.php';
                 Audit formula: <strong>Current Cold Room Units = Physical Count on Hand</strong> &bull; Tracks GRN In, Lorry Load, Direct Issue, and 3PM Returns.
             </p>
         </div>
-        <div class="text-xs font-mono bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200">
-            Period: <strong><?= date('d M Y', strtotime($fromDate)) ?></strong> to <strong><?= date('d M Y', strtotime($toDate)) ?></strong>
+        <div class="text-xs font-mono bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider <?= $activePreset === 'daily' ? 'bg-cyan-100 text-cyan-800' : ($activePreset === 'weekly' ? 'bg-indigo-100 text-indigo-800' : ($activePreset === 'monthly' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')) ?>">
+                <?= strtoupper($activePreset) ?>
+            </span>
+            <span>Period: <strong><?= date('d M Y', strtotime($fromDate)) ?></strong> to <strong><?= date('d M Y', strtotime($toDate)) ?></strong></span>
         </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <!-- Desktop Table View -->
+    <div class="hidden lg:block overflow-x-auto">
         <table class="w-full text-xs text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
@@ -389,22 +453,87 @@ require_once __DIR__ . '/includes/header.php';
             </tbody>
         </table>
     </div>
+
+    <!-- Mobile Movement Cards View -->
+    <div class="lg:hidden divide-y divide-slate-100">
+        <?php if (empty($movements)): ?>
+            <div class="py-8 text-center text-slate-400 text-xs">No products found.</div>
+        <?php else: ?>
+            <?php foreach ($movements as $m): 
+                $p = $m['info'];
+                $isLow = $m['current_stock'] <= $p['alert_quantity'];
+                $isOut = $m['current_stock'] <= 0;
+            ?>
+            <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-2.5">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="font-extrabold text-slate-900 text-xs leading-snug"><?= htmlspecialchars($p['name']) ?></div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-0.5"><?= htmlspecialchars($p['code']) ?> &bull; <?= htmlspecialchars($p['flavor']) ?> (<?= htmlspecialchars($p['size']) ?>)</div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="inline-block px-2.5 py-1 rounded-xl font-black font-mono text-xs <?= $isOut ? 'bg-rose-100 text-rose-700' : ($isLow ? 'bg-amber-100 text-amber-800' : 'bg-cyan-50 text-cyan-800') ?>">
+                            <?= number_format($m['current_stock']) ?> <?= htmlspecialchars($p['unit']) ?>
+                        </span>
+                        <div class="text-[9px] font-bold mt-0.5 <?= $isOut ? 'text-rose-600' : ($isLow ? 'text-amber-600' : 'text-emerald-600') ?>">
+                            <?= $isOut ? 'Out of Stock' : ($isLow ? 'Low Stock' : 'Good') ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6 Movement Metrics in 3x2 Grid -->
+                <div class="grid grid-cols-3 gap-1.5 text-center text-[10px] font-bold">
+                    <div class="bg-emerald-50/70 border border-emerald-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">+ GRN In</span>
+                        <span class="font-mono font-black text-emerald-700 text-xs"><?= $m['units_in'] > 0 ? '+' . number_format($m['units_in']) : '-' ?></span>
+                    </div>
+                    <div class="bg-amber-50/70 border border-amber-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">- Lorry Load</span>
+                        <span class="font-mono font-black text-amber-800 text-xs"><?= $m['units_loaded'] > 0 ? '-' . number_format($m['units_loaded']) : '-' ?></span>
+                    </div>
+                    <div class="bg-blue-50/70 border border-blue-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">- Direct Out</span>
+                        <span class="font-mono font-black text-blue-800 text-xs"><?= $m['units_direct_out'] > 0 ? '-' . number_format($m['units_direct_out']) : '-' ?></span>
+                    </div>
+                    <div class="bg-teal-50/70 border border-teal-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">+ 3PM Return</span>
+                        <span class="font-mono font-black text-teal-800 text-xs"><?= $m['units_returned'] > 0 ? '+' . number_format($m['units_returned']) : '-' ?></span>
+                    </div>
+                    <div class="bg-indigo-50/70 border border-indigo-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">Delivered</span>
+                        <span class="font-mono font-black text-indigo-800 text-xs"><?= $m['units_delivered'] > 0 ? number_format($m['units_delivered']) : '-' ?></span>
+                    </div>
+                    <div class="bg-rose-50/70 border border-rose-200/60 p-1.5 rounded-xl">
+                        <span class="text-slate-400 text-[9px] uppercase block">Damaged</span>
+                        <span class="font-mono font-black text-rose-700 text-xs"><?= $m['units_damaged'] > 0 ? number_format($m['units_damaged']) : '-' ?></span>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
 <?php endif; ?>
 
 <!-- ========================= TAB 2: LORRY FLEET DISPATCHES ========================= -->
 <?php if ($tab === 'lorry'): ?>
 <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
             <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wider flex items-center">
                 <i class="fa-solid fa-truck-moving text-indigo-600 mr-2"></i> Lorry Dispatches & 3:00 PM Settlements
             </h3>
             <p class="text-xs text-slate-400 mt-0.5">Formula: Loaded Units = Store Return Units + Melted / Damaged Units + Delivered Units</p>
         </div>
+        <div class="text-xs font-mono bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider <?= $activePreset === 'daily' ? 'bg-cyan-100 text-cyan-800' : ($activePreset === 'weekly' ? 'bg-indigo-100 text-indigo-800' : ($activePreset === 'monthly' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')) ?>">
+                <?= strtoupper($activePreset) ?>
+            </span>
+            <span>Period: <strong><?= date('d M Y', strtotime($fromDate)) ?></strong> to <strong><?= date('d M Y', strtotime($toDate)) ?></strong></span>
+        </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <!-- Desktop Table View -->
+    <div class="hidden lg:block overflow-x-auto">
         <table class="w-full text-xs text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
@@ -464,22 +593,77 @@ require_once __DIR__ . '/includes/header.php';
             </tbody>
         </table>
     </div>
+
+    <!-- Mobile Lorry Reports Cards -->
+    <div class="lg:hidden divide-y divide-slate-100">
+        <?php if (empty($lorryRunsList)): ?>
+            <div class="py-8 text-center text-slate-400 text-xs">No lorry dispatches found.</div>
+        <?php else: ?>
+            <?php foreach ($lorryRunsList as $ld): ?>
+            <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="font-mono font-bold text-indigo-700 text-xs"><?= htmlspecialchars($ld['dispatch_no']) ?></span>
+                        <div class="text-[10px] text-slate-400"><?= htmlspecialchars($ld['dispatch_date']) ?></div>
+                    </div>
+                    <div>
+                        <?php if ($ld['status'] === 'settled'): ?>
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">Settled (3PM)</span>
+                        <?php else: ?>
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">On Route</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-800 font-bold flex items-center space-x-1.5">
+                    <span class="font-mono"><?= htmlspecialchars($ld['plate_no']) ?></span>
+                    <span class="text-slate-400">&bull;</span>
+                    <span class="text-slate-600 font-normal"><?= htmlspecialchars($ld['driver_name']) ?></span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold pt-1">
+                    <div class="bg-amber-50 p-1.5 rounded-xl border border-amber-200">
+                        <span class="text-slate-400 text-[9px] block">Loaded</span>
+                        <span class="font-mono text-amber-800 text-xs"><?= number_format($ld['total_loaded_qty']) ?></span>
+                    </div>
+                    <div class="bg-teal-50 p-1.5 rounded-xl border border-teal-200">
+                        <span class="text-slate-400 text-[9px] block">Return</span>
+                        <span class="font-mono text-teal-800 text-xs"><?= number_format($ld['total_return_store_qty']) ?></span>
+                    </div>
+                    <div class="bg-rose-50 p-1.5 rounded-xl border border-rose-200">
+                        <span class="text-slate-400 text-[9px] block">Damage</span>
+                        <span class="font-mono text-rose-800 text-xs"><?= number_format($ld['total_damage_qty']) ?></span>
+                    </div>
+                    <div class="bg-indigo-50 p-1.5 rounded-xl border border-indigo-200">
+                        <span class="text-slate-400 text-[9px] block">Deliv</span>
+                        <span class="font-mono text-indigo-800 text-xs"><?= number_format($ld['total_delivered_qty']) ?></span>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
 <?php endif; ?>
 
 <!-- ========================= TAB 3: DIRECT STORE OUTFLOWS ========================= -->
 <?php if ($tab === 'direct'): ?>
 <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
             <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wider flex items-center">
                 <i class="fa-solid fa-arrow-up-from-bracket text-emerald-600 mr-2"></i> Direct Store Issues (GDN)
             </h3>
             <p class="text-xs text-slate-400 mt-0.5">Dispatched directly to Agents, Sub-distributors, Events or Pickups.</p>
         </div>
+        <div class="text-xs font-mono bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider <?= $activePreset === 'daily' ? 'bg-cyan-100 text-cyan-800' : ($activePreset === 'weekly' ? 'bg-indigo-100 text-indigo-800' : ($activePreset === 'monthly' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')) ?>">
+                <?= strtoupper($activePreset) ?>
+            </span>
+            <span>Period: <strong><?= date('d M Y', strtotime($fromDate)) ?></strong> to <strong><?= date('d M Y', strtotime($toDate)) ?></strong></span>
+        </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <!-- Desktop Table View -->
+    <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-xs text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
@@ -528,22 +712,53 @@ require_once __DIR__ . '/includes/header.php';
             </tbody>
         </table>
     </div>
+
+    <!-- Mobile Direct Store Outflow Cards -->
+    <div class="md:hidden divide-y divide-slate-100">
+        <?php if (empty($directRunsList)): ?>
+            <div class="py-8 text-center text-slate-400 text-xs">No direct store issues found.</div>
+        <?php else: ?>
+            <?php foreach ($directRunsList as $sd): ?>
+            <div class="p-3.5 hover:bg-slate-50 transition-colors">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <span class="font-mono font-bold text-emerald-700 text-xs"><?= htmlspecialchars($sd['issue_no']) ?></span>
+                        <div class="font-bold text-slate-800 text-xs mt-0.5"><?= htmlspecialchars($sd['recipient_name']) ?></div>
+                        <div class="text-[10px] text-slate-400 mt-0.5"><?= htmlspecialchars($sd['issue_date']) ?> &bull; By <?= htmlspecialchars($sd['issued_by_name'] ?? 'Staff') ?></div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="inline-block px-2.5 py-1 rounded-xl font-black font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <?= number_format($sd['total_qty']) ?> Units
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
 <?php endif; ?>
 
 <!-- ========================= TAB 4: DAMAGED / MELTED LOG ========================= -->
 <?php if ($tab === 'damage'): ?>
 <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
             <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wider flex items-center">
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 mr-2"></i> Damaged & Melted Ice Cream Log
             </h3>
             <p class="text-xs text-slate-400 mt-0.5">Units lost during transit, temperature variation, or box damage.</p>
         </div>
+        <div class="text-xs font-mono bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider <?= $activePreset === 'daily' ? 'bg-cyan-100 text-cyan-800' : ($activePreset === 'weekly' ? 'bg-indigo-100 text-indigo-800' : ($activePreset === 'monthly' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700')) ?>">
+                <?= strtoupper($activePreset) ?>
+            </span>
+            <span>Period: <strong><?= date('d M Y', strtotime($fromDate)) ?></strong> to <strong><?= date('d M Y', strtotime($toDate)) ?></strong></span>
+        </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <!-- Desktop Table View -->
+    <div class="hidden lg:block overflow-x-auto">
         <table class="w-full text-xs text-left border-collapse">
             <thead>
                 <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
@@ -584,6 +799,39 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Mobile Damaged Items Cards -->
+    <div class="lg:hidden divide-y divide-slate-100">
+        <?php if (empty($damageList)): ?>
+            <div class="py-8 text-center text-slate-400 text-xs">No damage or melted items recorded.</div>
+        <?php else: ?>
+            <?php foreach ($damageList as $dmg): ?>
+            <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-1.5">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="font-bold text-slate-900 text-xs"><?= htmlspecialchars($dmg['product_name']) ?></div>
+                        <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($dmg['flavor']) ?> (<?= htmlspecialchars($dmg['size']) ?>)</div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="inline-block px-2.5 py-1 rounded-xl font-black font-mono text-xs bg-rose-50 text-rose-700 border border-rose-200">
+                            <?= number_format($dmg['damage_qty']) ?> Units
+                        </span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+                    <div>
+                        <span class="font-mono text-indigo-700 font-bold"><?= htmlspecialchars($dmg['plate_no']) ?></span>
+                        <span class="text-slate-400">&bull;</span>
+                        <span><?= htmlspecialchars($dmg['driver_name']) ?></span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono">
+                        <?= htmlspecialchars($dmg['dispatch_date']) ?>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>

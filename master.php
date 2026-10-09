@@ -229,7 +229,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Master Action: One-Click DB Download -->
             <a href="master.php?action=download_backup" 
-               class="inline-flex items-center px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5">
+               class="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5">
                 <i class="fa-solid fa-download mr-2 text-sm"></i>
                 <span>Download .SQL Backup</span>
             </a>
@@ -351,7 +351,8 @@ require_once __DIR__ . '/includes/header.php';
                     </span>
                 </div>
 
-                <div class="overflow-x-auto">
+                <!-- Desktop Table View (hidden sm:block) -->
+                <div class="hidden sm:block overflow-x-auto">
                     <table class="w-full text-xs text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
@@ -368,7 +369,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <td class="py-3 px-4">
                                     <div class="flex items-center space-x-2">
                                         <span class="font-mono font-bold text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
-                                            <?= htmlspecialchars($b['code']) ?>
+                                             <?= htmlspecialchars($b['code']) ?>
                                         </span>
                                         <strong class="text-slate-800 text-xs"><?= htmlspecialchars($b['name']) ?></strong>
                                     </div>
@@ -401,6 +402,60 @@ require_once __DIR__ . '/includes/header.php';
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Mobile Branch Cards View (sm:hidden) -->
+                <div class="sm:hidden divide-y divide-slate-100">
+                    <?php foreach ($branchesList as $b): ?>
+                    <div class="p-4 space-y-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <div class="flex items-center space-x-1.5">
+                                    <span class="font-mono font-bold text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                        <?= htmlspecialchars($b['code']) ?>
+                                    </span>
+                                    <h4 class="text-xs font-extrabold text-slate-900"><?= htmlspecialchars($b['name']) ?></h4>
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-location-dot text-slate-400 text-[10px]"></i>
+                                    <span><?= htmlspecialchars($b['address'] ?: 'Local Center') ?></span>
+                                    <?php if ($b['phone']): ?>
+                                        &bull; <span><?= htmlspecialchars($b['phone']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div>
+                                <?php if ($b['id'] == 1): ?>
+                                    <span class="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full whitespace-nowrap">Primary Hub</span>
+                                <?php else: ?>
+                                    <form method="POST" action="master.php?tab=branches" class="inline" onsubmit="return confirm('Delete branch [<?= htmlspecialchars($b['name']) ?>]?');">
+                                        <input type="hidden" name="action" value="delete_branch">
+                                        <input type="hidden" name="branch_id" value="<?= $b['id'] ?>">
+                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1.5 font-bold text-[11px] bg-rose-50 rounded-lg">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <!-- Mini 3-stat Grid -->
+                        <div class="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                            <div>
+                                <span class="text-[9px] font-bold uppercase text-slate-400 block">Staff</span>
+                                <span class="text-xs font-black font-mono text-slate-800"><?= $b['staff_count'] ?></span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold uppercase text-slate-400 block">Lorries</span>
+                                <span class="text-xs font-black font-mono text-cyan-700"><?= $b['lorry_count'] ?></span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold uppercase text-slate-400 block">Stock</span>
+                                <span class="text-xs font-black font-mono text-emerald-700"><?= number_format($b['total_stock']) ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
         </div>
@@ -420,12 +475,12 @@ require_once __DIR__ . '/includes/header.php';
                 <p class="text-xs text-slate-400 mt-0.5">Who did what, when, and from which IP address.</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <form method="GET" action="master.php" class="flex flex-wrap items-center gap-2 text-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                <form method="GET" action="master.php" class="grid grid-cols-2 sm:flex sm:items-center gap-2 text-xs w-full sm:w-auto">
                     <input type="hidden" name="tab" value="logs">
                     
                     <!-- Action Filter -->
-                    <select name="log_action" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-700 text-xs focus:outline-none">
+                    <select name="log_action" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 font-bold text-slate-700 text-xs focus:outline-none col-span-2 sm:col-span-1">
                         <option value="">-- All Actions --</option>
                         <?php foreach ($distinctActions as $act): ?>
                         <option value="<?= htmlspecialchars($act) ?>" <?= $logActionFilter === $act ? 'selected' : '' ?>>
@@ -435,24 +490,24 @@ require_once __DIR__ . '/includes/header.php';
                     </select>
 
                     <input type="text" name="log_user" value="<?= htmlspecialchars($logUserFilter) ?>" placeholder="Filter user..."
-                           class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none">
+                           class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-700 focus:outline-none">
 
-                    <button type="submit" class="px-3 py-1.5 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition">
+                    <button type="submit" class="px-3 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition text-center justify-center flex items-center">
                         Filter
                     </button>
                 </form>
 
-                <form method="POST" action="master.php?tab=logs" onsubmit="return confirm('Purge logs older than 30 days?');">
+                <form method="POST" action="master.php?tab=logs" class="w-full sm:w-auto" onsubmit="return confirm('Purge logs older than 30 days?');">
                     <input type="hidden" name="action" value="clear_old_logs">
-                    <button type="submit" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition">
+                    <button type="submit" class="w-full sm:w-auto px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition flex items-center justify-center">
                         <i class="fa-solid fa-broom mr-1"></i> Clean Old Logs
                     </button>
                 </form>
             </div>
         </div>
 
-        <!-- Logs Table -->
-        <div class="overflow-x-auto">
+        <!-- Desktop Logs Table (hidden md:block) -->
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-xs text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
@@ -501,6 +556,39 @@ require_once __DIR__ . '/includes/header.php';
                     <?php endif; ?>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Log Cards View (md:hidden) -->
+        <div class="md:hidden divide-y divide-slate-100">
+            <?php if (empty($logsList)): ?>
+            <div class="py-12 text-center text-slate-400 font-sans p-4">
+                <i class="fa-solid fa-inbox text-2xl text-slate-300 mb-2 block"></i>
+                No activity logs found matching the filter.
+            </div>
+            <?php else: ?>
+            <?php foreach ($logsList as $l): ?>
+            <div class="p-3.5 space-y-2">
+                <div class="flex items-center justify-between text-[10px]">
+                    <span class="px-2 py-0.5 rounded font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                        <?= htmlspecialchars($l['action']) ?>
+                    </span>
+                    <span class="font-mono text-slate-400 text-[10px]"><?= htmlspecialchars($l['created_at']) ?></span>
+                </div>
+                <div class="text-xs text-slate-800 font-medium leading-snug">
+                    <?= htmlspecialchars($l['description']) ?>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-50">
+                    <span class="font-bold flex items-center gap-1">
+                        <i class="fa-solid fa-user text-slate-400 text-[10px]"></i>
+                        <?= htmlspecialchars($l['user_name']) ?> <span class="text-[10px] text-slate-400 font-normal">(<?= htmlspecialchars($l['user_role']) ?>)</span>
+                    </span>
+                    <span class="font-mono text-[10px] text-slate-400">
+                        <?= htmlspecialchars($l['ip_address'] ?: '127.0.0.1') ?>
+                    </span>
+                </div>
+            </div>
+            <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
