@@ -283,6 +283,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <!-- Right: Clean Quick Bill Action & User Status -->
                 <div class="flex items-center space-x-2 sm:space-x-3">
+                    <!-- Quick Lock Screen Button -->
+                    <button type="button" onclick="lockScreen()" title="Lock Screen (Privacy Protection)" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer flex items-center justify-center">
+                        <i class="fa-solid fa-lock text-sm"></i>
+                    </button>
+
                     <!-- Universal Quick Bill Button -->
                     <a href="pos.php" title="Open Counter POS" class="inline-flex items-center px-3 sm:px-3.5 py-2 text-xs font-black rounded-xl text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 shadow-sm transition-all transform hover:-translate-y-0.5 shrink-0">
                         <i class="fa-solid fa-bolt sm:mr-1.5 text-amber-300"></i>

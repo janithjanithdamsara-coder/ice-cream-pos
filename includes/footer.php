@@ -262,6 +262,82 @@
         </div>
     </div>
 
+    <!-- ==================== AUTO-LOCK INACTIVITY PRIVACY SCREEN ==================== -->
+    <style>
+        @keyframes lockShake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .animate-lock-shake {
+            animation: lockShake 0.35s ease-in-out;
+        }
+    </style>
+
+    <div id="autoLockScreenModal" class="fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-xl hidden flex items-center justify-center p-4 select-none no-print">
+        <div id="autoLockCard" class="relative w-full max-w-sm bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden p-6 text-center text-white space-y-5">
+            <!-- Glow background -->
+            <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-44 h-44 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+            <!-- Top Security Badge -->
+            <div class="flex items-center justify-center space-x-2 text-[10px] font-black text-cyan-300 uppercase tracking-widest bg-cyan-950/70 border border-cyan-800/60 py-1 px-3.5 rounded-full w-fit mx-auto shadow-inner">
+                <i class="fa-solid fa-lock text-xs text-cyan-400"></i>
+                <span>Privacy Auto-Lock</span>
+            </div>
+
+            <!-- User Avatar & Details -->
+            <div class="space-y-2">
+                <div class="relative mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-2xl font-black text-white shadow-lg shadow-cyan-500/30 border-2 border-white/20">
+                    <?= isset($user['name']) ? strtoupper(substr($user['name'], 0, 1)) : 'U' ?>
+                    <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-slate-950 flex items-center justify-center text-[9px] text-white">
+                        <i class="fa-solid fa-shield"></i>
+                    </span>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white tracking-tight"><?= htmlspecialchars($user['name'] ?? 'User') ?></h3>
+                    <p class="text-xs text-slate-400 capitalize"><?= htmlspecialchars(str_replace('_', ' ', $user['role'] ?? 'Cashier')) ?> &bull; <?= htmlspecialchars($user['branch_name'] ?? 'Cold Room Hub') ?></p>
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-300 leading-relaxed bg-slate-800/60 p-3 rounded-2xl border border-slate-700/60 text-left">
+                <i class="fa-solid fa-user-shield text-cyan-400 mr-1.5"></i>
+                ආරක්ෂාව සඳහා තිරය Lock කර ඇත. නැවත වැඩ කිරීමට ඔබගේ <strong>Password</strong> එක ඇතුළත් කරන්න.
+            </p>
+
+            <!-- Unlock Form -->
+            <form onsubmit="handleScreenUnlock(event)" class="space-y-3.5">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 text-xs pointer-events-none">
+                        <i class="fa-solid fa-key text-cyan-400"></i>
+                    </span>
+                    <input type="password" id="autoLockPasswordInput" required placeholder="Enter password to unlock..." autocomplete="current-password"
+                           class="w-full pl-9 pr-10 py-3 bg-slate-800/90 border border-slate-700 rounded-2xl text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition">
+                    <button type="button" onclick="toggleLockPasswordVisibility()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 text-xs cursor-pointer">
+                        <i id="lockPasswordEyeIcon" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+
+                <div id="autoLockErrorMsg" class="hidden text-xs text-rose-300 font-bold bg-rose-950/60 border border-rose-800/60 p-2.5 rounded-xl text-left flex items-start space-x-2">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-400 mt-0.5 shrink-0"></i>
+                    <span id="autoLockErrorText"></span>
+                </div>
+
+                <button type="submit" id="autoLockSubmitBtn" class="w-full py-3 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-2xl shadow-lg shadow-cyan-600/30 transition-all flex items-center justify-center space-x-2 cursor-pointer">
+                    <i class="fa-solid fa-lock-open text-xs"></i>
+                    <span>Unlock & Continue</span>
+                </button>
+            </form>
+
+            <!-- Sign Out Option -->
+            <div class="pt-2 border-t border-slate-800 text-center text-xs">
+                <a href="logout.php" class="text-slate-400 hover:text-rose-400 font-bold transition inline-flex items-center space-x-1.5">
+                    <i class="fa-solid fa-arrow-right-from-bracket text-[11px]"></i>
+                    <span>Sign Out / Switch User</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Scripts & Modern Toast System -->
     <script>
         function toggleSupportModal() {
@@ -298,6 +374,118 @@
                 btn.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
             }
         }, { passive: true });
+
+        // ================= AUTO-LOCK INACTIVITY PRIVACY PROTECTION =================
+        const INACTIVITY_LIMIT_MS = 5 * 60 * 1000; // 5 Minutes
+        let inactivityTimer = null;
+
+        function resetInactivityTimer() {
+            if (sessionStorage.getItem('screen_locked') === 'true') return;
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(lockScreen, INACTIVITY_LIMIT_MS);
+        }
+
+        function lockScreen() {
+            sessionStorage.setItem('screen_locked', 'true');
+            const modal = document.getElementById('autoLockScreenModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+                const passInput = document.getElementById('autoLockPasswordInput');
+                if (passInput) {
+                    passInput.value = '';
+                    setTimeout(() => passInput.focus(), 150);
+                }
+            }
+        }
+
+        async function handleScreenUnlock(e) {
+            e.preventDefault();
+            const passInput = document.getElementById('autoLockPasswordInput');
+            const errorMsg = document.getElementById('autoLockErrorMsg');
+            const errorText = document.getElementById('autoLockErrorText');
+            const submitBtn = document.getElementById('autoLockSubmitBtn');
+            const card = document.getElementById('autoLockCard');
+            const password = passInput.value.trim();
+
+            if (!password) return;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Verifying...';
+            errorMsg.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('password', password);
+
+                const res = await fetch('ajax_unlock.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    sessionStorage.removeItem('screen_locked');
+                    const modal = document.getElementById('autoLockScreenModal');
+                    if (modal) modal.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                    passInput.value = '';
+                    resetInactivityTimer();
+                    if (window.showToast) {
+                        showToast('Welcome back! Screen unlocked.', 'success', 'Unlocked');
+                    }
+                } else {
+                    errorText.innerText = data.message || 'Incorrect password.';
+                    errorMsg.classList.remove('hidden');
+                    if (card) {
+                        card.classList.add('animate-lock-shake');
+                        setTimeout(() => card.classList.remove('animate-lock-shake'), 400);
+                    }
+                    passInput.value = '';
+                    passInput.focus();
+
+                    if (data.redirect) {
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 1200);
+                    }
+                }
+            } catch (err) {
+                errorText.innerText = 'Network error. Please try again.';
+                errorMsg.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-lock-open mr-1.5"></i> Unlock & Continue';
+            }
+        }
+
+        function toggleLockPasswordVisibility() {
+            const input = document.getElementById('autoLockPasswordInput');
+            const icon = document.getElementById('lockPasswordEyeIcon');
+            if (!input || !icon) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        // Activity listeners to reset inactivity timer
+        ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, resetInactivityTimer, { passive: true });
+        });
+
+        // Initialize state on DOM ready
+        if (sessionStorage.getItem('screen_locked') === 'true') {
+            lockScreen();
+        } else {
+            resetInactivityTimer();
+        }
     </script>
 </body>
 </html>
