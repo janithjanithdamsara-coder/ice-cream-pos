@@ -1310,9 +1310,9 @@ function filterProducts() {
     const cards = document.querySelectorAll('.product-card');
 
     cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const code = card.getAttribute('data-code');
-        const flavor = card.getAttribute('data-flavor');
+        const name = (card.getAttribute('data-name') || '').toLowerCase();
+        const code = (card.getAttribute('data-code') || '').toLowerCase();
+        const flavor = (card.getAttribute('data-flavor') || '').toLowerCase();
         const cat = card.getAttribute('data-cat');
 
         const matchesQuery = !query || name.includes(query) || code.includes(query) || flavor.includes(query);

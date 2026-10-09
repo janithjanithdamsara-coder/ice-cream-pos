@@ -763,7 +763,7 @@ require_once __DIR__ . '/includes/header.php';
             <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 shrink-0">
                 <div class="relative w-full sm:w-72">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                    <input type="text" id="loanSearchInput" onkeyup="filterLoanList()" placeholder="Filter product name or code..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-hidden">
+                    <input type="text" id="loanSearchInput" oninput="filterLoanList()" placeholder="Filter product name or code..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:outline-hidden">
                 </div>
                 
                 <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
@@ -1225,9 +1225,10 @@ require_once __DIR__ . '/includes/header.php';
         const query = (input ? input.value : '').toLowerCase().trim();
         const rows = document.querySelectorAll('#loanBulkTableBody tr.loan-item-row');
         rows.forEach(r => {
-            const name = r.dataset.name || '';
-            const code = r.dataset.code || '';
-            if (name.includes(query) || code.includes(query)) {
+            const name = (r.dataset.name || '').toLowerCase();
+            const code = (r.dataset.code || '').toLowerCase();
+            const flavor = (r.dataset.flavor || '').toLowerCase();
+            if (!query || name.includes(query) || code.includes(query) || flavor.includes(query)) {
                 r.style.display = '';
             } else {
                 r.style.display = 'none';

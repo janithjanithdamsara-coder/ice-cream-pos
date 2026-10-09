@@ -22,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category_id = intval($_POST['category_id'] ?? 1);
         $alertQty = intval($_POST['alert_quantity'] ?? 15);
 
+        $incomingQty = intval($_POST['incoming_qty'] ?? 0);
+
         if (empty($code) || empty($name)) {
             echo json_encode(['success' => false, 'message' => 'Product Code and Description / Name are required.']);
             exit;
@@ -45,7 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newId = $pdo->lastInsertId();
 
             // Initialize 0 stock row for this branch
-            $pdo->prepare("INSERT IGNORE INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, 0)")
+            $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, 0)
+                ON DUPLICATE KEY UPDATE quantity = quantity")
                 ->execute([$branchId, $newId]);
 
             // Get category name
@@ -65,7 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'size' => $size,
                     'category_id' => $category_id,
                     'category_name' => $catName,
-                    'store_stock' => 0
+                    'store_stock' => 0,
+                    'incoming_qty' => $incomingQty
                 ]
             ]);
             exit;
@@ -221,11 +225,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newId = $pdo->lastInsertId();
 
                 if ($initialStock > 0) {
-                    $stmtS = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, ?)");
+                    $stmtS = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, ?)
+                        ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)");
                     $stmtS->execute([$branchId, $newId, $initialStock]);
+
+                    // Create Initial Stock Invoice entry for transparent audit trail & reports
+                    $initInvNo = 'INIT-' . date('ymd') . '-' . rand(100, 999);
+                    $pdo->prepare("INSERT INTO stock_invoices (invoice_no, branch_id, invoice_date, supplier_name, total_items, notes, created_by) 
+                        VALUES (?, ?, ?, 'Initial Opening Stock', ?, 'Opening balance set during product creation', ?)")
+                        ->execute([$initInvNo, $branchId, date('Y-m-d'), $initialStock, $user['id']]);
+                    $initInvId = $pdo->lastInsertId();
+
+                    $pdo->prepare("INSERT INTO stock_invoice_items (invoice_id, product_id, quantity, batch_no) 
+                        VALUES (?, ?, ?, 'OPENING')")
+                        ->execute([$initInvId, $newId, $initialStock]);
+                } else {
+                    $stmtS = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) VALUES (?, ?, 0)
+                        ON DUPLICATE KEY UPDATE quantity = quantity");
+                    $stmtS->execute([$branchId, $newId]);
                 }
 
-                setFlash('success', "New Product [{$name}] added to catalog!");
+                logActivity('create_product', 'product', "Added product {$code} - {$name} with initial stock: {$initialStock} units");
+                setFlash('success', "New Product [{$name}] added to catalog with " . number_format($initialStock) . " Units initial stock!");
             } catch (Exception $e) {
                 setFlash('danger', "Error adding product: " . $e->getMessage());
             }
@@ -323,7 +344,7 @@ require_once __DIR__ . '/includes/header.php';
                 <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
                     <i class="fa-solid fa-search"></i>
                 </span>
-                <input type="text" id="stockSearch" onkeyup="filterStockTable()" placeholder="Search product or flavor..." 
+                <input type="text" id="stockSearch" oninput="filterStockTable()" placeholder="Search product code, name, flavor, size..." 
                        class="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
             </div>
             <div class="text-[11px] sm:text-xs text-slate-400 w-full sm:w-auto text-left sm:text-right">
@@ -361,7 +382,7 @@ require_once __DIR__ . '/includes/header.php';
                             $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
                             $isZero = $prod['store_stock'] <= 0;
                         ?>
-                            <tr class="hover:bg-slate-50 transition-colors">
+                            <tr class="hover:bg-slate-50 transition-colors stock-desktop-row" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                                 <td class="py-3.5 px-4 font-bold text-slate-800">
                                     <div class="text-sm"><?= htmlspecialchars($prod['name']) ?></div>
                                     <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($prod['code']) ?> &bull; <?= htmlspecialchars($prod['flavor'] ?? '') ?></div>
@@ -398,6 +419,12 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <tr id="stockDesktopNoResults" class="hidden">
+                            <td colspan="6" class="py-12 text-center text-slate-400 font-bold text-xs">
+                                <i class="fa-solid fa-magnifying-glass text-slate-300 text-2xl mb-2 block"></i>
+                                No matching ice cream products found for this search.
+                            </td>
+                        </tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -416,7 +443,7 @@ require_once __DIR__ . '/includes/header.php';
                     $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
                     $isZero = $prod['store_stock'] <= 0;
                 ?>
-                <div class="p-3.5 hover:bg-slate-50 transition-colors stock-mobile-item" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? ''))) ?>">
+                <div class="p-3.5 hover:bg-slate-50 transition-colors stock-mobile-item" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="text-sm font-extrabold text-slate-900 leading-snug">
@@ -472,6 +499,10 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
                 <?php endforeach; ?>
+                <div id="stockMobileNoResults" class="hidden py-10 text-center text-slate-400 font-bold text-xs p-4">
+                    <i class="fa-solid fa-magnifying-glass text-slate-300 text-xl mb-1.5 block"></i>
+                    No matching ice cream products found for this search.
+                </div>
             <?php endif; ?>
         </div>
     </div>
@@ -660,7 +691,7 @@ require_once __DIR__ . '/includes/header.php';
                     </h4>
                     <span class="text-[10px] text-slate-500 font-medium">Adds instantly to catalog & this stock list without page reload</span>
                 </div>
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
                     <div>
                         <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Product Code (SKU) *</label>
                         <input type="text" id="quickCode" placeholder="e.g. F301019999" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-mono uppercase font-bold text-slate-800 text-xs">
@@ -680,6 +711,10 @@ require_once __DIR__ . '/includes/header.php';
                     <div>
                         <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Size / Volume</label>
                         <input type="text" id="quickSize" placeholder="e.g. 120ml / 1 Litre" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Incoming Qty (Units)</label>
+                        <input type="number" id="quickQty" min="0" placeholder="0" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-cyan-800 text-xs">
                     </div>
                 </div>
                 <div class="mt-2.5 pt-2 border-t border-emerald-200/60 flex items-center justify-between">
@@ -711,7 +746,7 @@ require_once __DIR__ . '/includes/header.php';
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
                             <?php foreach ($inventory as $prod): ?>
-                            <tr class="grn-item-row hover:bg-slate-50/80 transition-colors" id="grn_row_<?= $prod['id'] ?>" data-search="<?= htmlspecialchars(strtolower($prod['code'] . ' ' . $prod['name'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? ''))) ?>">
+                            <tr class="grn-item-row hover:bg-slate-50/80 transition-colors" id="grn_row_<?= $prod['id'] ?>" data-search="<?= htmlspecialchars(strtolower($prod['code'] . ' ' . $prod['name'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                                 <td class="py-2 px-3 text-center">
                                     <input type="checkbox" name="selected_products[]" value="<?= $prod['id'] ?>" id="chk_<?= $prod['id'] ?>" class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(<?= $prod['id'] ?>)">
                                 </td>
@@ -739,6 +774,12 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                             </tr>
                             <?php endforeach; ?>
+                            <tr id="grnNoResultsRow" class="hidden">
+                                <td colspan="6" class="py-8 text-center text-slate-400 font-bold text-xs">
+                                    <i class="fa-solid fa-magnifying-glass text-slate-300 text-sm mb-1 block"></i>
+                                    No matching products in GRN list.
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -914,25 +955,51 @@ require_once __DIR__ . '/includes/header.php';
     }
 
     function filterStockTable() {
-        const input = document.getElementById('stockSearch').value.toLowerCase();
-        document.querySelectorAll('#stockTable tbody tr').forEach(r => {
-            r.style.display = r.innerText.toLowerCase().includes(input) ? '' : 'none';
+        const input = (document.getElementById('stockSearch').value || '').toLowerCase().trim();
+        let desktopMatches = 0;
+        let mobileMatches = 0;
+
+        document.querySelectorAll('#stockTable tbody tr.stock-desktop-row').forEach(r => {
+            const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
+            const show = !input || text.includes(input);
+            r.style.display = show ? '' : 'none';
+            if (show) desktopMatches++;
         });
+
+        const desktopEmpty = document.getElementById('stockDesktopNoResults');
+        if (desktopEmpty) {
+            desktopEmpty.classList.toggle('hidden', desktopMatches > 0 || !input);
+        }
+
         document.querySelectorAll('#stockMobileCards .stock-mobile-item').forEach(c => {
             const text = (c.getAttribute('data-search') || c.innerText).toLowerCase();
-            c.style.display = text.includes(input) ? '' : 'none';
+            const show = !input || text.includes(input);
+            c.style.display = show ? '' : 'none';
+            if (show) mobileMatches++;
         });
+
+        const mobileEmpty = document.getElementById('stockMobileNoResults');
+        if (mobileEmpty) {
+            mobileEmpty.classList.toggle('hidden', mobileMatches > 0 || !input);
+        }
     }
 
     // --- Bulk GRN Checklist Interactive Functions ---
 
     function filterGrnList() {
-        const query = document.getElementById('grnSearchInput').value.toLowerCase().trim();
+        const query = (document.getElementById('grnSearchInput').value || '').toLowerCase().trim();
+        let grnMatches = 0;
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
         rows.forEach(r => {
             const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
-            r.style.display = text.includes(query) ? '' : 'none';
+            const show = !query || text.includes(query);
+            r.style.display = show ? '' : 'none';
+            if (show) grnMatches++;
         });
+        const grnEmpty = document.getElementById('grnNoResultsRow');
+        if (grnEmpty) {
+            grnEmpty.classList.toggle('hidden', grnMatches > 0 || !query);
+        }
     }
 
     function toggleSelectAllGrn(isChecked) {
@@ -1070,6 +1137,7 @@ require_once __DIR__ . '/includes/header.php';
         const name = document.getElementById('quickName').value.trim();
         const catId = document.getElementById('quickCat').value;
         const size = document.getElementById('quickSize').value.trim();
+        const incomingQty = parseInt(document.getElementById('quickQty') ? document.getElementById('quickQty').value : 0) || 0;
         const msgEl = document.getElementById('quickAddMsg');
         const saveBtn = document.getElementById('quickSaveBtn');
 
@@ -1090,6 +1158,7 @@ require_once __DIR__ . '/includes/header.php';
             formData.append('name', name);
             formData.append('category_id', catId);
             formData.append('size', size);
+            formData.append('incoming_qty', incomingQty);
 
             const res = await fetch('stock.php', {
                 method: 'POST',
@@ -1110,11 +1179,11 @@ require_once __DIR__ . '/includes/header.php';
             const newTr = document.createElement('tr');
             newTr.className = 'grn-item-row bg-emerald-50/60 border-l-4 border-l-emerald-600 transition-colors';
             newTr.id = 'grn_row_' + p.id;
-            newTr.setAttribute('data-search', (p.code + ' ' + p.name + ' ' + p.category_name).toLowerCase());
+            newTr.setAttribute('data-search', (p.code + ' ' + p.name + ' ' + (p.flavor || '') + ' ' + (p.size || '') + ' ' + p.category_name).toLowerCase());
 
             newTr.innerHTML = `
                 <td class="py-2 px-3 text-center">
-                    <input type="checkbox" name="selected_products[]" value="${p.id}" id="chk_${p.id}" checked class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(${p.id})">
+                    <input type="checkbox" name="selected_products[]" value="${p.id}" id="chk_${p.id}" ${p.incoming_qty > 0 ? 'checked' : ''} class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(${p.id})">
                 </td>
                 <td class="py-2 px-3 font-mono font-bold text-slate-800">
                     <span class="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded text-[11px] border border-emerald-300 font-mono">${escapeHtml(p.code)}</span>
@@ -1132,7 +1201,7 @@ require_once __DIR__ . '/includes/header.php';
                     <span class="font-mono font-bold text-slate-600 text-xs">0</span>
                 </td>
                 <td class="py-2 px-3 text-center">
-                    <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" 
+                    <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" value="${p.incoming_qty > 0 ? p.incoming_qty : ''}" 
                            class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
                            oninput="handleGrnQtyInput(${p.id})" onkeydown="handleGrnNav(event, this)">
                 </td>
@@ -1148,7 +1217,12 @@ require_once __DIR__ . '/includes/header.php';
             document.getElementById('quickCode').value = '';
             document.getElementById('quickName').value = '';
             document.getElementById('quickSize').value = '';
+            if (document.getElementById('quickQty')) document.getElementById('quickQty').value = '';
             toggleQuickAddDrawer();
+
+            if (p.incoming_qty > 0) {
+                handleGrnQtyInput(p.id);
+            }
 
             // Focus new row qty input
             setTimeout(() => {
