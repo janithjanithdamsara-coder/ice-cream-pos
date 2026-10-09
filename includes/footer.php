@@ -147,17 +147,16 @@
         };
     </script>
 
-    <!-- Floating Emergency Tech Support Button -->
-    <div class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 no-print">
-        <button type="button" onclick="toggleSupportModal()" 
-                class="group flex items-center space-x-2.5 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl shadow-slate-950/30 hover:shadow-cyan-500/20 border border-cyan-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-2 ring-white/10">
-            <div class="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-inner">
-                <i class="fa-solid fa-headset"></i>
-            </div>
-            <div class="text-left pr-1">
-                <span class="text-[9px] uppercase font-bold text-cyan-400 block leading-tight tracking-wider">Mr.Link Tech</span>
-                <span class="text-xs font-black text-white block leading-tight">Help & Hotline</span>
-            </div>
+    <!-- Floating Emergency Tech Support Circular Button (Scroll-To-Show) -->
+    <div id="floatingSupportBtn" class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 opacity-0 translate-y-6 pointer-events-none transition-all duration-300 no-print">
+        <button type="button" onclick="toggleSupportModal()" title="Mr.Link Tech Hotline & Support"
+                class="relative w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-600 via-indigo-600 to-slate-900 text-white shadow-xl shadow-cyan-950/40 hover:shadow-cyan-500/40 border border-white/20 hover:scale-110 active:scale-95 flex items-center justify-center transition-all cursor-pointer group">
+            <i class="fa-solid fa-headset text-base text-cyan-200 group-hover:text-white transition"></i>
+            <!-- Pulse Status Indicator -->
+            <span class="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500 border border-slate-950"></span>
+            </span>
         </button>
     </div>
 
@@ -286,6 +285,19 @@
                 }
             });
         }
+
+        // Floating Support Button Scroll-To-Show logic (Appears after 100px scroll)
+        window.addEventListener('scroll', function() {
+            const btn = document.getElementById('floatingSupportBtn');
+            if (!btn) return;
+            if (window.scrollY > 100) {
+                btn.classList.remove('opacity-0', 'translate-y-6', 'pointer-events-none');
+                btn.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
+            } else {
+                btn.classList.add('opacity-0', 'translate-y-6', 'pointer-events-none');
+                btn.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
+            }
+        }, { passive: true });
     </script>
 </body>
 </html>
