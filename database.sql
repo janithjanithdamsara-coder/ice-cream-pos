@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS `products` (
     `size` VARCHAR(50) NULL,
     `unit` VARCHAR(20) DEFAULT 'Units',
     `pack_size` INT DEFAULT 24,
+    `selling_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     `alert_quantity` INT DEFAULT 15,
     `status` ENUM('active', 'inactive') DEFAULT 'active',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

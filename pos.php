@@ -122,9 +122,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Active Products with live stock
-$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, p.unit, p.category_id, p.selling_price,
-    COALESCE(p.pack_size, 24) as pack_size,
+// Fetch Active Products with live stock (Defensive column checks)
+$hasPriceCol = false;
+$hasPackCol = false;
+try {
+    $hasPriceCol = !empty($pdo->query("SHOW COLUMNS FROM `products` LIKE 'selling_price'")->fetchAll());
+    $hasPackCol = !empty($pdo->query("SHOW COLUMNS FROM `products` LIKE 'pack_size'")->fetchAll());
+} catch (Exception $e) {}
+
+$priceField = $hasPriceCol ? "COALESCE(p.selling_price, 0) as selling_price" : "0 as selling_price";
+$packField = $hasPackCol ? "COALESCE(p.pack_size, 24) as pack_size" : "24 as pack_size";
+
+$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, p.unit, p.category_id, $priceField, $packField,
     c.name as category_name,
     COALESCE(bs.quantity, 0) as stock
     FROM products p 
@@ -161,8 +170,18 @@ if ($printId > 0) {
     }
 }
 
-// Recent POS slips today
-$recentSlips = $pdo->prepare("SELECT id, issue_no, issue_time, recipient_name, total_qty, extra_amount, bill_amount 
+// Recent POS slips today (Defensive column check for extra_amount & bill_amount)
+$hasExtraAmt = false;
+$hasBillAmt = false;
+try {
+    $hasExtraAmt = !empty($pdo->query("SHOW COLUMNS FROM `store_dispatches` LIKE 'extra_amount'")->fetchAll());
+    $hasBillAmt = !empty($pdo->query("SHOW COLUMNS FROM `store_dispatches` LIKE 'bill_amount'")->fetchAll());
+} catch (Exception $e) {}
+
+$extraField = $hasExtraAmt ? "extra_amount" : "0.00 as extra_amount";
+$billField = $hasBillAmt ? "bill_amount" : "0.00 as bill_amount";
+
+$recentSlips = $pdo->prepare("SELECT id, issue_no, issue_time, recipient_name, total_qty, $extraField, $billField 
     FROM store_dispatches 
     WHERE branch_id = ? AND issue_date = ? 
     ORDER BY id DESC LIMIT 10");

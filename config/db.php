@@ -257,6 +257,87 @@ function migrateSchema($pdo) {
                 $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `delivered_qty` INT NOT NULL DEFAULT 0 AFTER `damage_qty`");
             }
         }
+
+        // 3. Ensure products has pack_size and selling_price
+        $colsProdPack = $pdo->query("SHOW COLUMNS FROM `products` LIKE 'pack_size'")->fetchAll();
+        if (empty($colsProdPack)) {
+            $pdo->exec("ALTER TABLE `products` ADD COLUMN `pack_size` INT DEFAULT 24 AFTER `unit`");
+        }
+        $colsProdPrice = $pdo->query("SHOW COLUMNS FROM `products` LIKE 'selling_price'")->fetchAll();
+        if (empty($colsProdPrice)) {
+            $pdo->exec("ALTER TABLE `products` ADD COLUMN `selling_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `pack_size`");
+        }
+
+        // 4. Ensure store_dispatches has extra_amount, extra_label, bill_amount
+        $colsSdExtra = $pdo->query("SHOW COLUMNS FROM `store_dispatches` LIKE 'extra_amount'")->fetchAll();
+        if (empty($colsSdExtra)) {
+            $pdo->exec("ALTER TABLE `store_dispatches` ADD COLUMN `extra_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `total_qty`");
+            $pdo->exec("ALTER TABLE `store_dispatches` ADD COLUMN `extra_label` VARCHAR(150) NULL AFTER `extra_amount`");
+            $pdo->exec("ALTER TABLE `store_dispatches` ADD COLUMN `bill_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `extra_label`");
+        }
+
+        // 5. Ensure store_dispatch_items has unit_type, box_qty, units_per_box
+        $colsSdiUnit = $pdo->query("SHOW COLUMNS FROM `store_dispatch_items` LIKE 'unit_type'")->fetchAll();
+        if (empty($colsSdiUnit)) {
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'pcs' AFTER `quantity`");
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `unit_type`");
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+
+        // 6. Ensure warehouse_loans tables exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `warehouse_loans` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `loan_no` VARCHAR(50) NOT NULL UNIQUE,
+            `branch_id` INT NOT NULL DEFAULT 1,
+            `borrower_name` VARCHAR(150) NOT NULL,
+            `contact_no` VARCHAR(50) NULL,
+            `vehicle_no` VARCHAR(50) NULL,
+            `driver_name` VARCHAR(100) NULL,
+            `issue_date` DATE NOT NULL,
+            `issue_time` TIME NOT NULL,
+            `total_issued_qty` INT NOT NULL DEFAULT 0,
+            `total_returned_qty` INT NOT NULL DEFAULT 0,
+            `status` ENUM('pending', 'partial', 'settled', 'cancelled') NOT NULL DEFAULT 'pending',
+            `notes` TEXT NULL,
+            `created_by` INT NULL,
+            `settled_at` DATETIME NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_branch_status` (`branch_id`, `status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `warehouse_loan_items` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `loan_id` INT NOT NULL,
+            `product_id` INT NOT NULL,
+            `issued_qty` INT NOT NULL DEFAULT 0,
+            `returned_qty` INT NOT NULL DEFAULT 0,
+            INDEX (`loan_id`),
+            INDEX (`product_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `warehouse_loan_returns` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `loan_id` INT NOT NULL,
+            `return_no` VARCHAR(50) NOT NULL,
+            `return_date` DATE NOT NULL,
+            `return_time` TIME NOT NULL,
+            `total_return_qty` INT NOT NULL DEFAULT 0,
+            `delivered_by` VARCHAR(100) NULL,
+            `received_by` INT NULL,
+            `notes` TEXT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX (`loan_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `warehouse_loan_return_items` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `return_id` INT NOT NULL,
+            `product_id` INT NOT NULL,
+            `quantity` INT NOT NULL DEFAULT 0,
+            INDEX (`return_id`),
+            INDEX (`product_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
     } catch (Exception $e) {
         // Non-blocking fallback
     }
