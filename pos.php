@@ -468,8 +468,8 @@ require_once __DIR__ . '/includes/header.php';
         <!-- LEFT COLUMN: Product Catalog & Search (Col 7 / 8) -->
         <div class="lg:col-span-7 xl:col-span-8 space-y-4">
             
-            <!-- Search & Filter Bar -->
-            <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-3">
+            <!-- Sticky Search & Filter Bar -->
+            <div class="sticky top-20 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center gap-3">
                 <div class="relative flex-1 w-full">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input type="text" id="posSearchInput" oninput="filterProducts()" 
@@ -564,128 +564,128 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Col 5 / 4) -->
-        <div id="posCartContainer" class="lg:col-span-5 xl:col-span-4 sticky top-4">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-lg flex flex-col overflow-hidden">
+        <div id="posCartContainer" class="lg:col-span-5 xl:col-span-4 sticky top-20 z-10">
+            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col overflow-hidden lg:max-h-[calc(100vh-6rem)]">
                 
-                <!-- Cart Header -->
-                <div class="p-4 sm:p-5 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
+                <!-- Cart Header (Fixed at top of slip) -->
+                <div class="p-3.5 sm:p-4 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between shrink-0">
                     <div class="flex items-center space-x-2.5">
                         <div class="w-8 h-8 rounded-xl bg-cyan-500 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-900/40">
                             <i class="fa-solid fa-file-invoice"></i>
                         </div>
                         <div>
-                            <h3 class="text-sm font-extrabold tracking-tight">Counter Issue Slip</h3>
+                            <h3 class="text-xs sm:text-sm font-extrabold tracking-tight">Counter Issue Slip</h3>
                             <p class="text-[10px] text-slate-400 font-medium">Boxes &amp; Pieces &bull; Stock Outflow</p>
                         </div>
                     </div>
 
-                    <button type="button" onclick="clearCart()" class="text-slate-400 hover:text-rose-400 text-xs p-1" title="Clear Cart">
+                    <button type="button" onclick="clearCart()" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition" title="Clear Cart">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
 
-                <!-- Recipient Info Input -->
-                <div class="p-3.5 bg-slate-50 border-b border-slate-100 space-y-2">
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                            Recipient / Customer Name
-                        </label>
-                        <div class="relative">
-                            <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                            <input type="text" id="recipientInput" value="Counter Walk-in Pickup" 
-                                   placeholder="e.g. Walk-in, Agent Silva, Beach Stall"
-                                   class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
-                        </div>
+                <!-- Recipient Info Input (Compact shrink-0) -->
+                <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-100 shrink-0">
+                    <div class="relative">
+                        <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="recipientInput" value="Counter Walk-in Pickup" 
+                               placeholder="Recipient / Customer name..."
+                               class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
                     </div>
                 </div>
 
-                <!-- Cart Items Scroll List -->
-                <div id="cartItemsList" class="p-3.5 max-h-[320px] overflow-y-auto space-y-2.5">
+                <!-- Cart Items Scroll List (flex-1 overflow-y-auto - scrolls smoothly inside!) -->
+                <div id="cartItemsList" class="p-3 overflow-y-auto flex-1 min-h-[130px] max-h-[40vh] lg:max-h-none space-y-2.5 scrollbar-thin">
                     <!-- Populated dynamically via JavaScript -->
                 </div>
 
                 <!-- Empty Cart State -->
-                <div id="cartEmptyState" class="py-12 px-4 text-center text-slate-400">
-                    <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-300 flex items-center justify-center mx-auto mb-2 text-xl">
+                <div id="cartEmptyState" class="py-8 px-4 text-center text-slate-400 my-auto">
+                    <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-300 flex items-center justify-center mx-auto mb-2 text-lg">
                         <i class="fa-solid fa-basket-shopping"></i>
                     </div>
                     <p class="text-xs font-bold text-slate-600">Cart is Empty</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Click any ice cream card to add units or boxes to slip.</p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Click ice cream products to add units or boxes.</p>
                 </div>
 
-                <!-- Extra Charges & Bill Amount Section -->
-                <div class="p-3.5 bg-slate-50/80 border-t border-b border-slate-200 space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[11px] font-black uppercase text-slate-700 flex items-center">
-                            <i class="fa-solid fa-boxes-packing mr-1.5 text-cyan-600"></i> Extra Charge / Bill Amount
+                <!-- Extra Charges & Bill Amount (Compact Collapsible Toggle) -->
+                <div class="border-t border-slate-200/80 bg-slate-50/70 shrink-0">
+                    <button type="button" onclick="toggleExtraChargesSection()" class="w-full px-3.5 py-2 flex items-center justify-between text-[11px] font-bold text-slate-700 hover:text-cyan-700 hover:bg-slate-100/80 transition cursor-pointer select-none">
+                        <span class="flex items-center">
+                            <i class="fa-solid fa-boxes-packing mr-1.5 text-cyan-600"></i> Extra Charge / Bill Total (Optional)
                         </span>
-                        <span class="text-[10px] font-bold text-slate-400">Optional</span>
-                    </div>
+                        <span class="flex items-center text-slate-400 text-[10px]">
+                            <span id="extraSummaryBadge" class="mr-1 hidden font-mono text-cyan-700 font-bold"></span>
+                            <i id="extraChevronIcon" class="fa-solid fa-chevron-down transition-transform duration-200"></i>
+                        </span>
+                    </button>
 
-                    <!-- Extra Amount (Rigifoam Box, Delivery, Packing) -->
-                    <div class="grid grid-cols-12 gap-2 items-center">
-                        <div class="col-span-7">
-                            <input type="text" id="extraLabelInput" placeholder="Label (e.g. Rigifoam Box)"
-                                   class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                    <div id="extraChargesContent" class="hidden px-3.5 pb-3 pt-1 space-y-2 border-t border-slate-200/60">
+                        <!-- Extra Amount (Rigifoam Box, Delivery, Packing) -->
+                        <div class="grid grid-cols-12 gap-2 items-center">
+                            <div class="col-span-7">
+                                <input type="text" id="extraLabelInput" placeholder="Label (e.g. Rigifoam Box)"
+                                       class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            </div>
+                            <div class="col-span-5 relative">
+                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs.</span>
+                                <input type="number" step="0.01" min="0" id="extraAmountInput" placeholder="0.00" oninput="updateLiveSummary()"
+                                       class="w-full pl-8 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            </div>
                         </div>
-                        <div class="col-span-5 relative">
-                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs.</span>
-                            <input type="number" step="0.01" min="0" id="extraAmountInput" placeholder="0.00" oninput="updateLiveSummary()"
-                                   class="w-full pl-8 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
-                        </div>
-                    </div>
 
-                    <!-- Quick buttons for common Rigifoam Ice Box charges -->
-                    <div class="flex items-center space-x-1.5">
-                        <span class="text-[10px] text-slate-400 font-bold">Quick:</span>
-                        <button type="button" onclick="setQuickExtra('Rigifoam Box (Small)', 250)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
-                            + Rs.250 Box
-                        </button>
-                        <button type="button" onclick="setQuickExtra('Rigifoam Box (Large)', 350)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
-                            + Rs.350 Box
-                        </button>
-                        <button type="button" onclick="clearExtra()" class="px-1.5 py-0.5 rounded-lg text-[10px] text-rose-500 hover:text-rose-700 transition" title="Clear Extra">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-
-                    <!-- Total Bill Amount (Invoice / Selling Price Total) -->
-                    <div class="pt-2 border-t border-slate-200/60">
-                        <div class="flex items-center justify-between mb-1">
-                            <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                Total Bill Value (Rs.)
-                            </label>
-                            <button type="button" onclick="autoCalculateBillTotal()" class="text-[10px] font-bold text-cyan-600 hover:text-cyan-800 hover:underline">
-                                <i class="fa-solid fa-calculator mr-0.5"></i> Calc from Prices
+                        <!-- Quick buttons for common Rigifoam Ice Box charges -->
+                        <div class="flex items-center space-x-1.5">
+                            <span class="text-[10px] text-slate-400 font-bold">Quick:</span>
+                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Small)', 250)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
+                                + Rs.250 Box
+                            </button>
+                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Large)', 350)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
+                                + Rs.350 Box
+                            </button>
+                            <button type="button" onclick="clearExtra()" class="px-1.5 py-0.5 rounded-lg text-[10px] text-rose-500 hover:text-rose-700 transition" title="Clear Extra">
+                                <i class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
-                        <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs.</span>
-                            <input type="number" step="0.01" min="0" id="billAmountInput" placeholder="0.00 (Optional)" oninput="updateLiveSummary()"
-                                   class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+
+                        <!-- Total Bill Amount (Invoice / Selling Price Total) -->
+                        <div class="pt-2 border-t border-slate-200/60">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                    Total Bill Value (Rs.)
+                                </label>
+                                <button type="button" onclick="autoCalculateBillTotal()" class="text-[10px] font-bold text-cyan-600 hover:text-cyan-800 hover:underline">
+                                    <i class="fa-solid fa-calculator mr-0.5"></i> Calc from Prices
+                                </button>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs.</span>
+                                <input type="number" step="0.01" min="0" id="billAmountInput" placeholder="0.00 (Optional)" oninput="updateLiveSummary()"
+                                       class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Cart Footer Summary -->
-                <div class="p-4 sm:p-5 bg-white space-y-3">
-                    <div class="space-y-1.5">
+                <!-- Cart Footer Summary (ALWAYS pinned at the bottom of the card!) -->
+                <div class="p-3.5 sm:p-4 bg-white border-t border-slate-100 shrink-0 space-y-2.5">
+                    <div class="space-y-1">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Units to Deduct:</span>
                             <span id="cartTotalUnits" class="text-xl font-black font-mono text-cyan-700">0 Units</span>
                         </div>
-                        <div id="cartEstimatedAmountRow" class="text-xs text-slate-700 font-bold hidden flex items-center justify-between border-t border-dashed border-slate-200 pt-1.5">
+                        <div id="cartEstimatedAmountRow" class="text-xs text-slate-700 font-bold hidden flex items-center justify-between border-t border-dashed border-slate-200 pt-1">
                             <span class="text-slate-500">Estimated Total Bill:</span>
                             <span id="cartEstimatedAmount" class="font-black font-mono text-emerald-700 text-sm">Rs. 0.00</span>
                         </div>
                     </div>
 
                     <!-- Over-Stock Alert Banner -->
-                    <div id="cartStockWarning" class="p-3 bg-rose-50 border border-rose-300 rounded-2xl text-rose-800 text-xs font-bold hidden flex items-start space-x-2 animate-in fade-in">
-                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mt-0.5 text-sm shrink-0"></i>
+                    <div id="cartStockWarning" class="p-2.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs font-bold hidden flex items-start space-x-2 animate-in fade-in">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mt-0.5 text-xs shrink-0"></i>
                         <div class="leading-tight flex-1">
-                            <div class="font-black text-rose-900">තොග සීමාව ඉක්මවූ අයිතම ඇත!</div>
-                            <div id="cartStockWarningDetail" class="text-[10px] text-rose-700 font-medium mt-0.5">
+                            <div class="font-black text-rose-900 text-[11px]">තොග සීමාව ඉක්මවූ අයිතම ඇත!</div>
+                            <div id="cartStockWarningDetail" class="text-[9px] text-rose-700 font-medium">
                                 Cold Room හි පවතින තොගයට වඩා වැඩි ප්‍රමාණයක් නිකුත් කල නොහැක.
                             </div>
                         </div>
@@ -702,7 +702,7 @@ require_once __DIR__ . '/includes/header.php';
                         <input type="hidden" name="cart_data" id="formCartData" value="[]">
 
                         <button type="button" onclick="submitPosCheckout()" id="checkoutBtn" disabled
-                                class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-cyan-600/20 active:scale-98 transition flex items-center justify-center space-x-2">
+                                class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/30 active:scale-98 transition flex items-center justify-center space-x-2 cursor-pointer">
                             <i class="fa-solid fa-receipt text-sm"></i>
                             <span>Issue Stock &amp; Print Slip</span>
                         </button>
@@ -985,9 +985,24 @@ function clearCart() {
     renderCart();
 }
 
+function toggleExtraChargesSection() {
+    const content = document.getElementById('extraChargesContent');
+    const chevron = document.getElementById('extraChevronIcon');
+    if (!content) return;
+    const isHidden = content.classList.contains('hidden');
+    content.classList.toggle('hidden');
+    if (chevron) {
+        chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+    }
+}
+
 function setQuickExtra(label, amount) {
     document.getElementById('extraLabelInput').value = label;
     document.getElementById('extraAmountInput').value = amount;
+    const content = document.getElementById('extraChargesContent');
+    if (content && content.classList.contains('hidden')) {
+        toggleExtraChargesSection();
+    }
     updateLiveSummary();
 }
 
@@ -1007,6 +1022,10 @@ function autoCalculateBillTotal() {
     const extra = parseFloat(document.getElementById('extraAmountInput').value) || 0;
     const total = subtotal + extra;
     document.getElementById('billAmountInput').value = total > 0 ? total.toFixed(2) : '';
+    const content = document.getElementById('extraChargesContent');
+    if (content && content.classList.contains('hidden')) {
+        toggleExtraChargesSection();
+    }
     updateLiveSummary();
     if (total > 0) {
         showToast(`Calculated bill total: Rs. ${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 'success', 'Bill Total Calculated');
@@ -1020,6 +1039,16 @@ function updateLiveSummary() {
     const bill = parseFloat(document.getElementById('billAmountInput').value) || 0;
     const estRow = document.getElementById('cartEstimatedAmountRow');
     const estSpan = document.getElementById('cartEstimatedAmount');
+    const badge = document.getElementById('extraSummaryBadge');
+
+    if (badge) {
+        if (extra > 0 || bill > 0) {
+            badge.innerText = `Rs. ${(extra + bill).toLocaleString()}`;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
 
     if (bill > 0) {
         estRow.classList.remove('hidden');
