@@ -340,12 +340,15 @@ require_once __DIR__ . '/includes/header.php';
 <div id="inventoryTab" class="tab-content">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div class="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
-            <div class="relative w-full sm:w-72">
-                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
+            <div class="relative w-full sm:w-80">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs pointer-events-none">
                     <i class="fa-solid fa-search"></i>
                 </span>
-                <input type="text" id="stockSearch" oninput="filterStockTable()" placeholder="Search product code, name, flavor, size..." 
-                       class="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                <input type="text" id="stockSearch" oninput="filterStockTable()" onkeyup="filterStockTable()" onchange="filterStockTable()" placeholder="Search product code, name, flavor, size..." 
+                       class="w-full pl-8 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                <button type="button" id="stockSearchClear" onclick="document.getElementById('stockSearch').value=''; filterStockTable();" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </button>
             </div>
             <div class="text-[11px] sm:text-xs text-slate-400 w-full sm:w-auto text-left sm:text-right">
                 Physical counts in Cold Room warehouse
@@ -959,10 +962,31 @@ require_once __DIR__ . '/includes/header.php';
         const cleanQuery = query.toLowerCase().trim();
         if (!cleanQuery) return true;
 
-        const normalize = s => s.toLowerCase()
-            .replace(/choclate|choclet/g, 'chocolate')
-            .replace(/kitul/g, 'kithul')
-            .replace(/(.)\1+/g, '$1');
+        const normalize = s => {
+            return (s || '').toLowerCase()
+                // Sinhala to English transliteration for common ice cream terms
+                .replace(/වැනිලා|වැනිල/g, 'vanilla')
+                .replace(/චොක්ලට්|චොකලට්|චොකො/g, 'chocolate')
+                .replace(/ස්ට්‍රෝබෙරි|ස්ට්‍රෝබරි/g, 'strawberry')
+                .replace(/කිතුල්|කිටුල්/g, 'kithul')
+                .replace(/කෝන්/g, 'cone')
+                .replace(/කප්/g, 'cup')
+                .replace(/ටබ්/g, 'tub')
+                .replace(/අයිස්ක්‍රීම්|අයිස්/g, 'ice')
+                // Common English phonetics & typos
+                .replace(/choclate|choclet/g, 'chocolate')
+                .replace(/kitul/g, 'kithul')
+                .replace(/strawbery/g, 'strawberry')
+                .replace(/buter/g, 'butter')
+                // Unit normalization: 1 l, 1 ltr, 1 litre, 1lt -> 1l
+                .replace(/(\d+)\s*(litres?|ltrs?|lt|l)\b/g, '$1l')
+                .replace(/\b(litres?|ltrs?|lt)\b/g, 'l')
+                .replace(/(\d+)\s*(ml|kg|g)\b/g, '$1$2')
+                .replace(/[()[\]\-&.,/]/g, ' ')
+                .replace(/(.)\1+/g, '$1') // collapse duplicate letters (vanilla -> vanila)
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
 
         const rawTarget = (targetText || '').toLowerCase();
         const normTarget = normalize(rawTarget);
@@ -970,7 +994,7 @@ require_once __DIR__ . '/includes/header.php';
         const words = cleanQuery.split(/\s+/).filter(Boolean);
         return words.every(w => {
             const normW = normalize(w);
-            return rawTarget.includes(w) || normTarget.includes(normW);
+            return rawTarget.includes(w) || normTarget.includes(normW) || normTarget.includes(w);
         });
     }
 
@@ -1001,6 +1025,11 @@ require_once __DIR__ . '/includes/header.php';
         const mobileEmpty = document.getElementById('stockMobileNoResults');
         if (mobileEmpty) {
             mobileEmpty.classList.toggle('hidden', mobileMatches > 0 || !input.trim());
+        }
+
+        const clearBtn = document.getElementById('stockSearchClear');
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !input.trim());
         }
     }
 

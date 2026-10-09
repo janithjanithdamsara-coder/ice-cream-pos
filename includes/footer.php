@@ -145,6 +145,7 @@
         window.alert = function(msg) {
             showToast(msg, 'warning', 'Stock Notice');
         };
+    </script>
 
     <!-- Floating Emergency Tech Support Button -->
     <div class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 no-print">

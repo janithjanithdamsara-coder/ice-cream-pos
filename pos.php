@@ -1310,10 +1310,31 @@ function smartMatch(targetText, query) {
     const cleanQuery = query.toLowerCase().trim();
     if (!cleanQuery) return true;
 
-    const normalize = s => s.toLowerCase()
-        .replace(/choclate|choclet/g, 'chocolate')
-        .replace(/kitul/g, 'kithul')
-        .replace(/(.)\1+/g, '$1');
+    const normalize = s => {
+        return (s || '').toLowerCase()
+            // Sinhala to English transliteration for common ice cream terms
+            .replace(/වැනිලා|වැනිල/g, 'vanilla')
+            .replace(/චොක්ලට්|චොකලට්|චොකො/g, 'chocolate')
+            .replace(/ස්ට්‍රෝබෙරි|ස්ට්‍රෝබරි/g, 'strawberry')
+            .replace(/කිතුල්|කිටුල්/g, 'kithul')
+            .replace(/කෝන්/g, 'cone')
+            .replace(/කප්/g, 'cup')
+            .replace(/ටබ්/g, 'tub')
+            .replace(/අයිස්ක්‍රීම්|අයිස්/g, 'ice')
+            // Common English phonetics & typos
+            .replace(/choclate|choclet/g, 'chocolate')
+            .replace(/kitul/g, 'kithul')
+            .replace(/strawbery/g, 'strawberry')
+            .replace(/buter/g, 'butter')
+            // Unit normalization: 1 l, 1 ltr, 1 litre, 1lt -> 1l
+            .replace(/(\d+)\s*(litres?|ltrs?|lt|l)\b/g, '$1l')
+            .replace(/\b(litres?|ltrs?|lt)\b/g, 'l')
+            .replace(/(\d+)\s*(ml|kg|g)\b/g, '$1$2')
+            .replace(/[()[\]\-&.,/]/g, ' ')
+            .replace(/(.)\1+/g, '$1') // collapse duplicate letters (vanilla -> vanila)
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
 
     const rawTarget = (targetText || '').toLowerCase();
     const normTarget = normalize(rawTarget);
@@ -1321,7 +1342,7 @@ function smartMatch(targetText, query) {
     const words = cleanQuery.split(/\s+/).filter(Boolean);
     return words.every(w => {
         const normW = normalize(w);
-        return rawTarget.includes(w) || normTarget.includes(normW);
+        return rawTarget.includes(w) || normTarget.includes(normW) || normTarget.includes(w);
     });
 }
 
