@@ -172,10 +172,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         </div>
 
-        <!-- Page Footer -->
-        <div class="text-center mt-6 text-xs text-slate-400">
-            <div><strong>Dhanesha Distributors</strong> &bull; All Rights Reserved &copy; <?= date('Y') ?></div>
-            <div class="text-[11px] text-slate-500 mt-0.5">Authorized Personnel Only &bull; Sri Lanka</div>
+        <!-- Page Footer with Mr.Link Technology Attribution & Emergency Hotline -->
+        <div class="text-center mt-6 space-y-2.5">
+            <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs text-slate-300 shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span>System Engineered by <strong class="text-cyan-300 font-extrabold tracking-wide">Mr.Link Technology</strong></span>
+            </div>
+
+            <div class="flex items-center justify-center space-x-3 text-xs text-slate-400">
+                <a href="tel:0773093941" class="hover:text-cyan-300 transition flex items-center">
+                    <i class="fa-solid fa-code mr-1.5 text-cyan-400 text-[10px]"></i> Dev: 077-3093941
+                </a>
+                <span>&bull;</span>
+                <a href="tel:0762529906" class="hover:text-cyan-300 transition flex items-center">
+                    <i class="fa-solid fa-headset mr-1.5 text-indigo-400 text-[10px]"></i> Tech Lead: 076-2529906
+                </a>
+            </div>
+
+            <div class="text-[11px] text-slate-500">
+                Dhanesha Distributors &bull; Authorized Personnel Only &bull; &copy; <?= date('Y') ?>
+            </div>
         </div>
     </div>
 

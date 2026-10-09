@@ -244,6 +244,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     </a>
                 </div>
             </div>
+            
+            <div class="mt-2 text-center text-[10px] text-slate-500 flex items-center justify-between px-1">
+                <span>Dev: <strong class="text-cyan-400 font-bold">Mr.Link Tech</strong></span>
+                <button type="button" onclick="toggleSupportModal()" class="text-slate-400 hover:text-cyan-300 font-bold transition flex items-center cursor-pointer">
+                    <i class="fa-solid fa-headset mr-1 text-[9px]"></i> Helpline
+                </button>
+            </div>
         </div>
 
     </aside>
