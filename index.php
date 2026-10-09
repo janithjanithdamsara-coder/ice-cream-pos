@@ -66,11 +66,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             <div class="inline-flex w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-400 items-center justify-center text-white shadow-xl shadow-rose-300/60 mb-3.5 transform hover:scale-105 active:scale-95 transition-all">
                 <i class="fa-solid fa-ice-cream text-3xl sm:text-4xl"></i>
             </div>
-            <div class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full mb-2 shadow-sm">
-                <i class="fa-solid fa-rocket text-emerald-500"></i> <span>CI/CD Live Deployment Active</span>
-            </div>
-            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">FrostyFlow POS</h1>
-            <p class="text-slate-600 text-xs sm:text-sm font-medium mt-1">Dhanesha Distributors • Ice Cream Distribution & POS</p>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">FrostyFlow</h1>
+            <p class="text-slate-600 text-xs sm:text-sm font-medium mt-1">Ice Cream Distribution, Van Sales & POS</p>
         </div>
 
         <!-- Login Card -->
