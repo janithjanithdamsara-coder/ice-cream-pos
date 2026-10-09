@@ -118,6 +118,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: master.php?tab=backup");
         exit;
     }
+
+    // Action 6: Impersonate / Login As User (Master Developer Tool)
+    if ($action === 'impersonate_user') {
+        $targetUserId = intval($_POST['target_user_id'] ?? 0);
+        if ($targetUserId <= 0) {
+            setFlash('danger', 'Invalid user selected.');
+        } else {
+            $stmtTarget = $pdo->prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?");
+            $stmtTarget->execute([$targetUserId]);
+            $targetUser = $stmtTarget->fetch();
+
+            if (!$targetUser) {
+                setFlash('danger', 'User account not found.');
+            } elseif ($targetUser['role'] === 'master') {
+                setFlash('danger', 'You are already logged in as Master.');
+            } else {
+                // Save original master credentials
+                $_SESSION['impersonator_master_id'] = $user['id'];
+                $_SESSION['impersonator_master_name'] = $user['name'];
+                $_SESSION['impersonated_at'] = date('Y-m-d H:i:s');
+
+                // Switch active session to target user
+                $_SESSION['user_id'] = $targetUser['id'];
+                $_SESSION['user_name'] = $targetUser['name'];
+                $_SESSION['user_username'] = $targetUser['username'];
+                $_SESSION['user_role'] = $targetUser['role'];
+                $_SESSION['user_branch_id'] = $targetUser['branch_id'];
+                $_SESSION['active_branch_id'] = $targetUser['branch_id'] ?? 1;
+                $_SESSION['active_branch_name'] = $targetUser['branch_name'] ?? 'Main Cold Room';
+
+                logActivity('login_as_user', 'auth', "Master '{$user['name']}' logged in as '{$targetUser['username']}' ({$targetUser['role']})", $targetUser['id']);
+                setFlash('success', "Now logged in as [{$targetUser['name']}]. You are operating the system as this user. Click 'Exit to Master Portal' at the top anytime to return.");
+
+                header("Location: dashboard.php");
+                exit;
+            }
+        }
+        header("Location: master.php?tab=backup");
+        exit;
+    }
 }
 
 // ======================== HANDLE DATABASE BACKUP EXPORT (.SQL DOWNLOAD) ========================
@@ -199,8 +239,11 @@ $logsList = $stmtLogs->fetchAll();
 // Distinct log actions for filter
 $distinctActions = $pdo->query("SELECT DISTINCT action FROM activity_logs ORDER BY action ASC")->fetchAll(PDO::FETCH_COLUMN);
 
-// 3. Users list for password reset
-$allUsers = $pdo->query("SELECT id, name, username, role FROM users ORDER BY role ASC, name ASC")->fetchAll();
+// 3. Users list for login impersonation & password reset
+$allUsers = $pdo->query("SELECT u.id, u.name, u.username, u.role, u.branch_id, b.name as branch_name 
+    FROM users u 
+    LEFT JOIN branches b ON u.branch_id = b.id 
+    ORDER BY FIELD(u.role, 'master', 'super_admin', 'admin', 'cashier'), u.name ASC")->fetchAll();
 
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -250,7 +293,7 @@ require_once __DIR__ . '/includes/header.php';
             </a>
             <a href="?tab=backup" 
                class="pb-3 text-xs font-black whitespace-nowrap transition-colors flex items-center <?= $tab === 'backup' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-500 hover:text-slate-900' ?>">
-                <i class="fa-solid fa-wrench mr-2"></i> 3. Database Tools & Password Reset
+                <i class="fa-solid fa-user-secret mr-2"></i> 3. User Impersonation & Database Tools
             </a>
         </nav>
     </div>
@@ -598,9 +641,109 @@ require_once __DIR__ . '/includes/header.php';
     </div>
     <?php endif; ?>
 
-    <!-- ========================= TAB 3: DATABASE BACKUP & TOOLS ========================= -->
+    <!-- ========================= TAB 3: USER IMPERSONATION & TOOLS ========================= -->
     <?php if ($tab === 'backup'): ?>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+    <div class="space-y-6">
+
+        <!-- CARD 1: Instant Login As Any User (Session Impersonation) -->
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center space-x-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center justify-center font-black text-xl shadow-inner">
+                        <i class="fa-solid fa-user-secret"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 class="text-base font-black tracking-tight text-white">Instant Login As User (Session Impersonation)</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">Master Bypass</span>
+                        </div>
+                        <p class="text-xs text-slate-300 mt-0.5">
+                            Switch into <strong>Admin</strong>, <strong>Super Admin</strong>, or <strong>Cashier</strong> accounts with 1-click. No password needed.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="text-xs text-amber-200/80 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl self-start sm:self-auto font-medium">
+                    <i class="fa-solid fa-info-circle mr-1 text-amber-300"></i> Use top banner to return to Master anytime
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                            <th class="py-3 px-5">User Account</th>
+                            <th class="py-3 px-4">Username</th>
+                            <th class="py-3 px-4">Role</th>
+                            <th class="py-3 px-4">Assigned Hub / Branch</th>
+                            <th class="py-3 px-5 text-right">Master Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-medium">
+                        <?php foreach ($allUsers as $u): ?>
+                        <tr class="hover:bg-amber-50/30 transition-colors">
+                            <td class="py-3.5 px-5">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 rounded-xl <?= $u['role'] === 'master' ? 'bg-amber-100 text-amber-800' : ($u['role'] === 'super_admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700') ?> flex items-center justify-center font-black text-xs">
+                                        <?= strtoupper(substr($u['name'], 0, 1)) ?>
+                                    </div>
+                                    <div>
+                                        <div class="font-extrabold text-slate-900"><?= htmlspecialchars($u['name']) ?></div>
+                                        <div class="text-[10px] text-slate-400">ID: #<?= $u['id'] ?></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-3.5 px-4 font-mono font-bold text-slate-800">
+                                <?= htmlspecialchars($u['username']) ?>
+                            </td>
+                            <td class="py-3.5 px-4">
+                                <?php if ($u['role'] === 'master'): ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                                        <i class="fa-solid fa-crown mr-1 text-[9px]"></i> Master
+                                    </span>
+                                <?php elseif ($u['role'] === 'super_admin'): ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        Super Admin
+                                    </span>
+                                <?php elseif ($u['role'] === 'admin'): ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                        Admin
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                        <?= htmlspecialchars($u['role']) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-3.5 px-4 text-slate-600">
+                                <?= htmlspecialchars($u['branch_name'] ?? 'All Branches / Hubs') ?>
+                            </td>
+                            <td class="py-3.5 px-5 text-right">
+                                <?php if ($u['role'] === 'master'): ?>
+                                    <span class="inline-flex items-center px-3 py-1 rounded-xl bg-slate-100 text-slate-400 text-xs font-bold">
+                                        <i class="fa-solid fa-lock mr-1.5 text-[10px]"></i> Current Account
+                                    </span>
+                                <?php else: ?>
+                                    <form method="POST" action="master.php?tab=backup" class="inline" onsubmit="return confirm('Log in as <?= htmlspecialchars($u['name']) ?> (<?= htmlspecialchars($u['username']) ?>)? You will operate the system as this user.');">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="action" value="impersonate_user">
+                                        <input type="hidden" name="target_user_id" value="<?= $u['id'] ?>">
+                                        <button type="submit" class="inline-flex items-center px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-sm transition-all transform hover:-translate-y-0.5 cursor-pointer">
+                                            <i class="fa-solid fa-arrow-right-to-bracket mr-1.5"></i>
+                                            <span>Login As <?= htmlspecialchars($u['username']) ?></span>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         
         <!-- CARD 1: Automated Health Check & Stock Resync -->
         <div class="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
@@ -677,6 +820,7 @@ require_once __DIR__ . '/includes/header.php';
             </form>
         </div>
 
+    </div>
     </div>
     <?php endif; ?>
 

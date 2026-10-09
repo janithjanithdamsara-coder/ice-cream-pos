@@ -110,6 +110,37 @@ if (isLoggedIn() && ($_SESSION['user_role'] ?? '') === 'super_admin' && isset($_
     exit;
 }
 
+// Helper to switch back to Master session from an Impersonation session
+if (isset($_GET['action']) && $_GET['action'] === 'switch_back_to_master' && !empty($_SESSION['impersonator_master_id'])) {
+    global $pdo;
+    $masterId = intval($_SESSION['impersonator_master_id']);
+    $mStmt = $pdo->prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ? AND u.role = 'master'");
+    $mStmt->execute([$masterId]);
+    $mUser = $mStmt->fetch();
+
+    if ($mUser) {
+        $oldTarget = $_SESSION['user_name'] ?? 'User';
+        $_SESSION['user_id'] = $mUser['id'];
+        $_SESSION['user_name'] = $mUser['name'];
+        $_SESSION['user_username'] = $mUser['username'];
+        $_SESSION['user_role'] = 'master';
+        $_SESSION['user_branch_id'] = $mUser['branch_id'];
+        $_SESSION['active_branch_id'] = $mUser['branch_id'] ?? 1;
+        $_SESSION['active_branch_name'] = $mUser['branch_name'] ?? 'Main Hub';
+        
+        unset($_SESSION['impersonator_master_id'], $_SESSION['impersonator_master_name'], $_SESSION['impersonated_at']);
+        
+        logActivity('switch_back_master', 'auth', "Master returned to Master Control after operating as '{$oldTarget}'", $mUser['id']);
+        setFlash('success', "Switched back to Master Control successfully.");
+        header("Location: master.php?tab=backup");
+        exit;
+    }
+}
+
+function isImpersonating() {
+    return !empty($_SESSION['impersonator_master_id']);
+}
+
 // ==========================================
 // CSRF Protection Framework
 // ==========================================

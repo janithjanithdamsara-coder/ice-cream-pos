@@ -229,6 +229,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <div class="text-[10px] text-slate-400 capitalize truncate"><?= str_replace('_', ' ', $user['role']) ?></div>
                     </div>
                 <div class="flex items-center space-x-1 shrink-0">
+                    <?php if (isImpersonating()): ?>
+                        <a href="master.php?action=switch_back_to_master" title="Return to Master Portal" class="p-1.5 text-amber-400 hover:text-amber-300 rounded-lg transition-colors bg-amber-500/10">
+                            <i class="fa-solid fa-crown text-xs"></i>
+                        </a>
+                    <?php endif; ?>
                     <?php if (hasRole(['super_admin', 'admin'])): ?>
                         <a href="users.php" title="Manage Users & Change Password" class="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg transition-colors">
                             <i class="fa-solid fa-key text-xs"></i>
@@ -289,6 +294,27 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             </div>
         </header>
+
+        <!-- Impersonation Notice Banner (When Master is logged in as a user) -->
+        <?php if (isImpersonating()): ?>
+        <div class="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-3 z-40 text-xs no-print">
+            <div class="flex items-center space-x-2.5">
+                <span class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+                    <i class="fa-solid fa-user-secret"></i>
+                </span>
+                <div>
+                    <span class="font-extrabold uppercase tracking-wider text-amber-200 text-[10px] block leading-none mb-0.5">Master Impersonation Mode</span>
+                    <span>Currently operating as <strong><?= htmlspecialchars($user['name']) ?></strong> (<code><?= htmlspecialchars($user['username']) ?></code> &bull; <span class="capitalize"><?= htmlspecialchars(str_replace('_', ' ', $user['role'])) ?></span>)</span>
+                </div>
+            </div>
+            <div>
+                <a href="master.php?action=switch_back_to_master" 
+                   class="inline-flex items-center px-3.5 py-1.5 rounded-xl bg-slate-950 hover:bg-black text-amber-300 hover:text-white font-black text-xs shadow-md transition-all">
+                    <i class="fa-solid fa-arrow-right-from-bracket mr-1.5"></i> Exit to Master Portal
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Main Content Body -->
         <main class="flex-1 p-4 sm:p-6 lg:p-8 w-full">
