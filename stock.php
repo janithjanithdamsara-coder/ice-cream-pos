@@ -954,51 +954,71 @@ require_once __DIR__ . '/includes/header.php';
         el.classList.remove('text-slate-500', 'border-transparent');
     }
 
+    function smartMatch(targetText, query) {
+        if (!query) return true;
+        const cleanQuery = query.toLowerCase().trim();
+        if (!cleanQuery) return true;
+
+        const normalize = s => s.toLowerCase()
+            .replace(/choclate|choclet/g, 'chocolate')
+            .replace(/kitul/g, 'kithul')
+            .replace(/(.)\1+/g, '$1');
+
+        const rawTarget = (targetText || '').toLowerCase();
+        const normTarget = normalize(rawTarget);
+
+        const words = cleanQuery.split(/\s+/).filter(Boolean);
+        return words.every(w => {
+            const normW = normalize(w);
+            return rawTarget.includes(w) || normTarget.includes(normW);
+        });
+    }
+
     function filterStockTable() {
-        const input = (document.getElementById('stockSearch').value || '').toLowerCase().trim();
+        const input = (document.getElementById('stockSearch').value || '');
         let desktopMatches = 0;
         let mobileMatches = 0;
 
         document.querySelectorAll('#stockTable tbody tr.stock-desktop-row').forEach(r => {
             const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
-            const show = !input || text.includes(input);
+            const show = smartMatch(text, input);
             r.style.display = show ? '' : 'none';
             if (show) desktopMatches++;
         });
 
         const desktopEmpty = document.getElementById('stockDesktopNoResults');
         if (desktopEmpty) {
-            desktopEmpty.classList.toggle('hidden', desktopMatches > 0 || !input);
+            desktopEmpty.classList.toggle('hidden', desktopMatches > 0 || !input.trim());
         }
 
         document.querySelectorAll('#stockMobileCards .stock-mobile-item').forEach(c => {
             const text = (c.getAttribute('data-search') || c.innerText).toLowerCase();
-            const show = !input || text.includes(input);
+            const show = smartMatch(text, input);
             c.style.display = show ? '' : 'none';
             if (show) mobileMatches++;
         });
 
         const mobileEmpty = document.getElementById('stockMobileNoResults');
         if (mobileEmpty) {
-            mobileEmpty.classList.toggle('hidden', mobileMatches > 0 || !input);
+            mobileEmpty.classList.toggle('hidden', mobileMatches > 0 || !input.trim());
         }
     }
 
     // --- Bulk GRN Checklist Interactive Functions ---
 
     function filterGrnList() {
-        const query = (document.getElementById('grnSearchInput').value || '').toLowerCase().trim();
+        const query = (document.getElementById('grnSearchInput').value || '');
         let grnMatches = 0;
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
         rows.forEach(r => {
             const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
-            const show = !query || text.includes(query);
+            const show = smartMatch(text, query);
             r.style.display = show ? '' : 'none';
             if (show) grnMatches++;
         });
         const grnEmpty = document.getElementById('grnNoResultsRow');
         if (grnEmpty) {
-            grnEmpty.classList.toggle('hidden', grnMatches > 0 || !query);
+            grnEmpty.classList.toggle('hidden', grnMatches > 0 || !query.trim());
         }
     }
 

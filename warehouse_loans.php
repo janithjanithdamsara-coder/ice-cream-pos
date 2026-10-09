@@ -1220,19 +1220,33 @@ require_once __DIR__ . '/includes/header.php';
         document.getElementById('newLoanModal').classList.add('hidden');
     }
 
+    function smartMatch(targetText, query) {
+        if (!query) return true;
+        const cleanQuery = query.toLowerCase().trim();
+        if (!cleanQuery) return true;
+
+        const normalize = s => s.toLowerCase()
+            .replace(/choclate|choclet/g, 'chocolate')
+            .replace(/kitul/g, 'kithul')
+            .replace(/(.)\1+/g, '$1');
+
+        const rawTarget = (targetText || '').toLowerCase();
+        const normTarget = normalize(rawTarget);
+
+        const words = cleanQuery.split(/\s+/).filter(Boolean);
+        return words.every(w => {
+            const normW = normalize(w);
+            return rawTarget.includes(w) || normTarget.includes(normW);
+        });
+    }
+
     function filterLoanList() {
         const input = document.getElementById('loanSearchInput');
-        const query = (input ? input.value : '').toLowerCase().trim();
+        const query = (input ? input.value : '');
         const rows = document.querySelectorAll('#loanBulkTableBody tr.loan-item-row');
         rows.forEach(r => {
-            const name = (r.dataset.name || '').toLowerCase();
-            const code = (r.dataset.code || '').toLowerCase();
-            const flavor = (r.dataset.flavor || '').toLowerCase();
-            if (!query || name.includes(query) || code.includes(query) || flavor.includes(query)) {
-                r.style.display = '';
-            } else {
-                r.style.display = 'none';
-            }
+            const fullText = (r.dataset.name + ' ' + r.dataset.code + ' ' + (r.dataset.flavor || '')).toLowerCase();
+            r.style.display = smartMatch(fullText, query) ? '' : 'none';
         });
     }
 

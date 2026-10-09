@@ -1305,17 +1305,38 @@ function scrollToCart() {
     }
 }
 
+function smartMatch(targetText, query) {
+    if (!query) return true;
+    const cleanQuery = query.toLowerCase().trim();
+    if (!cleanQuery) return true;
+
+    const normalize = s => s.toLowerCase()
+        .replace(/choclate|choclet/g, 'chocolate')
+        .replace(/kitul/g, 'kithul')
+        .replace(/(.)\1+/g, '$1');
+
+    const rawTarget = (targetText || '').toLowerCase();
+    const normTarget = normalize(rawTarget);
+
+    const words = cleanQuery.split(/\s+/).filter(Boolean);
+    return words.every(w => {
+        const normW = normalize(w);
+        return rawTarget.includes(w) || normTarget.includes(normW);
+    });
+}
+
 function filterProducts() {
-    const query = document.getElementById('posSearchInput').value.toLowerCase().trim();
+    const query = document.getElementById('posSearchInput').value || '';
     const cards = document.querySelectorAll('.product-card');
 
     cards.forEach(card => {
-        const name = (card.getAttribute('data-name') || '').toLowerCase();
-        const code = (card.getAttribute('data-code') || '').toLowerCase();
-        const flavor = (card.getAttribute('data-flavor') || '').toLowerCase();
+        const name = card.getAttribute('data-name') || '';
+        const code = card.getAttribute('data-code') || '';
+        const flavor = card.getAttribute('data-flavor') || '';
         const cat = card.getAttribute('data-cat');
 
-        const matchesQuery = !query || name.includes(query) || code.includes(query) || flavor.includes(query);
+        const fullText = (name + ' ' + code + ' ' + flavor).toLowerCase();
+        const matchesQuery = smartMatch(fullText, query);
         const matchesCategory = activeCategory === 'all' || cat === activeCategory;
 
         if (matchesQuery && matchesCategory) {
