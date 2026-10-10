@@ -7,6 +7,15 @@ requireRole(['super_admin', 'admin']);
 
 $user = currentUser();
 
+// Safe helper to delete from tables that might or might not exist
+function safeTableDelete($pdo, $tableName) {
+    try {
+        $pdo->exec("DELETE FROM `{$tableName}`");
+    } catch (Throwable $e) {
+        // Table doesn't exist or already removed, ignore safely
+    }
+}
+
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireCsrf();
@@ -18,28 +27,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             // Delete all operational transactions
-            $pdo->exec("DELETE FROM `store_dispatch_items`");
-            $pdo->exec("DELETE FROM `store_dispatches`");
-            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
-            $pdo->exec("DELETE FROM `lorry_dispatches`");
-            $pdo->exec("DELETE FROM `stock_invoice_items`");
-            $pdo->exec("DELETE FROM `stock_invoices`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loans`");
+            safeTableDelete($pdo, 'store_dispatch_items');
+            safeTableDelete($pdo, 'store_dispatches');
+            safeTableDelete($pdo, 'lorry_dispatch_items');
+            safeTableDelete($pdo, 'lorry_dispatches');
+            safeTableDelete($pdo, 'stock_invoice_items');
+            safeTableDelete($pdo, 'stock_invoices');
+            safeTableDelete($pdo, 'warehouse_loan_return_items');
+            safeTableDelete($pdo, 'warehouse_loan_returns');
+            safeTableDelete($pdo, 'warehouse_loan_items');
+            safeTableDelete($pdo, 'warehouse_loans');
 
             // Clean up legacy tables if present
-            @$pdo->exec("DELETE FROM `pos_sale_items`");
-            @$pdo->exec("DELETE FROM `pos_sales`");
-            @$pdo->exec("DELETE FROM `daily_cash_register`");
-            @$pdo->exec("DELETE FROM `cash_transactions`");
+            safeTableDelete($pdo, 'pos_sale_items');
+            safeTableDelete($pdo, 'pos_sales');
+            safeTableDelete($pdo, 'daily_cash_register');
+            safeTableDelete($pdo, 'cash_transactions');
 
             // Delete all products, categories, stock, and lorries
-            $pdo->exec("DELETE FROM `branch_stock`");
-            $pdo->exec("DELETE FROM `products`");
-            $pdo->exec("DELETE FROM `categories`");
-            $pdo->exec("DELETE FROM `lorries`");
+            safeTableDelete($pdo, 'branch_stock');
+            safeTableDelete($pdo, 'products');
+            safeTableDelete($pdo, 'categories');
+            safeTableDelete($pdo, 'lorries');
 
             // Mark system as initialized so auto-seed does not re-insert items automatically
             $pdo->exec("INSERT INTO `system_settings` (`key_name`, `value`) VALUES ('initial_seed_done', 'yes') ON DUPLICATE KEY UPDATE `value` = 'yes'");
@@ -90,23 +99,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 
             // Reset all stock to 0 immediately
-            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
+            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0, `box_qty` = 0, `pieces_qty` = 0");
 
-            $pdo->exec("DELETE FROM `store_dispatch_items`");
-            $pdo->exec("DELETE FROM `store_dispatches`");
-            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
-            $pdo->exec("DELETE FROM `lorry_dispatches`");
-            $pdo->exec("DELETE FROM `stock_invoice_items`");
-            $pdo->exec("DELETE FROM `stock_invoices`");
+            safeTableDelete($pdo, 'store_dispatch_items');
+            safeTableDelete($pdo, 'store_dispatches');
+            safeTableDelete($pdo, 'lorry_dispatch_items');
+            safeTableDelete($pdo, 'lorry_dispatches');
+            safeTableDelete($pdo, 'stock_invoice_items');
+            safeTableDelete($pdo, 'stock_invoices');
 
-            @$pdo->exec("DELETE FROM `pos_sale_items`");
-            @$pdo->exec("DELETE FROM `pos_sales`");
-            @$pdo->exec("DELETE FROM `daily_cash_register`");
-            @$pdo->exec("DELETE FROM `cash_transactions`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loans`");
+            safeTableDelete($pdo, 'pos_sale_items');
+            safeTableDelete($pdo, 'pos_sales');
+            safeTableDelete($pdo, 'daily_cash_register');
+            safeTableDelete($pdo, 'cash_transactions');
+            safeTableDelete($pdo, 'warehouse_loan_return_items');
+            safeTableDelete($pdo, 'warehouse_loan_returns');
+            safeTableDelete($pdo, 'warehouse_loan_items');
+            safeTableDelete($pdo, 'warehouse_loans');
 
             $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
 
@@ -153,27 +162,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 60),
                     (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
 
-                $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`) VALUES
-                    (1, 1, 0), (1, 2, 0), (1, 3, 0), (1, 4, 0), (1, 5, 0),
-                    (1, 6, 0), (1, 7, 0), (1, 8, 0), (1, 9, 0), (1, 10, 0)
-                    ON DUPLICATE KEY UPDATE `quantity` = 0;");
+                $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`, `box_qty`, `pieces_qty`) VALUES
+                    (1, 1, 0, 0, 0), (1, 2, 0, 0, 0), (1, 3, 0, 0, 0), (1, 4, 0, 0, 0), (1, 5, 0, 0, 0),
+                    (1, 6, 0, 0, 0), (1, 7, 0, 0, 0), (1, 8, 0, 0, 0), (1, 9, 0, 0, 0), (1, 10, 0, 0, 0)
+                    ON DUPLICATE KEY UPDATE `quantity` = 0, `box_qty` = 0, `pieces_qty` = 0;");
             }
 
             // Always ensure all stock is reset to 0 for fresh testing
-            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0");
+            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0, `box_qty` = 0, `pieces_qty` = 0");
 
             // Clear past dispatches so system is 100% clean
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-            $pdo->exec("DELETE FROM `store_dispatch_items`");
-            $pdo->exec("DELETE FROM `store_dispatches`");
-            $pdo->exec("DELETE FROM `lorry_dispatch_items`");
-            $pdo->exec("DELETE FROM `lorry_dispatches`");
-            $pdo->exec("DELETE FROM `stock_invoice_items`");
-            $pdo->exec("DELETE FROM `stock_invoices`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_return_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_returns`");
-            @$pdo->exec("DELETE FROM `warehouse_loan_items`");
-            @$pdo->exec("DELETE FROM `warehouse_loans`");
+            safeTableDelete($pdo, 'store_dispatch_items');
+            safeTableDelete($pdo, 'store_dispatches');
+            safeTableDelete($pdo, 'lorry_dispatch_items');
+            safeTableDelete($pdo, 'lorry_dispatches');
+            safeTableDelete($pdo, 'stock_invoice_items');
+            safeTableDelete($pdo, 'stock_invoices');
+            safeTableDelete($pdo, 'warehouse_loan_return_items');
+            safeTableDelete($pdo, 'warehouse_loan_returns');
+            safeTableDelete($pdo, 'warehouse_loan_items');
+            safeTableDelete($pdo, 'warehouse_loans');
+            safeTableDelete($pdo, 'pos_sale_items');
+            safeTableDelete($pdo, 'pos_sales');
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
 
             // Insert lorries if 0

@@ -438,7 +438,37 @@ function migrateSchema($pdo) {
             INDEX (`product_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
-        // 7. Auto-populate / Sync the 37 official factory products
+        // 7. Ensure legacy pos_sales & pos_sale_items exist to prevent missing table errors
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `pos_sales` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `bill_no` VARCHAR(50) NOT NULL UNIQUE,
+            `branch_id` INT NOT NULL DEFAULT 1,
+            `user_id` INT NOT NULL,
+            `sale_date` DATE NOT NULL,
+            `sale_time` TIME NOT NULL,
+            `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `discount` DECIMAL(10,2) DEFAULT 0.00,
+            `grand_total` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `cash_paid` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `change_given` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `payment_method` VARCHAR(30) DEFAULT 'Cash',
+            `customer_name` VARCHAR(100) DEFAULT 'Walk-in Customer',
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `branch_id` (`branch_id`),
+            KEY `sale_date` (`sale_date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `pos_sale_items` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `sale_id` INT NOT NULL,
+            `product_id` INT NOT NULL,
+            `quantity` INT NOT NULL DEFAULT 0,
+            `unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            KEY `sale_id` (`sale_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        // 8. Auto-populate / Sync the 37 official factory products
         $stmtSync = $pdo->query("SELECT COUNT(*) FROM `system_settings` WHERE `key_name` = 'factory_37_products_synced_v1'");
         if ($stmtSync->fetchColumn() == 0) {
             // Ensure 5 Categories exist
