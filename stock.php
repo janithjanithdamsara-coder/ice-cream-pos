@@ -744,7 +744,6 @@ require_once __DIR__ . '/includes/header.php';
                                 <th class="py-2.5 px-3">Product Description</th>
                                 <th class="py-2.5 px-3 w-28 text-center">Cold Room</th>
                                 <th class="py-2.5 px-3 w-36 text-center text-cyan-800 font-extrabold">Incoming Qty *</th>
-                                <th class="py-2.5 px-3 w-32">Batch No</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
@@ -771,14 +770,10 @@ require_once __DIR__ . '/includes/header.php';
                                            class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
                                            oninput="handleGrnQtyInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
                                 </td>
-                                <td class="py-2 px-3">
-                                    <input type="text" name="batch_no[<?= $prod['id'] ?>]" placeholder="BTH-<?= date('y') ?>" 
-                                           class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 focus:ring-1 focus:ring-cyan-500">
-                                </td>
                             </tr>
                             <?php endforeach; ?>
                             <tr id="grnNoResultsRow" class="hidden">
-                                <td colspan="6" class="py-8 text-center text-slate-400 font-bold text-xs">
+                                <td colspan="5" class="py-8 text-center text-slate-400 font-bold text-xs">
                                     <i class="fa-solid fa-magnifying-glass text-slate-300 text-sm mb-1 block"></i>
                                     No matching products in GRN list.
                                 </td>
@@ -1253,10 +1248,6 @@ require_once __DIR__ . '/includes/header.php';
                     <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" value="${p.incoming_qty > 0 ? p.incoming_qty : ''}" 
                            class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
                            oninput="handleGrnQtyInput(${p.id})" onkeydown="handleGrnNav(event, this)">
-                </td>
-                <td class="py-2 px-3">
-                    <input type="text" name="batch_no[${p.id}]" placeholder="BTH-<?= date('y') ?>" 
-                           class="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 focus:ring-1 focus:ring-cyan-500">
                 </td>
             `;
 
