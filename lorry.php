@@ -1246,103 +1246,154 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- MODAL: Evening 3:00 PM Returns & Reconciliation (Opens if ?action=settle) -->
+<<!-- MODAL: Evening 3:00 PM Returns & Reconciliation (Opens if ?action=settle) -->
 <?php if ($settleDispatch): ?>
-<div id="settleModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+<div id="settleModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
-        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-600 to-rose-700 text-white">
-            <div>
-                <h3 class="font-extrabold text-base flex items-center">
-                    <i class="fa-solid fa-clock-rotate-left mr-2"></i> Evening 3:00 PM Lorry Returns & Settlement
-                </h3>
-                <p class="text-rose-100 text-xs mt-0.5">
-                    Lorry: <strong><?= htmlspecialchars($settleDispatch['plate_no']) ?></strong> &bull; Driver: <?= htmlspecialchars($settleDispatch['driver_name']) ?> &bull; Dispatch: <?= htmlspecialchars($settleDispatch['dispatch_no']) ?>
-                </p>
+        <!-- Modal Header -->
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-600 via-rose-700 to-red-800 text-white shrink-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner">
+                    <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-base flex items-center tracking-tight">
+                        Evening 3:00 PM Lorry Returns & Settlement
+                    </h3>
+                    <p class="text-rose-100 text-xs mt-0.5">
+                        Lorry: <strong><?= htmlspecialchars($settleDispatch['plate_no']) ?></strong> &bull; Driver: <?= htmlspecialchars($settleDispatch['driver_name']) ?> &bull; Dispatch: <?= htmlspecialchars($settleDispatch['dispatch_no']) ?>
+                    </p>
+                </div>
             </div>
-            <a href="lorry.php" class="text-white/80 hover:text-white text-lg">
+            <a href="lorry.php" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
                 <i class="fa-solid fa-xmark"></i>
             </a>
         </div>
 
-        <form method="POST" action="lorry.php" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <!-- Modal Form Body -->
+        <form method="POST" action="lorry.php" class="flex-1 flex flex-col min-h-0 overflow-hidden" id="settleForm">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="settle_dispatch">
             <input type="hidden" name="dispatch_id" value="<?= $settleDispatch['id'] ?>">
 
-            <div class="grid grid-cols-2 gap-3 p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs">
-                <div>
-                    <label class="block font-bold text-rose-900 mb-1">Return / Settlement Time</label>
-                    <input type="time" name="settlement_time" value="15:00" required class="w-full p-2 bg-white border border-rose-300 rounded-xl font-bold font-mono">
-                </div>
-                <div>
-                    <label class="block font-bold text-rose-900 mb-1">Return Notes / Reason</label>
-                    <input type="text" name="notes" placeholder="e.g. 3.00 PM Evening return completed" class="w-full p-2 bg-white border border-rose-300 rounded-xl">
-                </div>
-            </div>
-
-            <?php if (!empty($settleDispatchReloads)): ?>
-            <div class="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs text-orange-900 flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <i class="fa-solid fa-truck-ramp-box text-orange-600 text-base"></i>
+            <!-- Top Controls & Search Bar -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200 shrink-0 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                        <span class="font-bold">Includes <?= count($settleDispatchReloads) ?> Mid-Day Reload(s):</span>
-                        <span class="text-orange-700">All extra stock added while on route has been automatically added into the <strong>Total Loaded</strong> column below.</span>
+                        <label class="block font-bold text-slate-700 mb-1">Return / Settlement Time *</label>
+                        <input type="time" name="settlement_time" value="15:00" required class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold font-mono text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Return Notes / Reason</label>
+                        <input type="text" name="notes" placeholder="e.g. 3.00 PM Evening return completed" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none">
                     </div>
                 </div>
-                <span class="px-2 py-1 bg-orange-200/80 rounded-lg font-mono font-bold text-orange-800 text-[11px]">
-                    +<?= array_sum(array_column($settleDispatchReloads, 'total_reload_qty')) ?> Units Added Mid-Day
-                </span>
+
+                <?php if (!empty($settleDispatchReloads)): ?>
+                <div class="p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-900 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-truck-ramp-box text-orange-600"></i>
+                        <span>Includes <strong><?= count($settleDispatchReloads) ?> Mid-Day Reload(s)</strong>: Extra stock automatically added into Total Loaded.</span>
+                    </div>
+                    <span class="px-2 py-0.5 bg-orange-200/80 rounded-lg font-mono font-bold text-orange-800 text-[11px]">
+                        +<?= array_sum(array_column($settleDispatchReloads, 'total_reload_qty')) ?> Units Added
+                    </span>
+                </div>
+                <?php endif; ?>
+
+                <!-- Quick Action Buttons & Search Filter -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="settleSearchInput" placeholder="Search loaded product name or code..." oninput="filterSettleList()"
+                               class="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-8 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500">
+                        <button type="button" id="settleSearchClearBtn" onclick="clearSettleSearch()" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs p-0.5">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-1.5 shrink-0 text-xs">
+                        <button type="button" onclick="quickSettleAction('all_sold')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold flex items-center transition shadow-2xs">
+                            <i class="fa-solid fa-bolt mr-1 text-emerald-600"></i> All Sold (0 Returns)
+                        </button>
+                        <button type="button" onclick="quickSettleAction('return_all')" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold flex items-center transition shadow-2xs">
+                            <i class="fa-solid fa-rotate-left mr-1 text-purple-600"></i> Return All to Store
+                        </button>
+                    </div>
+                </div>
             </div>
-            <?php endif; ?>
 
             <!-- Pure Quantity Reconciliation Table -->
-            <div class="border border-slate-200 rounded-2xl overflow-x-auto">
-                <table class="w-full text-left text-xs min-w-[500px]">
-                    <thead class="bg-slate-100 text-slate-700 uppercase text-[10px] font-bold">
+            <div class="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-white">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-100/95 sticky top-0 z-10 text-slate-500 uppercase text-[11px] font-extrabold border-b border-slate-200 backdrop-blur-xs">
                         <tr>
-                            <th class="py-2.5 px-3">Product Name</th>
-                            <th class="py-2.5 px-3 text-center">
+                            <th class="py-2.5 px-3 min-w-[200px]">Product Description</th>
+                            <th class="py-2.5 px-3 text-center min-w-[110px]">
                                 Total Loaded
                                 <?php if (!empty($settleDispatchReloads)): ?>
-                                    <span class="text-[9px] block text-amber-600 font-semibold">(Morning + Reloads)</span>
+                                    <span class="text-[9px] block text-amber-600 font-semibold">(+Reloads)</span>
                                 <?php endif; ?>
                             </th>
-                            <th class="py-2.5 px-3 text-center text-purple-700">Good Returns (To Store)</th>
-                            <th class="py-2.5 px-3 text-center text-rose-700">Melted / Damaged</th>
-                            <th class="py-2.5 px-3 text-center text-emerald-700 font-extrabold">Delivered Units</th>
+                            <th class="py-2.5 px-3 text-center min-w-[130px] text-purple-700">Good Returns (To Store)</th>
+                            <th class="py-2.5 px-3 text-center min-w-[130px] text-rose-700">Melted / Damaged</th>
+                            <th class="py-2.5 px-3 text-right min-w-[110px] text-emerald-700">Delivered Units</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-slate-100" id="settleTableBody">
                         <?php foreach ($settleDispatchItems as $it): 
                             $uType = $it['unit_type'] ?? 'box';
                             $uLabel = ($uType === 'piece') ? 'Pieces' : 'Boxes';
                             $uIcon = ($uType === 'piece') ? '🍦' : '📦';
                         ?>
-                            <tr class="settle-item-row" data-loaded="<?= $it['loaded_qty'] ?>">
+                            <tr class="settle-item-row hover:bg-slate-50/60 transition" 
+                                data-loaded="<?= $it['loaded_qty'] ?>"
+                                data-unit="<?= $uLabel ?>"
+                                data-search="<?= htmlspecialchars(strtolower($it['product_name'] . ' ' . $it['product_code'])) ?>">
                                 <input type="hidden" name="item_id[]" value="<?= $it['id'] ?>">
-                                <td class="p-2.5 font-bold text-slate-800">
-                                    <?= htmlspecialchars($it['product_name']) ?>
+                                
+                                <!-- Product Info -->
+                                <td class="py-2.5 px-3">
+                                    <div class="font-bold text-slate-800 text-xs"><?= htmlspecialchars($it['product_name']) ?></div>
                                     <div class="text-[10px] text-slate-400 font-mono mt-0.5">
-                                        <?= htmlspecialchars($it['product_code']) ?> &bull; 
-                                        <span class="font-bold <?= $uType === 'piece' ? 'text-sky-700' : 'text-amber-700' ?>"><?= $uIcon ?> <?= $uLabel ?></span>
+                                        <span><?= htmlspecialchars($it['product_code']) ?></span> &bull; 
+                                        <span class="font-bold <?= $uType === 'piece' ? 'text-amber-700' : 'text-emerald-700' ?>"><?= $uIcon ?> <?= $uLabel ?></span>
                                     </div>
                                 </td>
-                                <td class="p-2.5 text-center font-mono font-black text-amber-700 text-sm loaded-val">
-                                    <?= $it['loaded_qty'] ?> <span class="text-[10px] font-normal text-slate-400"><?= $uLabel ?></span>
+
+                                <!-- Total Loaded -->
+                                <td class="py-2.5 px-3 text-center font-mono font-black text-slate-800 text-xs loaded-val whitespace-nowrap">
+                                    <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+                                        <?= $it['loaded_qty'] ?> <?= $uLabel ?>
+                                    </span>
                                 </td>
-                                <td class="p-2.5">
-                                    <input type="number" name="return_store_qty[]" min="0" max="<?= $it['loaded_qty'] ?>" value="0" 
-                                           oninput="recalcSettleRow(this)" required 
-                                           class="w-24 mx-auto block p-2 text-center bg-purple-50 border border-purple-300 text-purple-800 rounded-xl font-mono font-bold text-xs return-input">
+
+                                <!-- Good Returns Input -->
+                                <td class="py-2.5 px-3 text-center">
+                                    <div class="relative max-w-[120px] mx-auto">
+                                        <span class="absolute left-2 top-1.5 text-[11px]"><?= $uIcon ?></span>
+                                        <input type="number" name="return_store_qty[]" min="0" max="<?= $it['loaded_qty'] ?>" value="0" 
+                                               oninput="recalcSettleRow(this)" required 
+                                               class="w-full pl-6 pr-2 py-1.5 text-center bg-purple-50/80 border border-purple-200 text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none rounded-xl font-mono font-bold text-xs return-input">
+                                    </div>
                                 </td>
-                                <td class="p-2.5">
-                                    <input type="number" name="damage_qty[]" min="0" max="<?= $it['loaded_qty'] ?>" value="0" 
-                                           oninput="recalcSettleRow(this)" required 
-                                           class="w-24 mx-auto block p-2 text-center bg-rose-50 border border-rose-300 text-rose-800 rounded-xl font-mono font-bold text-xs damage-input">
+
+                                <!-- Damaged Input -->
+                                <td class="py-2.5 px-3 text-center">
+                                    <div class="relative max-w-[120px] mx-auto">
+                                        <span class="absolute left-2 top-1.5 text-[11px]">⚠️</span>
+                                        <input type="number" name="damage_qty[]" min="0" max="<?= $it['loaded_qty'] ?>" value="0" 
+                                               oninput="recalcSettleRow(this)" required 
+                                               class="w-full pl-6 pr-2 py-1.5 text-center bg-rose-50/80 border border-rose-200 text-rose-900 focus:ring-2 focus:ring-rose-500 focus:outline-none rounded-xl font-mono font-bold text-xs damage-input">
+                                    </div>
                                 </td>
-                                <td class="p-2.5 text-center font-mono font-black text-emerald-700 text-base delivered-val">
-                                    <?= $it['loaded_qty'] ?> <span class="text-[10px] font-normal text-slate-400"><?= $uLabel ?></span>
+
+                                <!-- Delivered Calculated Output -->
+                                <td class="py-2.5 px-3 text-right font-mono font-black text-emerald-700 text-xs delivered-val whitespace-nowrap">
+                                    <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                        <span class="delivered-number"><?= $it['loaded_qty'] ?></span> <?= $uLabel ?>
+                                    </span>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -1350,16 +1401,40 @@ require_once __DIR__ . '/includes/header.php';
                 </table>
             </div>
 
-            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 flex justify-between items-center">
-                <span>Formula: <strong>Loaded = Good Returns + Damaged + Delivered</strong></span>
-                <span class="text-emerald-700 font-bold"><i class="fa-solid fa-circle-check mr-1"></i> 100% Quantity Balanced</span>
-            </div>
+            <!-- Sticky Bottom Summary Cards & Submit -->
+            <div class="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 shrink-0 space-y-3">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                    <div class="p-2 bg-amber-50/80 border border-amber-200 rounded-xl">
+                        <span class="text-[10px] uppercase font-bold text-amber-700 block">Total Loaded</span>
+                        <strong class="text-sm font-mono font-black text-amber-900" id="settleSummaryLoaded">0 Units</strong>
+                    </div>
+                    <div class="p-2 bg-purple-50/80 border border-purple-200 rounded-xl">
+                        <span class="text-[10px] uppercase font-bold text-purple-700 block">Good Returns (Restock)</span>
+                        <strong class="text-sm font-mono font-black text-purple-900" id="settleSummaryReturns">0 Units</strong>
+                    </div>
+                    <div class="p-2 bg-rose-50/80 border border-rose-200 rounded-xl">
+                        <span class="text-[10px] uppercase font-bold text-rose-700 block">Melted / Damaged</span>
+                        <strong class="text-sm font-mono font-black text-rose-900" id="settleSummaryDamages">0 Units</strong>
+                    </div>
+                    <div class="p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+                        <span class="text-[10px] uppercase font-bold text-emerald-700 block">Delivered / Sold</span>
+                        <strong class="text-sm font-mono font-black text-emerald-900" id="settleSummaryDelivered">0 Units</strong>
+                    </div>
+                </div>
 
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
-                <a href="lorry.php" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</a>
-                <button type="submit" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-200">
-                    <i class="fa-solid fa-check-double mr-1.5"></i> Confirm 3:00 PM Return & Restock
-                </button>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-slate-200/80">
+                    <div class="flex items-center text-xs font-bold text-emerald-700">
+                        <i class="fa-solid fa-circle-check mr-1.5 text-sm"></i>
+                        <span>Formula: <strong>Loaded = Good Returns + Damaged + Delivered</strong></span>
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-2">
+                        <a href="lorry.php" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition">Cancel</a>
+                        <button type="submit" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-200 transition">
+                            <i class="fa-solid fa-check-double mr-1.5"></i> Confirm 3:00 PM Return & Restock
+                        </button>
+                    </div>
+                </div>
             </div>
         </form>
     </div>
@@ -1836,19 +1911,109 @@ require_once __DIR__ . '/includes/header.php';
 
     function recalcSettleRow(inputEl) {
         const row = inputEl.closest('tr');
+        if (!row) return;
         const loaded = parseInt(row.dataset.loaded) || 0;
-        const retStore = parseInt(row.querySelector('.return-input').value) || 0;
-        const damage = parseInt(row.querySelector('.damage-input').value) || 0;
+        const unit = row.dataset.unit || 'Units';
+        const retInput = row.querySelector('.return-input');
+        const dmgInput = row.querySelector('.damage-input');
+        const delNumSpan = row.querySelector('.delivered-number');
 
-        let delivered = loaded - (retStore + damage);
-        if (delivered < 0) {
-            showToast('Returns + Damages cannot exceed Loaded units (' + loaded + ')!', 'error', 'Quantity Exceeded');
-            inputEl.value = 0;
-            delivered = loaded;
+        let retStore = parseInt(retInput ? retInput.value : 0) || 0;
+        let damage = parseInt(dmgInput ? dmgInput.value : 0) || 0;
+
+        if ((retStore + damage) > loaded) {
+            showToast('Returns + Damages cannot exceed Loaded quantity (' + loaded + ')!', 'error', 'Quantity Exceeded');
+            if (inputEl) inputEl.value = 0;
+            retStore = parseInt(retInput ? retInput.value : 0) || 0;
+            damage = parseInt(dmgInput ? dmgInput.value : 0) || 0;
         }
 
-        row.querySelector('.delivered-val').innerText = delivered;
+        const delivered = Math.max(0, loaded - (retStore + damage));
+        if (delNumSpan) {
+            delNumSpan.innerText = delivered;
+        }
+        updateSettleSummary();
     }
+
+    function filterSettleList() {
+        const query = (document.getElementById('settleSearchInput').value || '').trim();
+        const rows = document.querySelectorAll('#settleTableBody tr.settle-item-row');
+        rows.forEach(r => {
+            const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
+            r.style.display = smartMatch(text, query) ? '' : 'none';
+        });
+        const clearBtn = document.getElementById('settleSearchClearBtn');
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !query);
+        }
+    }
+
+    function clearSettleSearch() {
+        const input = document.getElementById('settleSearchInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        filterSettleList();
+    }
+
+    function quickSettleAction(actionType) {
+        const rows = document.querySelectorAll('#settleTableBody tr.settle-item-row');
+        rows.forEach(row => {
+            const loaded = parseInt(row.dataset.loaded) || 0;
+            const retInput = row.querySelector('.return-input');
+            const dmgInput = row.querySelector('.damage-input');
+            const delNumSpan = row.querySelector('.delivered-number');
+
+            if (actionType === 'all_sold') {
+                if (retInput) retInput.value = 0;
+                if (dmgInput) dmgInput.value = 0;
+                if (delNumSpan) delNumSpan.innerText = loaded;
+            } else if (actionType === 'return_all') {
+                if (retInput) retInput.value = loaded;
+                if (dmgInput) dmgInput.value = 0;
+                if (delNumSpan) delNumSpan.innerText = 0;
+            }
+        });
+        updateSettleSummary();
+    }
+
+    function updateSettleSummary() {
+        let totalLoaded = 0;
+        let totalReturns = 0;
+        let totalDamages = 0;
+        let totalDelivered = 0;
+
+        const rows = document.querySelectorAll('#settleTableBody tr.settle-item-row');
+        rows.forEach(row => {
+            const loaded = parseInt(row.dataset.loaded) || 0;
+            const retStore = parseInt(row.querySelector('.return-input') ? row.querySelector('.return-input').value : 0) || 0;
+            const damage = parseInt(row.querySelector('.damage-input') ? row.querySelector('.damage-input').value : 0) || 0;
+            const delivered = Math.max(0, loaded - (retStore + damage));
+
+            totalLoaded += loaded;
+            totalReturns += retStore;
+            totalDamages += damage;
+            totalDelivered += delivered;
+        });
+
+        const elLoaded = document.getElementById('settleSummaryLoaded');
+        const elReturns = document.getElementById('settleSummaryReturns');
+        const elDamages = document.getElementById('settleSummaryDamages');
+        const elDelivered = document.getElementById('settleSummaryDelivered');
+
+        if (elLoaded) elLoaded.innerText = totalLoaded.toLocaleString() + ' Units';
+        if (elReturns) elReturns.innerText = totalReturns.toLocaleString() + ' Units';
+        if (elDamages) elDamages.innerText = totalDamages.toLocaleString() + ' Units';
+        if (elDelivered) elDelivered.innerText = totalDelivered.toLocaleString() + ' Units';
+    }
+
+    // Auto-calculate settlement summary on load if modal is open
+    document.addEventListener('DOMContentLoaded', function() {
+        if (document.getElementById('settleModal')) {
+            updateSettleSummary();
+        }
+    });
 
     // --- Mid-Day Lorry Reload / Top-up Checklist Functions ---
 

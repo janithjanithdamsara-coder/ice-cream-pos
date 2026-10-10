@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $issueTime = trim($_POST['issue_time'] ?? date('H:i'));
         $notes = trim($_POST['notes'] ?? '');
         $productIds = $_POST['product_id'] ?? [];
+        $selectedProducts = $_POST['selected_products'] ?? [];
         $boxQtys = $_POST['box_qty'] ?? [];
         $piecesQtys = $_POST['pieces_qty'] ?? [];
         $quantities = $_POST['quantity'] ?? [];
@@ -29,60 +30,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $recipient = 'Direct Customer / Agent';
         }
 
-        if (empty($productIds)) {
-            setFlash('danger', 'Please select at least one product to issue.');
-        } else {
-            try {
-                $pdo->beginTransaction();
+        try {
+            $pdo->beginTransaction();
 
-                $issueNo = 'ISU-' . date('ymd') . '-' . rand(1000, 9999);
-                $totalUnits = 0;
-                $totalBoxes = 0;
-                $totalPieces = 0;
-                $itemsToIssue = [];
+            $issueNo = 'ISU-' . date('ymd') . '-' . rand(1000, 9999);
+            $totalUnits = 0;
+            $totalBoxes = 0;
+            $totalPieces = 0;
+            $itemsToIssue = [];
 
+            // Identify all products with entered quantity
+            $pidsToProcess = [];
+            if (!empty($selectedProducts)) {
+                foreach ($selectedProducts as $spid) {
+                    $spid = intval($spid);
+                    if ($spid > 0) $pidsToProcess[$spid] = $spid;
+                }
+            }
+            if (!empty($productIds)) {
                 foreach ($productIds as $idx => $pid) {
                     $pid = intval($pid);
-                    $bQty = intval($boxQtys[$idx] ?? 0);
-                    $pQty = intval($piecesQtys[$idx] ?? 0);
-                    $legacyQty = intval($quantities[$idx] ?? 0);
-
-                    if ($pid > 0) {
-                        if ($bQty > 0) {
-                            $itemsToIssue[] = [
-                                'product_id' => $pid,
-                                'unit_type' => 'box',
-                                'box_qty' => $bQty,
-                                'pieces_qty' => 0,
-                                'qty' => $bQty
-                            ];
-                        } elseif ($pQty > 0) {
-                            $itemsToIssue[] = [
-                                'product_id' => $pid,
-                                'unit_type' => 'piece',
-                                'box_qty' => 0,
-                                'pieces_qty' => $pQty,
-                                'qty' => $pQty
-                            ];
-                        } elseif ($legacyQty > 0) {
-                            $itemsToIssue[] = [
-                                'product_id' => $pid,
-                                'unit_type' => 'box',
-                                'box_qty' => $legacyQty,
-                                'pieces_qty' => 0,
-                                'qty' => $legacyQty
-                            ];
-                        }
-                    }
+                    if ($pid > 0) $pidsToProcess[$pid] = $idx;
                 }
+            }
+            foreach ($boxQtys as $k => $v) {
+                if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = $k;
+            }
+            foreach ($piecesQtys as $k => $v) {
+                if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = $k;
+            }
 
-                if (empty($itemsToIssue)) {
-                    throw new Exception("Please enter a Box or Pieces quantity greater than 0 for at least one item.");
+            foreach ($pidsToProcess as $pid => $key) {
+                $bQty = intval($boxQtys[$pid] ?? ($boxQtys[$key] ?? 0));
+                $pQty = intval($piecesQtys[$pid] ?? ($piecesQtys[$key] ?? 0));
+                $legacyQty = intval($quantities[$pid] ?? ($quantities[$key] ?? 0));
+
+                if ($bQty > 0) {
+                    $itemsToIssue[] = [
+                        'product_id' => $pid,
+                        'unit_type' => 'box',
+                        'box_qty' => $bQty,
+                        'pieces_qty' => 0,
+                        'qty' => $bQty
+                    ];
+                } elseif ($pQty > 0) {
+                    $itemsToIssue[] = [
+                        'product_id' => $pid,
+                        'unit_type' => 'piece',
+                        'box_qty' => 0,
+                        'pieces_qty' => $pQty,
+                        'qty' => $pQty
+                    ];
+                } elseif ($legacyQty > 0) {
+                    $itemsToIssue[] = [
+                        'product_id' => $pid,
+                        'unit_type' => 'box',
+                        'box_qty' => $legacyQty,
+                        'pieces_qty' => 0,
+                        'qty' => $legacyQty
+                    ];
                 }
+            }
 
-                // Validate stock availability
-                foreach ($itemsToIssue as $item) {
-                    $pid = $item['product_id'];
+            if (empty($itemsToIssue)) {
+                throw new Exception("Please enter a Box or Pieces quantity greater than 0 for at least one item.");
+            }
+
+            // Validate stock availability
+            foreach ($itemsToIssue as $item) {
+                $pid = $item['product_id'];
                     $uType = $item['unit_type'];
                     $bQty = $item['box_qty'];
                     $pQty = $item['pieces_qty'];
@@ -163,7 +179,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header("Location: direct_issue.php");
                 exit;
             }
-        }
     }
 
     // Action 2: Cancel / Delete Direct Store Issue (Restores Stock)
@@ -639,19 +654,19 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- ========================= CREATE DIRECT ISSUE MODAL ========================= -->
-<div id="issueModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 hidden">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+<!-- ========================= CREATE DIRECT ISSUE MODAL (BULK CHECKLIST TABLE) ========================= -->
+<div id="issueModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         <!-- Modal Header -->
-        <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+        <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600 text-white shrink-0">
             <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner">
                     <i class="fa-solid fa-arrow-up-from-bracket text-lg"></i>
                 </div>
                 <div>
-                    <h3 class="text-base font-black tracking-tight">Direct Store Issue Note (Store Out)</h3>
-                    <p class="text-xs text-emerald-100">Dispatches ice creams directly from Cold Room (Zero Money).</p>
+                    <h3 class="text-base font-black tracking-tight">Direct Store Issue Note (Store Out / GDN)</h3>
+                    <p class="text-xs text-emerald-100">Dispatches ice creams directly from Cold Room (Zero Money &bull; Units Only).</p>
                 </div>
             </div>
             <button type="button" onclick="closeIssueModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
@@ -660,78 +675,164 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- Modal Body (Form) -->
-        <form method="POST" action="direct_issue.php" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" id="issueForm">
+        <form method="POST" action="direct_issue.php" class="flex-1 flex flex-col min-h-0 overflow-hidden" id="issueForm" onsubmit="return validateIssueForm()">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="create_issue">
 
-            <!-- Meta details -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Issue Date</label>
-                    <input type="date" name="issue_date" value="<?= date('Y-m-d') ?>" required
-                           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Issue Time</label>
-                    <input type="time" name="issue_time" value="<?= date('H:i') ?>" required
-                           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Recipient / Agent Name</label>
-                    <input type="text" name="recipient_name" placeholder="e.g. Agent Silva / Beach Stall / Event" required
-                           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-            </div>
-
-            <!-- Notes -->
-            <div>
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Dispatch Reason / Reference Notes</label>
-                <input type="text" name="notes" placeholder="e.g. Wholesale pickup, direct supply, special request"
-                       class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
-
-            <!-- Product Selection Table -->
-            <div class="border border-slate-200 rounded-2xl overflow-hidden">
-                <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-600">Select Items to Issue Out (Box or Pieces)</span>
-                    <button type="button" onclick="addIssueRow()" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center">
-                        <i class="fa-solid fa-plus-circle mr-1"></i> Add Another Item
-                    </button>
-                </div>
-
-                <!-- Table Header for clarity -->
-                <div class="hidden sm:grid grid-cols-12 gap-2 px-3 pt-2.5 pb-1 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    <div class="col-span-6">Ice Cream Product</div>
-                    <div class="col-span-3 text-center">📦 Box Qty</div>
-                    <div class="col-span-2 text-center">🍦 Pieces Qty</div>
-                    <div class="col-span-1 text-center">Del</div>
-                </div>
-
-                <div class="p-3 space-y-3" id="issueItemsContainer">
-                    <!-- Dynamic Rows appended here -->
-                </div>
-
-                <div class="bg-emerald-50/60 p-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                    <div class="flex items-center space-x-3 text-xs">
-                        <span class="text-slate-500">Summary:</span>
-                        <span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold" id="totalBoxesBadge">📦 Boxes: 0</span>
-                        <span class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 font-bold" id="totalPiecesBadge">🍦 Pieces: 0</span>
+            <!-- Meta details (Top Section) -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200 shrink-0 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Issue Date *</label>
+                        <input type="date" name="issue_date" value="<?= date('Y-m-d') ?>" required
+                               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     </div>
                     <div>
-                        <span class="text-slate-500 mr-1">Total Units:</span>
-                        <span id="totalUnitsBadge" class="text-sm font-black text-emerald-700 font-mono">0 Units</span>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Issue Time *</label>
+                        <input type="time" name="issue_time" value="<?= date('H:i') ?>" required
+                               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Recipient / Agent Name *</label>
+                        <input type="text" name="recipient_name" placeholder="e.g. Agent Nimal / Beach Outlet / Event" required
+                               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Dispatch Reason / Reference Notes</label>
+                    <input type="text" name="notes" placeholder="e.g. Wholesale pickup, direct supply, special order"
+                           class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <!-- Search & Filter Bar -->
+                <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="issueSearchInput" placeholder="Search product name or code..." oninput="filterIssueList()"
+                               class="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-8 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <button type="button" id="issueSearchClearBtn" onclick="clearIssueSearch()" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs p-0.5">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <button type="button" onclick="clearIssueSearch()" class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-bold text-slate-600">
+                            Clear Search
+                        </button>
+                        <button type="button" onclick="toggleSelectAllIssue(false)" class="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[11px] font-bold text-rose-700">
+                            Deselect All
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Footer Submit -->
-            <div class="pt-2 flex items-center justify-end space-x-2">
-                <button type="button" onclick="closeIssueModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition">
-                    Cancel
-                </button>
-                <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 hover:from-emerald-700 hover:to-teal-700 transition">
-                    <i class="fa-solid fa-check mr-1.5"></i> Confirm & Issue Units Out
-                </button>
+            <!-- Product Selection Table (Scrollable Body) -->
+            <div class="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-white">
+                <table class="w-full text-xs text-left border-collapse">
+                    <thead class="bg-slate-100/90 sticky top-0 z-10 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 text-[11px] backdrop-blur-xs">
+                        <tr>
+                            <th class="py-2.5 px-3 w-10 text-center">
+                                <input type="checkbox" id="masterIssueCheckbox" onchange="toggleSelectAllIssue(this.checked)" class="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                            </th>
+                            <th class="py-2.5 px-3 min-w-[200px]">Product Description</th>
+                            <th class="py-2.5 px-3 text-center min-w-[130px]">Cold Room Stock</th>
+                            <th class="py-2.5 px-3 text-center min-w-[120px]">📦 Issue Boxes</th>
+                            <th class="py-2.5 px-3 text-center min-w-[120px]">🍦 Issue Pieces</th>
+                            <th class="py-2.5 px-3 text-right min-w-[100px]">Total Out</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100" id="issueBulkTableBody">
+                        <?php foreach ($availableProducts as $p): 
+                            $pid = $p['id'];
+                            $pStock = intval($p['stock'] ?? 0);
+                            $pBoxes = intval($p['store_boxes'] ?? 0);
+                            $pPieces = intval($p['store_pieces'] ?? 0);
+                            $hasStock = ($pBoxes > 0 || $pPieces > 0);
+                        ?>
+                        <tr class="hover:bg-emerald-50/40 transition-colors issue-item-row <?= !$hasStock ? 'opacity-50' : '' ?>" 
+                            id="issue_row_<?= $pid ?>" 
+                            data-pid="<?= $pid ?>"
+                            data-search="<?= htmlspecialchars(strtolower($p['name'] . ' ' . $p['code'] . ' ' . ($p['flavor'] ?? '') . ' ' . ($p['size'] ?? ''))) ?>">
+                            
+                            <!-- Checkbox -->
+                            <td class="py-2.5 px-3 text-center">
+                                <input type="checkbox" name="selected_products[]" value="<?= $pid ?>" id="issue_chk_<?= $pid ?>"
+                                       onchange="handleIssueCheck(<?= $pid ?>)"
+                                       class="issue-checkbox rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer <?= !$hasStock ? 'disabled opacity-30 cursor-not-allowed' : '' ?>">
+                            </td>
+
+                            <!-- Product Description -->
+                            <td class="py-2.5 px-3">
+                                <div class="font-bold text-slate-800 text-xs"><?= htmlspecialchars($p['name']) ?></div>
+                                <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                                    <span><?= htmlspecialchars($p['code']) ?></span> &bull;
+                                    <span><?= htmlspecialchars($p['flavor'] ?? 'Standard') ?></span> &bull;
+                                    <span><?= htmlspecialchars($p['size'] ?? '') ?></span>
+                                </div>
+                            </td>
+
+                            <!-- Cold Room Stock Badge -->
+                            <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                                <?php if ($hasStock): ?>
+                                    <span class="inline-flex items-center gap-1 font-mono font-bold text-[11px]">
+                                        <span class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">📦 <?= $pBoxes ?> Bx</span>
+                                        <span class="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">🍦 <?= $pPieces ?> Pcs</span>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-block px-2 py-0.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-bold">
+                                        0 Out of stock
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+
+                            <!-- Box Qty Input -->
+                            <td class="py-2.5 px-3 text-center">
+                                <div class="relative max-w-[110px] mx-auto">
+                                    <span class="absolute left-2 top-1.5 text-[11px]">📦</span>
+                                    <input type="number" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" min="0" max="<?= $pBoxes ?>" placeholder="0"
+                                           oninput="handleIssueInput(<?= $pid ?>, 'box', <?= $pBoxes ?>, <?= $pPieces ?>)"
+                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
+                                </div>
+                            </td>
+
+                            <!-- Pieces Qty Input -->
+                            <td class="py-2.5 px-3 text-center">
+                                <div class="relative max-w-[110px] mx-auto">
+                                    <span class="absolute left-2 top-1.5 text-[11px]">🍦</span>
+                                    <input type="number" name="pieces_qty[<?= $pid ?>]" id="issue_pcs_<?= $pid ?>" min="0" max="<?= $pPieces ?>" placeholder="0"
+                                           oninput="handleIssueInput(<?= $pid ?>, 'piece', <?= $pBoxes ?>, <?= $pPieces ?>)"
+                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-right">
+                                </div>
+                            </td>
+
+                            <!-- Row Total -->
+                            <td class="py-2.5 px-3 text-right font-black font-mono text-xs text-slate-700 whitespace-nowrap" id="issue_total_<?= $pid ?>">
+                                0
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sticky Summary Footer -->
+            <div class="p-3 sm:p-4 bg-emerald-50/80 border-t border-emerald-200 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-700">
+                    <span class="text-slate-500">Summary:</span>
+                    <span class="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-900 font-black font-mono text-xs" id="totalIssueBoxesBadge">📦 Boxes: 0</span>
+                    <span class="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-black font-mono text-xs" id="totalIssuePiecesBadge">🍦 Pieces: 0</span>
+                    <span class="px-3 py-1 rounded-xl bg-slate-900 text-white font-black font-mono text-xs" id="totalIssueUnitsBadge">Total: 0 Units</span>
+                </div>
+
+                <div class="flex items-center justify-end space-x-2 shrink-0">
+                    <button type="button" onclick="closeIssueModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 hover:from-emerald-700 hover:to-teal-700 transition">
+                        <i class="fa-solid fa-check mr-1.5"></i> Confirm & Issue Units Out
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -739,173 +840,243 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- JavaScript for Dynamic Modal and Calculations -->
 <script>
-const productsCatalog = <?= json_encode($availableProducts) ?>;
-
 function openIssueModal() {
-    const container = document.getElementById('issueItemsContainer');
-    container.innerHTML = '';
-    addIssueRow();
     document.getElementById('issueModal').classList.remove('hidden');
+    updateIssueTotals();
+    setTimeout(() => {
+        const search = document.getElementById('issueSearchInput');
+        if (search) search.focus();
+    }, 100);
 }
 
 function closeIssueModal() {
     document.getElementById('issueModal').classList.add('hidden');
 }
 
-function addIssueRow() {
-    const container = document.getElementById('issueItemsContainer');
-    const rowId = 'row_' + Date.now() + '_' + Math.floor(Math.random() * 100);
+function smartMatchIssue(targetText, query) {
+    if (!query) return true;
+    const cleanQuery = query.toLowerCase().trim();
+    if (!cleanQuery) return true;
 
-    let optionsHtml = '<option value="">-- Choose Ice Cream --</option>';
-    productsCatalog.forEach(p => {
-        const b = parseInt(p.store_boxes || 0);
-        const pcs = parseInt(p.store_pieces || 0);
-        const stockLabel = (b === 0 && pcs === 0) ? '0 Out of stock' : `${b} Bx + ${pcs} Pcs`;
-        optionsHtml += `<option value="${p.id}" data-boxes="${b}" data-pieces="${pcs}" data-stock="${p.stock}">
-            ${p.name} (${p.flavor || 'Standard'}) [Stock: ${stockLabel}]
-        </option>`;
+    const normalize = s => {
+        return (s || '').toLowerCase()
+            .replace(/වැනිලා|වැනිල/g, 'vanilla')
+            .replace(/චොක්ලට්|චොකලට්|චොකො/g, 'chocolate')
+            .replace(/ස්ට්‍රෝබෙරි|ස්ට්‍රෝබරි/g, 'strawberry')
+            .replace(/කිතුල්|කිටුල්/g, 'kithul')
+            .replace(/කෝන්/g, 'cone')
+            .replace(/කප්/g, 'cup')
+            .replace(/ටබ්/g, 'tub')
+            .replace(/අයිස්ක්‍රීම්|අයිස්/g, 'ice')
+            .replace(/choclate|choclet/g, 'chocolate')
+            .replace(/kitul/g, 'kithul')
+            .replace(/strawbery/g, 'strawberry')
+            .replace(/[()[\]\-&.,/]/g, ' ')
+            .trim();
+    };
+
+    const rawTarget = (targetText || '').toLowerCase();
+    const normTarget = normalize(rawTarget);
+    const words = cleanQuery.split(/\s+/).filter(Boolean);
+
+    return words.every(w => {
+        const normW = normalize(w);
+        return rawTarget.includes(w) || normTarget.includes(normW) || normTarget.includes(w);
     });
-
-    const rowDiv = document.createElement('div');
-    rowDiv.id = rowId;
-    rowDiv.className = 'grid grid-cols-12 gap-2 items-center bg-slate-50/70 p-2.5 rounded-xl border border-slate-200';
-
-    rowDiv.innerHTML = `
-        <div class="col-span-12 sm:col-span-6">
-            <select name="product_id[]" required onchange="handleProductSelect('${rowId}', this)"
-                    class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                ${optionsHtml}
-            </select>
-            <div id="${rowId}_stock_info" class="text-[10px] text-slate-500 mt-1 ml-1 flex items-center gap-1.5 font-medium">
-                <span class="text-slate-400">Available:</span> <span>Select an item</span>
-            </div>
-        </div>
-        <div class="col-span-5 sm:col-span-3">
-            <div class="relative">
-                <span class="absolute left-2 top-1.5 text-[11px]">📦</span>
-                <input type="number" name="box_qty[]" min="0" placeholder="Boxes" oninput="handleRowInput('${rowId}', 'box')"
-                       class="w-full bg-white border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
-            </div>
-        </div>
-        <div class="col-span-5 sm:col-span-2">
-            <div class="relative">
-                <span class="absolute left-2 top-1.5 text-[11px]">🍦</span>
-                <input type="number" name="pieces_qty[]" min="0" placeholder="Pieces" oninput="handleRowInput('${rowId}', 'piece')"
-                       class="w-full bg-white border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-right">
-            </div>
-        </div>
-        <div class="col-span-2 sm:col-span-1 text-center">
-            <button type="button" onclick="removeIssueRow('${rowId}')" class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs flex items-center justify-center mx-auto transition">
-                <i class="fa-solid fa-trash-can"></i>
-            </button>
-        </div>
-    `;
-
-    container.appendChild(rowDiv);
 }
 
-function handleProductSelect(rowId, selectElem) {
-    const selectedOption = selectElem.options[selectElem.selectedIndex];
-    const boxes = parseInt(selectedOption.getAttribute('data-boxes') || 0);
-    const pieces = parseInt(selectedOption.getAttribute('data-pieces') || 0);
-    const infoDiv = document.getElementById(`${rowId}_stock_info`);
-    const boxInput = document.querySelector(`#${rowId} input[name="box_qty[]"]`);
-    const piecesInput = document.querySelector(`#${rowId} input[name="pieces_qty[]"]`);
-
-    if (selectedOption.value) {
-        let badgeHtml = `<span class="text-slate-500 font-bold">Cold Room:</span> `;
-        if (boxes === 0 && pieces === 0) {
-            badgeHtml += `<span class="text-rose-600 font-bold">0 Out of Stock</span>`;
-        } else {
-            badgeHtml += `<span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold font-mono">📦 ${boxes} Boxes</span>
-                          <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-bold font-mono">🍦 ${pieces} Pieces</span>`;
-        }
-        infoDiv.innerHTML = badgeHtml;
-        boxInput.max = boxes;
-        piecesInput.max = pieces;
-    } else {
-        infoDiv.innerHTML = `<span class="text-slate-400">Available:</span> <span>Select an item</span>`;
-        boxInput.removeAttribute('max');
-        piecesInput.removeAttribute('max');
+function filterIssueList() {
+    const query = (document.getElementById('issueSearchInput').value || '').trim();
+    const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
+    rows.forEach(r => {
+        const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
+        r.style.display = smartMatchIssue(text, query) ? '' : 'none';
+    });
+    const clearBtn = document.getElementById('issueSearchClearBtn');
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !query);
     }
-    calcTotalUnits();
 }
 
-function handleRowInput(rowId, changedType) {
-    const row = document.getElementById(rowId);
+function clearIssueSearch() {
+    const input = document.getElementById('issueSearchInput');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+    filterIssueList();
+}
+
+function toggleSelectAllIssue(isChecked) {
+    const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
+    rows.forEach(row => {
+        const chk = row.querySelector('.issue-checkbox');
+        if (chk && !chk.disabled && row.style.display !== 'none') {
+            chk.checked = isChecked;
+            if (isChecked) {
+                row.classList.add('bg-emerald-50/70');
+            } else {
+                row.classList.remove('bg-emerald-50/70');
+                const boxInp = row.querySelector('input[name^="box_qty"]');
+                const pcsInp = row.querySelector('input[name^="pieces_qty"]');
+                if (boxInp) boxInp.value = '';
+                if (pcsInp) pcsInp.value = '';
+                const tot = row.querySelector('[id^="issue_total_"]');
+                if (tot) tot.innerText = '0';
+            }
+        }
+    });
+    const master = document.getElementById('masterIssueCheckbox');
+    if (master) master.checked = isChecked;
+    updateIssueTotals();
+}
+
+function handleIssueCheck(pid) {
+    const row = document.getElementById('issue_row_' + pid);
+    const chk = document.getElementById('issue_chk_' + pid);
+    const boxInp = document.getElementById('issue_box_' + pid);
+    const pcsInp = document.getElementById('issue_pcs_' + pid);
+    if (!row || !chk) return;
+
+    if (chk.checked) {
+        row.classList.add('bg-emerald-50/70');
+        const b = parseInt(boxInp ? boxInp.value : 0) || 0;
+        const p = parseInt(pcsInp ? pcsInp.value : 0) || 0;
+        if (b === 0 && p === 0) {
+            if (boxInp && !boxInp.disabled) {
+                boxInp.focus();
+                boxInp.select();
+            } else if (pcsInp && !pcsInp.disabled) {
+                pcsInp.focus();
+                pcsInp.select();
+            }
+        }
+    } else {
+        row.classList.remove('bg-emerald-50/70');
+        if (boxInp) boxInp.value = '';
+        if (pcsInp) pcsInp.value = '';
+        const tot = document.getElementById('issue_total_' + pid);
+        if (tot) tot.innerText = '0';
+    }
+    updateIssueTotals();
+}
+
+function handleIssueInput(pid, changedType, maxBoxes, maxPieces) {
+    const row = document.getElementById('issue_row_' + pid);
+    const chk = document.getElementById('issue_chk_' + pid);
+    const boxInp = document.getElementById('issue_box_' + pid);
+    const pcsInp = document.getElementById('issue_pcs_' + pid);
+    const totalElem = document.getElementById('issue_total_' + pid);
     if (!row) return;
 
-    const select = row.querySelector('select[name="product_id[]"]');
-    const boxInput = row.querySelector('input[name="box_qty[]"]');
-    const piecesInput = row.querySelector('input[name="pieces_qty[]"]');
-    const selectedOption = select.options[select.selectedIndex];
-
-    const maxBoxes = parseInt(selectedOption ? selectedOption.getAttribute('data-boxes') : 0) || 0;
-    const maxPieces = parseInt(selectedOption ? selectedOption.getAttribute('data-pieces') : 0) || 0;
+    let bVal = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
+    let pVal = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
 
     if (changedType === 'box') {
-        const val = parseInt(boxInput.value, 10);
-        if (!isNaN(val) && val > 0) {
-            piecesInput.value = '';
-            if (val > maxBoxes && selectedOption.value) {
-                boxInput.classList.add('border-rose-500', 'bg-rose-50');
+        if (bVal > 0) {
+            if (pcsInp) pcsInp.value = '';
+            pVal = 0;
+            if (bVal > maxBoxes) {
+                boxInp.classList.add('border-rose-500', 'bg-rose-50');
             } else {
-                boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+                boxInp.classList.remove('border-rose-500', 'bg-rose-50');
             }
         } else {
-            boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+            boxInp.classList.remove('border-rose-500', 'bg-rose-50');
         }
-        piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+        if (pcsInp) pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
     } else if (changedType === 'piece') {
-        const val = parseInt(piecesInput.value, 10);
-        if (!isNaN(val) && val > 0) {
-            boxInput.value = '';
-            if (val > maxPieces && selectedOption.value) {
-                piecesInput.classList.add('border-rose-500', 'bg-rose-50');
+        if (pVal > 0) {
+            if (boxInp) boxInp.value = '';
+            bVal = 0;
+            if (pVal > maxPieces) {
+                pcsInp.classList.add('border-rose-500', 'bg-rose-50');
             } else {
-                piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+                pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
             }
         } else {
-            piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+            pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
         }
-        boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+        if (boxInp) boxInp.classList.remove('border-rose-500', 'bg-rose-50');
     }
 
-    calcTotalUnits();
-}
-
-function removeIssueRow(rowId) {
-    const row = document.getElementById(rowId);
-    if (row) {
-        row.remove();
-        calcTotalUnits();
+    const rowTotal = bVal + pVal;
+    if (chk) {
+        chk.checked = rowTotal > 0;
+        if (chk.checked) {
+            row.classList.add('bg-emerald-50/70');
+        } else {
+            row.classList.remove('bg-emerald-50/70');
+        }
     }
+
+    if (totalElem) {
+        if (bVal > 0) {
+            totalElem.innerHTML = `<span class="text-emerald-700 font-bold font-mono">📦 ${bVal} Bx</span>`;
+        } else if (pVal > 0) {
+            totalElem.innerHTML = `<span class="text-amber-700 font-bold font-mono">🍦 ${pVal} Pcs</span>`;
+        } else {
+            totalElem.innerText = '0';
+        }
+    }
+
+    updateIssueTotals();
 }
 
-function calcTotalUnits() {
+function updateIssueTotals() {
     let totalBoxes = 0;
     let totalPieces = 0;
 
-    const boxInputs = document.querySelectorAll('#issueItemsContainer input[name="box_qty[]"]');
-    boxInputs.forEach(inp => {
-        const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) {
-            totalBoxes += val;
-        }
-    });
+    const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
+    rows.forEach(row => {
+        const pid = row.dataset.pid;
+        const boxInp = document.getElementById('issue_box_' + pid);
+        const pcsInp = document.getElementById('issue_pcs_' + pid);
 
-    const piecesInputs = document.querySelectorAll('#issueItemsContainer input[name="pieces_qty[]"]');
-    piecesInputs.forEach(inp => {
-        const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) {
-            totalPieces += val;
-        }
+        const b = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
+        const p = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
+
+        totalBoxes += b;
+        totalPieces += p;
     });
 
     const totalUnits = totalBoxes + totalPieces;
-    document.getElementById('totalBoxesBadge').innerText = `📦 Boxes: ${totalBoxes}`;
-    document.getElementById('totalPiecesBadge').innerText = `🍦 Pieces: ${totalPieces}`;
-    document.getElementById('totalUnitsBadge').innerText = totalUnits.toLocaleString() + ' Units';
+    const bBadge = document.getElementById('totalIssueBoxesBadge');
+    const pBadge = document.getElementById('totalIssuePiecesBadge');
+    const uBadge = document.getElementById('totalIssueUnitsBadge');
+
+    if (bBadge) bBadge.innerText = `📦 Boxes: ${totalBoxes}`;
+    if (pBadge) pBadge.innerText = `🍦 Pieces: ${totalPieces}`;
+    if (uBadge) uBadge.innerText = `Total: ${totalUnits.toLocaleString()} Units`;
+}
+
+function validateIssueForm() {
+    let hasQuantity = false;
+    let hasOverStock = false;
+
+    const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
+    rows.forEach(row => {
+        const boxInp = row.querySelector('input[name^="box_qty"]');
+        const pcsInp = row.querySelector('input[name^="pieces_qty"]');
+        const b = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
+        const p = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
+
+        if (b > 0 || p > 0) {
+            hasQuantity = true;
+            if (boxInp && boxInp.max && b > parseInt(boxInp.max, 10)) hasOverStock = true;
+            if (pcsInp && pcsInp.max && p > parseInt(pcsInp.max, 10)) hasOverStock = true;
+        }
+    });
+
+    if (!hasQuantity) {
+        alert("Please enter a Box or Pieces quantity greater than 0 for at least one item.");
+        return false;
+    }
+    if (hasOverStock) {
+        alert("Some items exceed available Cold Room stock! Please adjust quantities marked in red.");
+        return false;
+    }
+    return true;
 }
 </script>
 
