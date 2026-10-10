@@ -42,17 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 1. Verify available stock in Cold Room
             foreach ($cartData as $item) {
                 $pid = intval($item['id'] ?? 0);
-                $unitType = ($item['unit_type'] ?? 'pcs') === 'box' ? 'box' : 'pcs';
                 $boxQty = max(0, intval($item['box_qty'] ?? 0));
-                $unitsPerBox = max(1, intval($item['units_per_box'] ?? 24));
-                $qty = intval($item['qty'] ?? 0);
+                $pcsQty = max(0, intval($item['pcs_qty'] ?? 0));
+                $unitsPerBox = max(1, intval($item['units_per_box'] ?? ($item['pack_size'] ?? 24)));
+                
+                // Calculate master total units in pieces
+                $qty = ($boxQty * $unitsPerBox) + $pcsQty;
 
-                if ($unitType === 'box') {
-                    if ($boxQty <= 0) $boxQty = 1;
-                    $qty = $boxQty * $unitsPerBox;
-                } else {
-                    $boxQty = 0;
-                }
+                $unitType = ($boxQty > 0 && $pcsQty > 0) ? 'mixed' : (($boxQty > 0) ? 'box' : 'pcs');
 
                 if ($pid > 0 && $qty > 0) {
                     $stmtCheck = $pdo->prepare("SELECT p.name, COALESCE(bs.quantity, 0) as stock 
@@ -66,8 +63,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!$pData || $pData['stock'] < $qty) {
                         $pName = $pData['name'] ?? "Item #$pid";
                         $avail = max(0, intval($pData['stock'] ?? 0));
-                        $boxNotice = ($unitType === 'box') ? " ({$boxQty} Boxes × {$unitsPerBox} = {$qty} units)" : "";
-                        throw new Exception("Cold Room stock limit: '{$pName}' has only {$avail} units available, but {$qty} units{$boxNotice} requested.");
+                        $breakdownNotice = "";
+                        if ($boxQty > 0 && $pcsQty > 0) {
+                            $breakdownNotice = " ({$boxQty} Boxes × {$unitsPerBox} + {$pcsQty} Loose = {$qty} units)";
+                        } elseif ($boxQty > 0) {
+                            $breakdownNotice = " ({$boxQty} Boxes × {$unitsPerBox} = {$qty} units)";
+                        }
+                        throw new Exception("Cold Room stock limit: '{$pName}' has only {$avail} units available, but {$qty} units{$breakdownNotice} requested.");
                     }
 
                     $totalUnits += $qty;
@@ -76,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'qty' => $qty,
                         'unit_type' => $unitType,
                         'box_qty' => $boxQty,
+                        'pieces_qty' => $pcsQty,
                         'units_per_box' => $unitsPerBox
                     ];
                 }
@@ -96,11 +99,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dispatchId = $pdo->lastInsertId();
 
             // 4. Insert items & deduct from Cold Room warehouse
-            $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity, unit_type, box_qty, units_per_box) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmtDeduct = $pdo->prepare("UPDATE branch_stock SET quantity = quantity - ? WHERE branch_id = ? AND product_id = ?");
+            $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity, unit_type, box_qty, pieces_qty, units_per_box) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmtDeduct = $pdo->prepare("UPDATE branch_stock SET quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
 
             foreach ($validatedItems as $it) {
-                $stmtItem->execute([$dispatchId, $it['id'], $it['qty'], $it['unit_type'], $it['box_qty'], $it['units_per_box']]);
+                $stmtItem->execute([$dispatchId, $it['id'], $it['qty'], $it['unit_type'], $it['box_qty'], $it['pieces_qty'], $it['units_per_box']]);
                 $stmtDeduct->execute([$it['qty'], $branchId, $it['id']]);
             }
 
@@ -227,26 +230,32 @@ require_once __DIR__ . '/includes/header.php';
         </thead>
         <tbody>
             <?php foreach ($printItems as $it): 
-                $isBox = ($it['unit_type'] ?? 'pcs') === 'box';
                 $boxQty = intval($it['box_qty'] ?? 0);
+                $pcsQty = intval($it['pieces_qty'] ?? 0);
                 $packSize = intval($it['units_per_box'] ?? 0);
+                if ($packSize <= 0) $packSize = 24;
+                $uType = $it['unit_type'] ?? 'pcs';
             ?>
             <tr class="border-b border-dotted border-gray-400 align-top">
                 <td class="py-1">
                     <span class="font-bold block leading-tight"><?= htmlspecialchars($it['name']) ?></span>
                     <span class="text-[9px] text-gray-700"><?= htmlspecialchars($it['flavor'] ?: '') ?> <?= $it['size'] ? '('.htmlspecialchars($it['size']).')' : '' ?></span>
-                    <?php if ($isBox): ?>
+                    <?php if ($boxQty > 0 && $pcsQty > 0): ?>
+                        <div class="text-[10px] font-extrabold text-black">
+                            📦 <?= $boxQty ?> Bx (<?= $boxQty * $packSize ?>) + 🍦 <?= $pcsQty ?> Pcs
+                        </div>
+                    <?php elseif ($boxQty > 0): ?>
                         <div class="text-[10px] font-extrabold text-black">
                             📦 <?= $boxQty ?> Box<?= $boxQty > 1 ? 'es' : '' ?> &times; <?= $packSize ?> pcs
                         </div>
                     <?php else: ?>
                         <div class="text-[9px] font-medium text-gray-600">
-                            낱 Loose (කෑලි)
+                            🍦 <?= $it['quantity'] ?> Loose Pcs (කෑලි)
                         </div>
                     <?php endif; ?>
                 </td>
                 <td class="py-1 text-center font-black text-[10px]">
-                    <?= $isBox ? 'BOX' : 'PCS' ?>
+                    <?= ($boxQty > 0 && $pcsQty > 0) ? 'MIX' : (($boxQty > 0) ? 'BOX' : 'PCS') ?>
                 </td>
                 <td class="py-1 text-right font-black font-mono">
                     <?= number_format($it['quantity']) ?>
@@ -327,20 +336,26 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="py-2 space-y-1.5 border-b border-slate-800">
                     <?php foreach ($printItems as $it): 
-                        $isBox = ($it['unit_type'] ?? 'pcs') === 'box';
                         $boxQty = intval($it['box_qty'] ?? 0);
+                        $pcsQty = intval($it['pieces_qty'] ?? 0);
                         $packSize = intval($it['units_per_box'] ?? 0);
+                        if ($packSize <= 0) $packSize = 24;
+                        $uType = $it['unit_type'] ?? 'pcs';
                     ?>
                     <div class="flex justify-between items-start text-[10px]">
                         <div class="pr-2">
                             <div class="font-bold text-slate-900 leading-tight"><?= htmlspecialchars($it['name']) ?></div>
                             <div class="text-[9px] text-slate-500"><?= htmlspecialchars($it['flavor'] ?: '') ?> <?= $it['size'] ? '('.htmlspecialchars($it['size']).')' : '' ?></div>
-                            <?php if ($isBox): ?>
+                            <?php if ($boxQty > 0 && $pcsQty > 0): ?>
+                                <span class="inline-block px-1 py-0.2 rounded bg-amber-100 text-amber-900 font-bold text-[9px]">
+                                    📦 <?= $boxQty ?> Bx (<?= $boxQty * $packSize ?>) + 🍦 <?= $pcsQty ?> Pcs
+                                </span>
+                            <?php elseif ($boxQty > 0): ?>
                                 <span class="inline-block px-1 py-0.2 rounded bg-amber-100 text-amber-900 font-bold text-[9px]">
                                     📦 <?= $boxQty ?> Box<?= $boxQty > 1 ? 'es' : '' ?> &times; <?= $packSize ?> pcs
                                 </span>
                             <?php else: ?>
-                                <span class="text-[9px] text-slate-500">낱 Loose (කෑලි)</span>
+                                <span class="text-[9px] text-slate-500">🍦 Loose <?= $it['quantity'] ?> Pcs</span>
                             <?php endif; ?>
                         </div>
                         <div class="text-right font-black font-mono whitespace-nowrap">
@@ -502,7 +517,11 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
                 <?php else: ?>
                 <?php foreach ($products as $p): 
-                    $inStock = $p['stock'] > 0;
+                    $pStock = intval($p['stock'] ?? 0);
+                    $inStock = $pStock > 0;
+                    $packSize = max(1, intval($p['pack_size'] ?? 24));
+                    $boxCount = floor($pStock / $packSize);
+                    $pcsCount = $pStock % $packSize;
                 ?>
                 <div class="product-card group relative bg-white rounded-2xl border p-3.5 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none <?= $inStock ? 'border-slate-200 hover:border-cyan-400 hover:shadow-md active:scale-95' : 'border-slate-200/60 opacity-60 bg-slate-50/50 cursor-not-allowed' ?>"
                      data-id="<?= $p['id'] ?>"
@@ -510,8 +529,8 @@ require_once __DIR__ . '/includes/header.php';
                      data-code="<?= htmlspecialchars(strtolower($p['code'])) ?>"
                      data-flavor="<?= htmlspecialchars(strtolower($p['flavor'] ?? '')) ?>"
                      data-cat="<?= $p['category_id'] ?>"
-                     data-stock="<?= $p['stock'] ?>"
-                     data-pack="<?= $p['pack_size'] ?>"
+                     data-stock="<?= $pStock ?>"
+                     data-pack="<?= $packSize ?>"
                      data-price="<?= $p['selling_price'] ?>"
                      onclick="handleCardClick(<?= $p['id'] ?>, <?= $inStock ? 'true' : 'false' ?>)">
                     
@@ -522,7 +541,17 @@ require_once __DIR__ . '/includes/header.php';
                                 <?= htmlspecialchars($p['code']) ?>
                             </span>
                             <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full <?= $inStock ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 'bg-rose-50 text-rose-600 border border-rose-200/50' ?>">
-                                <?= $inStock ? number_format($p['stock']) . ' In Store' : 'Out of Stock' ?>
+                                <?php if ($inStock): ?>
+                                    <?php if ($boxCount > 0 && $pcsCount > 0): ?>
+                                        📦 <?= $boxCount ?> Bx + 🍦 <?= $pcsCount ?> Pcs
+                                    <?php elseif ($boxCount > 0): ?>
+                                        📦 <?= $boxCount ?> Boxes (<?= number_format($pStock) ?>)
+                                    <?php else: ?>
+                                        🍦 <?= $pcsCount ?> Loose Pcs
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    Out of Stock
+                                <?php endif; ?>
                             </span>
                         </div>
 
@@ -539,12 +568,12 @@ require_once __DIR__ . '/includes/header.php';
 
                     <!-- Pack Size & Selling Price Badge -->
                     <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <div class="flex items-center space-x-1">
-                            <span class="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center" title="Pack Size">
-                                <i class="fa-solid fa-box mr-1 text-[9px]"></i> <?= $p['pack_size'] ?>/box
+                        <div class="flex items-center space-x-1.5 flex-wrap">
+                            <span class="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center" title="Default Box Size">
+                                <i class="fa-solid fa-box mr-1 text-[9px]"></i> <?= $packSize ?>/box
                             </span>
                             <?php if ($p['selling_price'] > 0): ?>
-                            <span class="text-[10px] font-semibold text-slate-500">
+                            <span class="text-[10px] font-semibold text-slate-600">
                                 Rs. <?= number_format($p['selling_price'], 0) ?>
                             </span>
                             <?php endif; ?>
@@ -575,7 +604,7 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                         <div>
                             <h3 class="text-xs sm:text-sm font-extrabold tracking-tight">Counter Issue Slip</h3>
-                            <p class="text-[10px] text-slate-400 font-medium">Boxes &amp; Pieces &bull; Stock Outflow</p>
+                            <p class="text-[10px] text-slate-400 font-medium">Boxes &amp; Loose Pieces &bull; Stock Outflow</p>
                         </div>
                     </div>
 
@@ -605,7 +634,7 @@ require_once __DIR__ . '/includes/header.php';
                         <i class="fa-solid fa-basket-shopping"></i>
                     </div>
                     <p class="text-xs font-bold text-slate-600">Cart is Empty</p>
-                    <p class="text-[10px] text-slate-400 mt-0.5">Click ice cream products to add units or boxes.</p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Click ice cream products to add boxes or loose pieces.</p>
                 </div>
 
                 <!-- Extra Charges & Bill Amount (Compact Collapsible Toggle) -->
@@ -759,7 +788,7 @@ require_once __DIR__ . '/includes/header.php';
 const catalogData = <?= json_encode($products) ?>;
 let cart = {}; 
 // Item structure:
-// { id, name, flavor, size, stock, packSize, price, unitType ('pcs'|'box'), boxQty, pcsQty, qty }
+// { id, name, flavor, size, stock, packSize, price, boxQty, pcsQty, qty }
 let activeCategory = 'all';
 
 function handleCardClick(productId, inStock) {
@@ -781,25 +810,13 @@ function addToCart(productId) {
     const price = parseFloat(p.selling_price || 0);
 
     if (cart[productId]) {
-        if (cart[productId].unitType === 'box') {
-            const nextBoxQty = cart[productId].boxQty + 1;
-            const maxBoxes = Math.floor(stock / packSize);
-            if (nextBoxQty <= maxBoxes) {
-                cart[productId].boxQty = nextBoxQty;
-                cart[productId].qty = nextBoxQty * packSize;
-            } else {
-                showToast(`Cold Room හි ඇත්තේ උපරිම පෙට්ටි ${maxBoxes}ක් පමණි (${stock} units).`, 'warning', 'පෙට්ටි සීමාව ඉක්මවා ඇත');
-                return;
-            }
+        const nextQty = cart[productId].qty + 1;
+        if (nextQty <= stock) {
+            cart[productId].pcsQty += 1;
+            cart[productId].qty = (cart[productId].boxQty * cart[productId].packSize) + cart[productId].pcsQty;
         } else {
-            const nextPcsQty = cart[productId].pcsQty + 1;
-            if (nextPcsQty <= stock) {
-                cart[productId].pcsQty = nextPcsQty;
-                cart[productId].qty = nextPcsQty;
-            } else {
-                showToast(`Cold Room හි ඇත්තේ උපරිම කෑලි ${stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
-                return;
-            }
+            showToast(`Cold Room හි ඇත්තේ උපරිම කෑලි ${stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
+            return;
         }
     } else {
         cart[productId] = {
@@ -810,8 +827,7 @@ function addToCart(productId) {
             stock: stock,
             packSize: packSize,
             price: price,
-            unitType: 'pcs',
-            boxQty: 1,
+            boxQty: 0,
             pcsQty: 1,
             qty: 1
         };
@@ -820,154 +836,92 @@ function addToCart(productId) {
     renderCart();
 }
 
-function toggleUnitType(productId, newType) {
+function updateItemBoxQty(productId, delta) {
     const item = cart[productId];
     if (!item) return;
 
-    const maxBoxes = Math.floor(item.stock / item.packSize);
+    const newBoxQty = Math.max(0, item.boxQty + delta);
+    const candidateTotal = (newBoxQty * item.packSize) + item.pcsQty;
 
-    if (newType === 'box') {
-        if (maxBoxes < 1) {
-            showToast(`Cold Room හි ඇත්තේ කෑලි ${item.stock}ක් පමණි. සම්පූර්ණ පෙට්ටියක් සඳහා අවම වශයෙන් කෑලි ${item.packSize}ක් තිබිය යුතුය.`, 'warning', 'පෙට්ටි සඳහා තොග මදි');
-            item.unitType = 'pcs';
-            item.qty = Math.min(item.pcsQty, item.stock);
-            renderCart();
-            return;
-        }
+    if (candidateTotal > item.stock && delta > 0) {
+        showToast(`Cold Room හි ඇත්තේ කෑලි ${item.stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
+        return;
+    }
 
-        item.unitType = 'box';
-        if (item.boxQty <= 0) item.boxQty = 1;
-        if (item.boxQty > maxBoxes) {
-            item.boxQty = maxBoxes;
-            showToast(`Cold Room සීමාව අනුව උපරිම පෙට්ටි ${maxBoxes}කට (${maxBoxes * item.packSize} units) සකස් කරන ලදී.`, 'info', 'පෙට්ටි සීමාව');
-        }
-        item.qty = item.boxQty * item.packSize;
+    if (newBoxQty === 0 && item.pcsQty === 0) {
+        delete cart[productId];
     } else {
-        item.unitType = 'pcs';
-        if (item.pcsQty <= 0) item.pcsQty = 1;
-        if (item.pcsQty > item.stock) {
-            item.pcsQty = item.stock;
-        }
-        item.qty = item.pcsQty;
+        item.boxQty = newBoxQty;
+        item.qty = (item.boxQty * item.packSize) + item.pcsQty;
     }
 
     renderCart();
 }
 
-function updateQty(productId, delta) {
+function updateItemPcsQty(productId, delta) {
     const item = cart[productId];
     if (!item) return;
 
-    if (item.unitType === 'box') {
-        const maxBoxes = Math.floor(item.stock / item.packSize);
-        const newBoxQty = item.boxQty + delta;
-        if (newBoxQty <= 0) {
-            delete cart[productId];
-        } else if (newBoxQty > maxBoxes) {
-            showToast(`Cold Room හි ඇත්තේ උපරිම පෙට්ටි ${maxBoxes}ක් පමණි (${item.stock} units).`, 'warning', 'පෙට්ටි සීමාව ඉක්මවා ඇත');
-        } else {
-            item.boxQty = newBoxQty;
-            item.qty = newBoxQty * item.packSize;
-        }
+    const newPcsQty = Math.max(0, item.pcsQty + delta);
+    const candidateTotal = (item.boxQty * item.packSize) + newPcsQty;
+
+    if (candidateTotal > item.stock && delta > 0) {
+        showToast(`Cold Room හි ඇත්තේ කෑලි ${item.stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
+        return;
+    }
+
+    if (item.boxQty === 0 && newPcsQty === 0) {
+        delete cart[productId];
     } else {
-        const newPcsQty = item.pcsQty + delta;
-        if (newPcsQty <= 0) {
-            delete cart[productId];
-        } else if (newPcsQty > item.stock) {
-            showToast(`Cold Room හි ඇත්තේ උපරිම කෑලි ${item.stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
-        } else {
-            item.pcsQty = newPcsQty;
-            item.qty = newPcsQty;
-        }
+        item.pcsQty = newPcsQty;
+        item.qty = (item.boxQty * item.packSize) + item.pcsQty;
     }
 
     renderCart();
 }
 
-// Instant input validation while typing (strictly prevents typing greater than stock)
-function handleQtyInput(productId, inputElem) {
+function handleItemBoxInput(productId, inputElem) {
     const item = cart[productId];
     if (!item) return;
 
     let rawVal = inputElem.value;
-    if (rawVal === '') return; // Let user clear and type new digit
+    if (rawVal === '') return;
 
     let val = parseInt(rawVal, 10);
-    if (isNaN(val)) return;
+    if (isNaN(val) || val < 0) val = 0;
 
-    if (item.unitType === 'box') {
-        const maxBoxes = Math.floor(item.stock / item.packSize);
-        if (val > maxBoxes) {
-            val = Math.max(1, maxBoxes);
-            inputElem.value = val;
-            showToast(`Cold Room හි ඇත්තේ උපරිම පෙට්ටි ${maxBoxes}ක් පමණි! (${item.stock} units)`, 'warning', 'පෙට්ටි සීමාව ඉක්මවා ඇත');
-        } else if (val < 1) {
-            val = 1;
-            inputElem.value = val;
-        }
-        item.boxQty = val;
-        item.qty = val * item.packSize;
-    } else {
-        if (val > item.stock) {
-            val = Math.max(1, item.stock);
-            inputElem.value = val;
-            showToast(`Cold Room හි ඇත්තේ උපරිම කෑලි ${item.stock}ක් පමණි!`, 'warning', 'තොග සීමාව ඉක්මවා ඇත');
-        } else if (val < 1) {
-            val = 1;
-            inputElem.value = val;
-        }
-        item.pcsQty = val;
-        item.qty = val;
-    }
+    item.boxQty = val;
+    item.qty = (item.boxQty * item.packSize) + item.pcsQty;
 
     updateCartLiveStats();
 }
 
-function setManualQty(productId, inputElem) {
+function handleItemPcsInput(productId, inputElem) {
     const item = cart[productId];
     if (!item) return;
 
-    let val = parseInt(inputElem.value, 10);
-    if (isNaN(val) || val <= 0) val = 1;
+    let rawVal = inputElem.value;
+    if (rawVal === '') return;
 
-    if (item.unitType === 'box') {
-        const maxBoxes = Math.floor(item.stock / item.packSize);
-        if (val > maxBoxes) {
-            val = Math.max(1, maxBoxes);
-            showToast(`Cold Room හි ඇත්තේ උපරිම පෙට්ටි ${maxBoxes}ක් පමණි!`, 'warning', 'පෙට්ටි සීමාව');
-        }
-        item.boxQty = val;
-        item.qty = val * item.packSize;
-    } else {
-        if (val > item.stock) {
-            val = Math.max(1, item.stock);
-            showToast(`Cold Room හි ඇත්තේ උපරිම කෑලි ${item.stock}ක් පමණි!`, 'warning', 'තොග සීමාව');
-        }
-        item.pcsQty = val;
-        item.qty = val;
-    }
+    let val = parseInt(rawVal, 10);
+    if (isNaN(val) || val < 0) val = 0;
 
-    renderCart();
+    item.pcsQty = val;
+    item.qty = (item.boxQty * item.packSize) + item.pcsQty;
+
+    updateCartLiveStats();
 }
 
 function adjustItemToMaxStock(productId) {
     const item = cart[productId];
     if (!item) return;
 
-    if (item.unitType === 'box') {
-        const maxBoxes = Math.floor(item.stock / item.packSize);
-        if (maxBoxes >= 1) {
-            item.boxQty = maxBoxes;
-            item.qty = maxBoxes * item.packSize;
-        } else {
-            item.unitType = 'pcs';
-            item.pcsQty = item.stock;
-            item.qty = item.stock;
-        }
-    } else {
-        item.pcsQty = item.stock;
-        item.qty = item.stock;
-    }
+    const maxBoxes = Math.floor(item.stock / item.packSize);
+    const remPieces = item.stock % item.packSize;
+
+    item.boxQty = maxBoxes;
+    item.pcsQty = remPieces;
+    item.qty = item.stock;
 
     showToast(`'${item.name}' Cold Room තොග සීමාව (${item.qty} units) ට සකස් කරන ලදී.`, 'success', 'තොගය සකස් විය');
     renderCart();
@@ -1079,15 +1033,17 @@ function updateCartLiveStats() {
     let totalUnits = 0;
     let totalBoxes = 0;
     let hasOverStock = false;
+    let hasZeroTotal = false;
 
     itemKeys.forEach(key => {
         const item = cart[key];
         totalUnits += item.qty;
-        if (item.unitType === 'box') {
-            totalBoxes += item.boxQty;
-        }
+        totalBoxes += item.boxQty;
         if (item.qty > item.stock) {
             hasOverStock = true;
+        }
+        if (item.qty <= 0) {
+            hasZeroTotal = true;
         }
     });
 
@@ -1098,13 +1054,18 @@ function updateCartLiveStats() {
         checkoutBtn.disabled = true;
         checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
         checkoutBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-sm mr-1.5"></i> තොග සීමාව ඉක්මවා ඇත (Cannot Issue)';
+    } else if (hasZeroTotal || totalUnits <= 0) {
+        if (stockWarning) stockWarning.classList.add('hidden');
+        checkoutBtn.disabled = true;
+        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-slate-300 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center space-x-2";
+        checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5"></i> Enter valid quantities';
     } else {
         if (stockWarning) stockWarning.classList.add('hidden');
-        checkoutBtn.disabled = itemKeys.length === 0;
+        checkoutBtn.disabled = false;
         checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-cyan-600/20 active:scale-98 transition flex items-center justify-center space-x-2";
         let btnText = `Issue Stock & Print Slip (${totalUnits.toLocaleString()} Units)`;
         if (totalBoxes > 0) {
-            btnText = `Issue Stock (${totalBoxes} Box${totalBoxes > 1 ? 'es' : ''} / ${totalUnits.toLocaleString()} Units)`;
+            btnText = `Issue Stock (${totalBoxes} Bx / ${totalUnits.toLocaleString()} Units)`;
         }
         checkoutBtn.innerHTML = `<i class="fa-solid fa-receipt text-sm mr-1.5"></i> ${btnText}`;
     }
@@ -1133,8 +1094,9 @@ function submitPosCheckout() {
 
     const cartArray = Object.values(cart).map(it => ({
         id: it.id,
-        unit_type: it.unitType,
-        box_qty: it.unitType === 'box' ? it.boxQty : 0,
+        unit_type: (it.boxQty > 0 && it.pcsQty > 0) ? 'mixed' : (it.boxQty > 0 ? 'box' : 'pcs'),
+        box_qty: it.boxQty,
+        pcs_qty: it.pcsQty,
         units_per_box: it.packSize,
         qty: it.qty
     }));
@@ -1175,38 +1137,36 @@ function renderCart() {
     let totalUnits = 0;
     let totalBoxes = 0;
     let hasOverStock = false;
+    let hasZeroTotal = false;
     let html = '';
 
     itemKeys.forEach(key => {
         const item = cart[key];
         totalUnits += item.qty;
+        totalBoxes += item.boxQty;
 
         const maxBoxes = Math.floor(item.stock / item.packSize);
-        const canSelectBox = maxBoxes >= 1;
+        const remPieces = item.stock % item.packSize;
         const isOverStock = item.qty > item.stock;
 
         if (isOverStock) {
             hasOverStock = true;
         }
-
-        if (item.unitType === 'box') {
-            totalBoxes += item.boxQty;
+        if (item.qty <= 0) {
+            hasZeroTotal = true;
         }
 
-        // Determine if + button should be disabled
-        const isPlusDisabled = item.unitType === 'box' ? (item.boxQty >= maxBoxes) : (item.qty >= item.stock);
-
         html += `
-        <div class="p-2.5 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/40' : 'border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-cyan-300'} transition space-y-2">
+        <div class="p-3 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/40' : 'border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-cyan-300'} transition space-y-2.5">
             <!-- Item Title & Delete -->
             <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                     <div class="text-xs font-black text-slate-800 leading-tight truncate">${item.name}</div>
                     <div class="text-[10px] text-slate-500">${item.flavor} &bull; ${item.size}</div>
                 </div>
-                <div class="flex items-center space-x-1">
+                <div class="flex items-center space-x-1 shrink-0">
                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" title="Available in Cold Room">
-                        Store: ${item.stock}
+                        Store: ${item.stock} (${maxBoxes} Bx + ${remPieces} Pcs)
                     </span>
                     <button type="button" onclick="removeFromCart(${item.id})" class="text-slate-400 hover:text-rose-500 text-xs p-1 transition" title="Remove">
                         <i class="fa-solid fa-xmark"></i>
@@ -1214,64 +1174,53 @@ function renderCart() {
                 </div>
             </div>
 
-            <!-- Mode Selector: Box (පෙට්ටි) vs Pieces (කෑලි) -->
-            <div class="grid grid-cols-2 gap-1.5 p-0.5 bg-slate-200/70 rounded-xl text-[10px] font-bold">
-                ${canSelectBox ? `
-                <button type="button" onclick="toggleUnitType(${item.id}, 'box')" 
-                        class="py-1 rounded-lg transition flex items-center justify-center space-x-1 ${item.unitType === 'box' ? 'bg-amber-500 text-white font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-                    <span>📦 පෙට්ටි (Box)</span>
-                </button>
-                ` : `
-                <button type="button" disabled title="Cold Room හි ඇත්තේ කෑලි ${item.stock}ක් පමණි (පෙට්ටියකට කෑලි ${item.packSize}ක් අවශ්‍යයි)"
-                        class="py-1 rounded-lg transition flex items-center justify-center space-x-1 opacity-40 cursor-not-allowed bg-slate-100 text-slate-400">
-                    <span>📦 පෙට්ටි (මදි)</span>
-                </button>
-                `}
-                <button type="button" onclick="toggleUnitType(${item.id}, 'pcs')" 
-                        class="py-1 rounded-lg transition flex items-center justify-center space-x-1 ${item.unitType === 'pcs' ? 'bg-cyan-600 text-white font-black shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
-                    <span>낱 කෑලි (Pcs)</span>
-                </button>
+            <!-- Dual Inputs Grid: Boxes & Loose Pieces -->
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
+                <!-- Boxes Input -->
+                <div class="bg-amber-50/80 p-2 rounded-xl border border-amber-200/80 space-y-1">
+                    <div class="text-[10px] font-bold text-amber-900 flex items-center justify-between">
+                        <span>📦 Boxes (${item.packSize}/bx)</span>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">-</button>
+                        <input type="number" min="0" value="${item.boxQty}" 
+                               oninput="handleItemBoxInput(${item.id}, this)"
+                               class="w-full text-center py-0.5 bg-white border border-amber-300 rounded-lg text-xs font-black font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">+</button>
+                    </div>
+                </div>
+
+                <!-- Loose Pieces Input -->
+                <div class="bg-cyan-50/80 p-2 rounded-xl border border-cyan-200/80 space-y-1">
+                    <div class="text-[10px] font-bold text-cyan-900 flex items-center justify-between">
+                        <span>🍦 Loose Pieces</span>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">-</button>
+                        <input type="number" min="0" value="${item.pcsQty}" 
+                               oninput="handleItemPcsInput(${item.id}, this)"
+                               class="w-full text-center py-0.5 bg-white border border-cyan-300 rounded-lg text-xs font-black font-mono text-cyan-900 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">+</button>
+                    </div>
+                </div>
             </div>
 
-            <!-- Stepper & Calculation Details -->
-            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60">
+            <!-- Calculation Detail Badge -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
                 <div>
-                    ${item.unitType === 'box' ? `
-                        <div class="text-[11px] font-black text-amber-900">
-                            📦 ${item.boxQty} Box${item.boxQty > 1 ? 'es' : ''} &times; ${item.packSize}
-                        </div>
-                        <div class="text-[10px] font-bold ${isOverStock ? 'text-rose-600' : 'text-cyan-700'}">
-                            = ${item.qty} Total Units (Max: ${maxBoxes} bxs)
-                        </div>
-                    ` : `
-                        <div class="text-[11px] font-black ${isOverStock ? 'text-rose-600' : 'text-cyan-900'}">
-                            낱 ${item.qty} Loose Pieces
-                        </div>
-                        <div class="text-[10px] text-slate-400">
-                            (Max: ${item.stock} pcs &bull; 1 Box = ${item.packSize})
-                        </div>
-                    `}
+                    <span class="font-bold text-slate-500">Line Units:</span>
+                    <span class="font-black font-mono ${isOverStock ? 'text-rose-600' : 'text-slate-900'}">
+                        ${item.qty} Units
+                    </span>
+                    ${item.boxQty > 0 && item.pcsQty > 0 ? `
+                        <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>
+                    ` : ''}
                 </div>
-
-                <!-- Quantity Stepper Buttons with Stock Lock -->
-                <div class="flex items-center space-x-1 shrink-0">
-                    <button type="button" onclick="updateQty(${item.id}, -1)" 
-                            class="w-7 h-7 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-black transition shadow-xs">
-                        -
-                    </button>
-                    <input type="number" min="1" 
-                           max="${item.unitType === 'box' ? maxBoxes : item.stock}" 
-                           value="${item.unitType === 'box' ? item.boxQty : item.qty}" 
-                           oninput="handleQtyInput(${item.id}, this)"
-                           onchange="setManualQty(${item.id}, this)"
-                           class="w-12 text-center py-1 bg-white border ${isOverStock ? 'border-rose-500 bg-rose-50 text-rose-700 font-black ring-1 ring-rose-400' : 'border-slate-200'} rounded-xl text-xs font-black font-mono ${item.unitType === 'box' ? 'text-amber-800' : 'text-cyan-700'} focus:outline-none focus:ring-1 focus:ring-cyan-500 shadow-inner">
-                    <button type="button" onclick="updateQty(${item.id}, 1)" 
-                            ${isPlusDisabled ? 'disabled' : ''}
-                            title="${isPlusDisabled ? 'Cold Room තොග සීමාවට ළඟා වී ඇත' : 'Add 1'}"
-                            class="w-7 h-7 rounded-xl ${isPlusDisabled ? 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-100' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs cursor-pointer'} flex items-center justify-center text-xs font-black transition">
-                        +
-                    </button>
-                </div>
+                ${item.price > 0 ? `
+                    <div class="font-mono font-bold text-emerald-700 text-xs">
+                        Rs. ${(item.qty * item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    </div>
+                ` : ''}
             </div>
 
             <!-- Overstock Alert Row with One-Click Fix -->
@@ -1290,12 +1239,17 @@ function renderCart() {
     listContainer.innerHTML = html;
     totalUnitsBadge.innerText = totalUnits.toLocaleString() + ' Units';
 
-    // Safety lock on Checkout button if over-stock exists
+    // Safety lock on Checkout button
     if (hasOverStock) {
         if (stockWarning) stockWarning.classList.remove('hidden');
         checkoutBtn.disabled = true;
         checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
         checkoutBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-sm mr-1.5"></i> තොග සීමාව ඉක්මවා ඇත (Cannot Issue)';
+    } else if (hasZeroTotal || totalUnits <= 0) {
+        if (stockWarning) stockWarning.classList.add('hidden');
+        checkoutBtn.disabled = true;
+        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-slate-300 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center space-x-2";
+        checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5"></i> Enter valid quantities';
     } else {
         if (stockWarning) stockWarning.classList.add('hidden');
         checkoutBtn.disabled = false;
@@ -1303,7 +1257,7 @@ function renderCart() {
 
         let btnText = `Issue Stock & Print Slip (${totalUnits.toLocaleString()} Units)`;
         if (totalBoxes > 0) {
-            btnText = `Issue Stock (${totalBoxes} Box${totalBoxes > 1 ? 'es' : ''} / ${totalUnits.toLocaleString()} Units)`;
+            btnText = `Issue Stock (${totalBoxes} Bx / ${totalUnits.toLocaleString()} Units)`;
         }
         checkoutBtn.innerHTML = `<i class="fa-solid fa-receipt text-sm mr-1.5"></i> ${btnText}`;
     }

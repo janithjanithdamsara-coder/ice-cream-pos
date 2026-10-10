@@ -20,10 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $issueDate = trim($_POST['issue_date'] ?? $today);
         $issueTime = trim($_POST['issue_time'] ?? date('H:i'));
         $notes = trim($_POST['notes'] ?? '');
-        $productIds = $_POST['product_id'] ?? [];
         $selectedProducts = $_POST['selected_products'] ?? [];
         $boxQtys = $_POST['box_qty'] ?? [];
         $piecesQtys = $_POST['pieces_qty'] ?? [];
+        $packSizes = $_POST['pack_size'] ?? [];
         $quantities = $_POST['quantity'] ?? [];
 
         if (empty($recipient)) {
@@ -41,53 +41,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Identify all products with entered quantity
             $pidsToProcess = [];
-            if (!empty($selectedProducts)) {
+            if (!empty($selectedProducts) && is_array($selectedProducts)) {
                 foreach ($selectedProducts as $spid) {
                     $spid = intval($spid);
                     if ($spid > 0) $pidsToProcess[$spid] = $spid;
                 }
             }
-            if (!empty($productIds)) {
-                foreach ($productIds as $idx => $pid) {
-                    $pid = intval($pid);
-                    if ($pid > 0) $pidsToProcess[$pid] = $idx;
+            if (is_array($boxQtys)) {
+                foreach ($boxQtys as $k => $v) {
+                    if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = intval($k);
                 }
             }
-            foreach ($boxQtys as $k => $v) {
-                if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = $k;
-            }
-            foreach ($piecesQtys as $k => $v) {
-                if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = $k;
+            if (is_array($piecesQtys)) {
+                foreach ($piecesQtys as $k => $v) {
+                    if (intval($v) > 0 && is_numeric($k) && intval($k) > 0) $pidsToProcess[intval($k)] = intval($k);
+                }
             }
 
-            foreach ($pidsToProcess as $pid => $key) {
-                $bQty = intval($boxQtys[$pid] ?? ($boxQtys[$key] ?? 0));
-                $pQty = intval($piecesQtys[$pid] ?? ($piecesQtys[$key] ?? 0));
-                $legacyQty = intval($quantities[$pid] ?? ($quantities[$key] ?? 0));
+            foreach ($pidsToProcess as $pid) {
+                $bQty = max(0, intval($boxQtys[$pid] ?? 0));
+                $pQty = max(0, intval($piecesQtys[$pid] ?? 0));
+                $packSize = max(1, intval($packSizes[$pid] ?? 24));
+                $lineUnits = ($bQty * $packSize) + $pQty;
 
-                if ($bQty > 0) {
+                if ($lineUnits > 0) {
+                    $unitType = ($bQty > 0 && $pQty > 0) ? 'mixed' : (($bQty > 0) ? 'box' : 'pcs');
                     $itemsToIssue[] = [
                         'product_id' => $pid,
-                        'unit_type' => 'box',
+                        'unit_type' => $unitType,
                         'box_qty' => $bQty,
-                        'pieces_qty' => 0,
-                        'qty' => $bQty
-                    ];
-                } elseif ($pQty > 0) {
-                    $itemsToIssue[] = [
-                        'product_id' => $pid,
-                        'unit_type' => 'piece',
-                        'box_qty' => 0,
                         'pieces_qty' => $pQty,
-                        'qty' => $pQty
-                    ];
-                } elseif ($legacyQty > 0) {
-                    $itemsToIssue[] = [
-                        'product_id' => $pid,
-                        'unit_type' => 'box',
-                        'box_qty' => $legacyQty,
-                        'pieces_qty' => 0,
-                        'qty' => $legacyQty
+                        'units_per_box' => $packSize,
+                        'qty' => $lineUnits
                     ];
                 }
             }
@@ -96,89 +81,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Please enter a Box or Pieces quantity greater than 0 for at least one item.");
             }
 
-            // Validate stock availability
+            // Validate stock availability in Cold Room
             foreach ($itemsToIssue as $item) {
                 $pid = $item['product_id'];
-                    $uType = $item['unit_type'];
-                    $bQty = $item['box_qty'];
-                    $pQty = $item['pieces_qty'];
-                    $qty = $item['qty'];
+                $qty = $item['qty'];
+                $bQty = $item['box_qty'];
+                $pQty = $item['pieces_qty'];
+                $packSize = $item['units_per_box'];
 
-                    $stmtCheck = $pdo->prepare("SELECT p.name, 
-                        COALESCE(bs.quantity, 0) as stock, 
-                        COALESCE(bs.box_qty, 0) as store_boxes, 
-                        COALESCE(bs.pieces_qty, 0) as store_pieces 
-                        FROM products p 
-                        LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
-                        WHERE p.id = ?");
-                    $stmtCheck->execute([$branchId, $pid]);
-                    $pData = $stmtCheck->fetch();
-                    $pName = $pData['name'] ?? "Item #$pid";
+                $stmtCheck = $pdo->prepare("SELECT p.name, COALESCE(bs.quantity, 0) as stock 
+                    FROM products p 
+                    LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
+                    WHERE p.id = ? FOR UPDATE");
+                $stmtCheck->execute([$branchId, $pid]);
+                $pData = $stmtCheck->fetch();
+                $pName = $pData['name'] ?? "Item #$pid";
+                $avail = max(0, intval($pData['stock'] ?? 0));
 
-                    if ($uType === 'box') {
-                        $availBoxes = intval($pData['store_boxes'] ?? 0);
-                        if ($bQty > $availBoxes) {
-                            throw new Exception("Insufficient stock for '{$pName}'. Available: {$availBoxes} Boxes, Requested: {$bQty} Boxes.");
-                        }
-                        $totalBoxes += $bQty;
-                    } else {
-                        $availPieces = intval($pData['store_pieces'] ?? 0);
-                        if ($pQty > $availPieces) {
-                            throw new Exception("Insufficient stock for '{$pName}'. Available: {$availPieces} Pieces, Requested: {$pQty} Pieces.");
-                        }
-                        $totalPieces += $pQty;
+                if ($avail < $qty) {
+                    $notice = "";
+                    if ($bQty > 0 && $pQty > 0) {
+                        $notice = " ({$bQty} Bx × {$packSize} + {$pQty} Pcs = {$qty} units)";
+                    } elseif ($bQty > 0) {
+                        $notice = " ({$bQty} Bx × {$packSize} = {$qty} units)";
                     }
-                    $totalUnits += $qty;
+                    throw new Exception("Insufficient stock for '{$pName}'. Available: {$avail} units in Cold Room, Requested: {$qty} units{$notice}.");
                 }
 
-                // Insert into store_dispatches
-                $stmtInsert = $pdo->prepare("INSERT INTO store_dispatches 
-                    (issue_no, branch_id, user_id, issue_date, issue_time, recipient_name, total_qty, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmtInsert->execute([$issueNo, $branchId, $user['id'], $issueDate, $issueTime, $recipient, $totalUnits, $notes]);
-                $dispatchId = $pdo->lastInsertId();
-
-                // Insert items & deduct from Cold Room
-                $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity, box_qty, pieces_qty, unit_type) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmtDeductBox = $pdo->prepare("UPDATE branch_stock SET box_qty = GREATEST(0, box_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
-                $stmtDeductPiece = $pdo->prepare("UPDATE branch_stock SET pieces_qty = GREATEST(0, pieces_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
-
-                foreach ($itemsToIssue as $item) {
-                    $stmtItem->execute([
-                        $dispatchId, 
-                        $item['product_id'], 
-                        $item['qty'], 
-                        $item['box_qty'], 
-                        $item['pieces_qty'], 
-                        $item['unit_type']
-                    ]);
-
-                    if ($item['unit_type'] === 'box') {
-                        $stmtDeductBox->execute([$item['box_qty'], $item['box_qty'], $branchId, $item['product_id']]);
-                    } else {
-                        $stmtDeductPiece->execute([$item['pieces_qty'], $item['pieces_qty'], $branchId, $item['product_id']]);
-                    }
-                }
-
-                $pdo->commit();
-                $summaryBreakdown = [];
-                if ($totalBoxes > 0) $summaryBreakdown[] = "{$totalBoxes} Boxes";
-                if ($totalPieces > 0) $summaryBreakdown[] = "{$totalPieces} Pieces";
-                $summaryText = !empty($summaryBreakdown) ? implode(' + ', $summaryBreakdown) : "{$totalUnits} Units";
-
-                logActivity('direct_issue', 'store_out', "Goods Issue Note #{$issueNo}: {$summaryText} issued to '{$recipient}'");
-                setFlash('success', "Goods Issue Note #{$issueNo} created successfully! {$summaryText} issued out of Cold Room.");
-                header("Location: direct_issue.php?view_id=" . $dispatchId);
-                exit;
-
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-                setFlash('danger', "Failed to issue goods: " . $e->getMessage());
-                header("Location: direct_issue.php");
-                exit;
+                $totalBoxes += $bQty;
+                $totalPieces += $pQty;
+                $totalUnits += $qty;
             }
+
+            // Insert into store_dispatches
+            $stmtInsert = $pdo->prepare("INSERT INTO store_dispatches 
+                (issue_no, branch_id, user_id, issue_date, issue_time, recipient_name, total_qty, notes) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmtInsert->execute([$issueNo, $branchId, $user['id'], $issueDate, $issueTime, $recipient, $totalUnits, $notes]);
+            $dispatchId = $pdo->lastInsertId();
+
+            // Insert items & deduct from Cold Room
+            $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity, unit_type, box_qty, pieces_qty, units_per_box) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmtDeduct = $pdo->prepare("UPDATE branch_stock SET quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
+
+            foreach ($itemsToIssue as $item) {
+                $stmtItem->execute([
+                    $dispatchId, 
+                    $item['product_id'], 
+                    $item['qty'], 
+                    $item['unit_type'],
+                    $item['box_qty'], 
+                    $item['pieces_qty'],
+                    $item['units_per_box']
+                ]);
+                $stmtDeduct->execute([$item['qty'], $branchId, $item['product_id']]);
+            }
+
+            $pdo->commit();
+            $summaryBreakdown = [];
+            if ($totalBoxes > 0) $summaryBreakdown[] = "{$totalBoxes} Boxes";
+            if ($totalPieces > 0) $summaryBreakdown[] = "{$totalPieces} Loose Pcs";
+            $summaryText = !empty($summaryBreakdown) ? implode(' + ', $summaryBreakdown) . " (Total: {$totalUnits} Units)" : "{$totalUnits} Units";
+
+            logActivity('direct_issue', 'store_out', "Goods Issue Note #{$issueNo}: {$summaryText} issued to '{$recipient}'");
+            setFlash('success', "Goods Issue Note #{$issueNo} created successfully! {$summaryText} issued out of Cold Room.");
+            header("Location: direct_issue.php?view_id=" . $dispatchId);
+            exit;
+
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            setFlash('danger', "Failed to issue goods: " . $e->getMessage());
+            header("Location: direct_issue.php");
+            exit;
+        }
     }
 
     // Action 2: Cancel / Delete Direct Store Issue (Restores Stock)
@@ -188,21 +165,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             // Fetch issue items
-            $stmt = $pdo->prepare("SELECT product_id, quantity, box_qty, pieces_qty, unit_type FROM store_dispatch_items WHERE dispatch_id = ?");
+            $stmt = $pdo->prepare("SELECT product_id, quantity FROM store_dispatch_items WHERE dispatch_id = ?");
             $stmt->execute([$issueId]);
             $items = $stmt->fetchAll();
 
-            // Return stock to warehouse
-            $stmtReturnBox = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, box_qty, quantity) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE box_qty = box_qty + VALUES(box_qty), quantity = quantity + VALUES(quantity)");
-            $stmtReturnPiece = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, pieces_qty, quantity) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE pieces_qty = pieces_qty + VALUES(pieces_qty), quantity = quantity + VALUES(quantity)");
+            // Return stock units to warehouse
+            $stmtReturn = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) 
+                VALUES (?, ?, ?) 
+                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
 
             foreach ($items as $item) {
                 $qty = intval($item['quantity']);
-                $uType = $item['unit_type'] ?? 'box';
-                if ($uType === 'piece') {
-                    $stmtReturnPiece->execute([$branchId, $item['product_id'], $qty, $qty]);
-                } else {
-                    $stmtReturnBox->execute([$branchId, $item['product_id'], $qty, $qty]);
+                if ($qty > 0) {
+                    $stmtReturn->execute([$branchId, $item['product_id'], $qty]);
                 }
             }
 
@@ -224,10 +199,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch Active Products with Live Stock
-$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, 
-    COALESCE(bs.quantity, 0) as stock, 
-    COALESCE(bs.box_qty, 0) as store_boxes, 
-    COALESCE(bs.pieces_qty, 0) as store_pieces
+$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, COALESCE(p.pack_size, 24) as pack_size,
+    COALESCE(bs.quantity, 0) as stock
     FROM products p
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ?
     WHERE p.status = 'active'
@@ -299,23 +272,44 @@ require_once __DIR__ . '/includes/header.php';
 
     <table class="w-full text-xs text-left border-collapse my-3">
         <thead>
-            <tr class="border-b border-black font-bold uppercase">
+            <tr class="border-b-2 border-black font-bold uppercase text-[10px]">
                 <th class="py-1">#</th>
                 <th class="py-1">Item Description</th>
-                <th class="py-1">Size</th>
+                <th class="py-1 text-center">Type</th>
                 <th class="py-1 text-right">Units</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($viewItems as $idx => $it): 
-                $uType = $it['unit_type'] ?? 'box';
-                $uLabel = ($uType === 'piece') ? 'Pieces' : 'Boxes';
+                $boxQty = intval($it['box_qty'] ?? 0);
+                $pcsQty = intval($it['pieces_qty'] ?? 0);
+                $packSize = intval($it['units_per_box'] ?? 0);
+                if ($packSize <= 0) $packSize = 24;
+                $totalU = intval($it['quantity']);
             ?>
-            <tr class="border-b border-dashed border-gray-300">
+            <tr class="border-b border-dashed border-gray-300 align-top">
                 <td class="py-1"><?= $idx + 1 ?></td>
-                <td class="py-1 font-semibold"><?= htmlspecialchars($it['name']) ?></td>
-                <td class="py-1"><?= htmlspecialchars($it['size']) ?></td>
-                <td class="py-1 text-right font-bold"><?= number_format($it['quantity']) ?> <?= $uLabel ?></td>
+                <td class="py-1">
+                    <span class="font-bold block leading-tight"><?= htmlspecialchars($it['name']) ?></span>
+                    <span class="text-[9px] text-gray-700"><?= htmlspecialchars($it['flavor'] ?: '') ?> <?= $it['size'] ? '('.htmlspecialchars($it['size']).')' : '' ?></span>
+                    <?php if ($boxQty > 0 && $pcsQty > 0): ?>
+                        <div class="text-[9px] font-bold text-black">
+                            📦 <?= $boxQty ?> Bx (<?= $boxQty * $packSize ?>) + 🍦 <?= $pcsQty ?> Pcs
+                        </div>
+                    <?php elseif ($boxQty > 0): ?>
+                        <div class="text-[9px] font-bold text-black">
+                            📦 <?= $boxQty ?> Box<?= $boxQty > 1 ? 'es' : '' ?> &times; <?= $packSize ?> pcs
+                        </div>
+                    <?php else: ?>
+                        <div class="text-[9px] text-gray-600">
+                            🍦 <?= $totalU ?> Loose Pcs
+                        </div>
+                    <?php endif; ?>
+                </td>
+                <td class="py-1 text-center font-black text-[10px]">
+                    <?= ($boxQty > 0 && $pcsQty > 0) ? 'MIX' : (($boxQty > 0) ? 'BOX' : 'PCS') ?>
+                </td>
+                <td class="py-1 text-right font-black font-mono"><?= number_format($totalU) ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>
@@ -736,23 +730,26 @@ require_once __DIR__ . '/includes/header.php';
                                 <input type="checkbox" id="masterIssueCheckbox" onchange="toggleSelectAllIssue(this.checked)" class="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
                             </th>
                             <th class="py-2.5 px-3 min-w-[200px]">Product Description</th>
-                            <th class="py-2.5 px-3 text-center min-w-[130px]">Cold Room Stock</th>
-                            <th class="py-2.5 px-3 text-center min-w-[120px]">📦 Issue Boxes</th>
-                            <th class="py-2.5 px-3 text-center min-w-[120px]">🍦 Issue Pieces</th>
-                            <th class="py-2.5 px-3 text-right min-w-[100px]">Total Out</th>
+                            <th class="py-2.5 px-3 text-center min-w-[150px]">Cold Room Stock</th>
+                            <th class="py-2.5 px-3 text-center min-w-[85px]">Pcs/Box</th>
+                            <th class="py-2.5 px-3 text-center min-w-[110px]">📦 Issue Boxes</th>
+                            <th class="py-2.5 px-3 text-center min-w-[110px]">🍦 Issue Pieces</th>
+                            <th class="py-2.5 px-3 text-right min-w-[120px]">Total Out Units</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100" id="issueBulkTableBody">
                         <?php foreach ($availableProducts as $p): 
                             $pid = $p['id'];
                             $pStock = intval($p['stock'] ?? 0);
-                            $pBoxes = intval($p['store_boxes'] ?? 0);
-                            $pPieces = intval($p['store_pieces'] ?? 0);
-                            $hasStock = ($pBoxes > 0 || $pPieces > 0);
+                            $packSize = max(1, intval($p['pack_size'] ?? 24));
+                            $bCount = floor($pStock / $packSize);
+                            $pCount = $pStock % $packSize;
+                            $hasStock = ($pStock > 0);
                         ?>
                         <tr class="hover:bg-emerald-50/40 transition-colors issue-item-row <?= !$hasStock ? 'opacity-50' : '' ?>" 
                             id="issue_row_<?= $pid ?>" 
                             data-pid="<?= $pid ?>"
+                            data-stock="<?= $pStock ?>"
                             data-search="<?= htmlspecialchars(strtolower($p['name'] . ' ' . $p['code'] . ' ' . ($p['flavor'] ?? '') . ' ' . ($p['size'] ?? ''))) ?>">
                             
                             <!-- Checkbox -->
@@ -776,8 +773,15 @@ require_once __DIR__ . '/includes/header.php';
                             <td class="py-2.5 px-3 text-center whitespace-nowrap">
                                 <?php if ($hasStock): ?>
                                     <span class="inline-flex items-center gap-1 font-mono font-bold text-[11px]">
-                                        <span class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">📦 <?= $pBoxes ?> Bx</span>
-                                        <span class="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">🍦 <?= $pPieces ?> Pcs</span>
+                                        <?php if ($bCount > 0 && $pCount > 0): ?>
+                                            <span class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">📦 <?= $bCount ?> Bx</span>
+                                            <span class="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">🍦 <?= $pCount ?> Pcs</span>
+                                        <?php elseif ($bCount > 0): ?>
+                                            <span class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">📦 <?= $bCount ?> Bx</span>
+                                        <?php else: ?>
+                                            <span class="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">🍦 <?= $pCount ?> Pcs</span>
+                                        <?php endif; ?>
+                                        <span class="text-[10px] text-slate-400 font-mono">(<?= number_format($pStock) ?>)</span>
                                     </span>
                                 <?php else: ?>
                                     <span class="inline-block px-2 py-0.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-bold">
@@ -786,23 +790,30 @@ require_once __DIR__ . '/includes/header.php';
                                 <?php endif; ?>
                             </td>
 
+                            <!-- Pack Size Input -->
+                            <td class="py-2.5 px-3 text-center">
+                                <input type="number" name="pack_size[<?= $pid ?>]" id="issue_pack_<?= $pid ?>" value="<?= $packSize ?>" min="1"
+                                       oninput="handleIssueInput(<?= $pid ?>)"
+                                       class="w-14 bg-slate-50 border border-slate-200 rounded-lg px-1 py-1 text-xs font-bold font-mono text-center text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            </td>
+
                             <!-- Box Qty Input -->
                             <td class="py-2.5 px-3 text-center">
-                                <div class="relative max-w-[110px] mx-auto">
-                                    <span class="absolute left-2 top-1.5 text-[11px]">📦</span>
-                                    <input type="number" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" min="0" max="<?= $pBoxes ?>" placeholder="0"
-                                           oninput="handleIssueInput(<?= $pid ?>, 'box', <?= $pBoxes ?>, <?= $pPieces ?>)"
-                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
+                                <div class="relative max-w-[105px] mx-auto">
+                                    <span class="absolute left-2 top-1 text-[11px]">📦</span>
+                                    <input type="number" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" min="0" placeholder="0"
+                                           oninput="handleIssueInput(<?= $pid ?>)"
+                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
                                 </div>
                             </td>
 
                             <!-- Pieces Qty Input -->
                             <td class="py-2.5 px-3 text-center">
-                                <div class="relative max-w-[110px] mx-auto">
-                                    <span class="absolute left-2 top-1.5 text-[11px]">🍦</span>
-                                    <input type="number" name="pieces_qty[<?= $pid ?>]" id="issue_pcs_<?= $pid ?>" min="0" max="<?= $pPieces ?>" placeholder="0"
-                                           oninput="handleIssueInput(<?= $pid ?>, 'piece', <?= $pBoxes ?>, <?= $pPieces ?>)"
-                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-right">
+                                <div class="relative max-w-[105px] mx-auto">
+                                    <span class="absolute left-2 top-1 text-[11px]">🍦</span>
+                                    <input type="number" name="pieces_qty[<?= $pid ?>]" id="issue_pcs_<?= $pid ?>" min="0" placeholder="0"
+                                           oninput="handleIssueInput(<?= $pid ?>)"
+                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1 text-xs font-bold font-mono text-cyan-700 focus:outline-none focus:ring-1 focus:ring-cyan-500 text-right">
                                 </div>
                             </td>
 
@@ -821,7 +832,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-700">
                     <span class="text-slate-500">Summary:</span>
                     <span class="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-900 font-black font-mono text-xs" id="totalIssueBoxesBadge">📦 Boxes: 0</span>
-                    <span class="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-black font-mono text-xs" id="totalIssuePiecesBadge">🍦 Pieces: 0</span>
+                    <span class="px-2.5 py-1 rounded-xl bg-cyan-100 text-cyan-900 font-black font-mono text-xs" id="totalIssuePiecesBadge">🍦 Pieces: 0</span>
                     <span class="px-3 py-1 rounded-xl bg-slate-900 text-white font-black font-mono text-xs" id="totalIssueUnitsBadge">Total: 0 Units</span>
                 </div>
 
@@ -830,7 +841,7 @@ require_once __DIR__ . '/includes/header.php';
                         Cancel
                     </button>
                     <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 hover:from-emerald-700 hover:to-teal-700 transition">
-                        <i class="fa-solid fa-check mr-1.5"></i> Confirm & Issue Units Out
+                        <i class="fa-solid fa-check mr-1.5"></i> Confirm &amp; Issue Units Out
                     </button>
                 </div>
             </div>
@@ -961,46 +972,22 @@ function handleIssueCheck(pid) {
     updateIssueTotals();
 }
 
-function handleIssueInput(pid, changedType, maxBoxes, maxPieces) {
+function handleIssueInput(pid) {
     const row = document.getElementById('issue_row_' + pid);
     const chk = document.getElementById('issue_chk_' + pid);
     const boxInp = document.getElementById('issue_box_' + pid);
     const pcsInp = document.getElementById('issue_pcs_' + pid);
+    const packInp = document.getElementById('issue_pack_' + pid);
     const totalElem = document.getElementById('issue_total_' + pid);
     if (!row) return;
 
+    const stock = parseInt(row.dataset.stock || '0', 10);
     let bVal = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
     let pVal = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
+    let packVal = parseInt(packInp ? packInp.value : 24, 10) || 24;
 
-    if (changedType === 'box') {
-        if (bVal > 0) {
-            if (pcsInp) pcsInp.value = '';
-            pVal = 0;
-            if (bVal > maxBoxes) {
-                boxInp.classList.add('border-rose-500', 'bg-rose-50');
-            } else {
-                boxInp.classList.remove('border-rose-500', 'bg-rose-50');
-            }
-        } else {
-            boxInp.classList.remove('border-rose-500', 'bg-rose-50');
-        }
-        if (pcsInp) pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
-    } else if (changedType === 'piece') {
-        if (pVal > 0) {
-            if (boxInp) boxInp.value = '';
-            bVal = 0;
-            if (pVal > maxPieces) {
-                pcsInp.classList.add('border-rose-500', 'bg-rose-50');
-            } else {
-                pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
-            }
-        } else {
-            pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
-        }
-        if (boxInp) boxInp.classList.remove('border-rose-500', 'bg-rose-50');
-    }
+    const rowTotal = (bVal * packVal) + pVal;
 
-    const rowTotal = bVal + pVal;
     if (chk) {
         chk.checked = rowTotal > 0;
         if (chk.checked) {
@@ -1010,11 +997,28 @@ function handleIssueInput(pid, changedType, maxBoxes, maxPieces) {
         }
     }
 
+    if (rowTotal > stock) {
+        if (boxInp) boxInp.classList.add('border-rose-500', 'bg-rose-50');
+        if (pcsInp) pcsInp.classList.add('border-rose-500', 'bg-rose-50');
+    } else {
+        if (boxInp) boxInp.classList.remove('border-rose-500', 'bg-rose-50');
+        if (pcsInp) pcsInp.classList.remove('border-rose-500', 'bg-rose-50');
+    }
+
     if (totalElem) {
-        if (bVal > 0) {
-            totalElem.innerHTML = `<span class="text-emerald-700 font-bold font-mono">📦 ${bVal} Bx</span>`;
-        } else if (pVal > 0) {
-            totalElem.innerHTML = `<span class="text-amber-700 font-bold font-mono">🍦 ${pVal} Pcs</span>`;
+        if (rowTotal > 0) {
+            let badgeHtml = '';
+            if (bVal > 0 && pVal > 0) {
+                badgeHtml = `<span class="text-emerald-700 font-bold font-mono">📦 ${bVal} Bx</span> + <span class="text-cyan-700 font-bold font-mono">🍦 ${pVal} Pcs</span> <span class="text-slate-500 font-extrabold font-mono">(= ${rowTotal})</span>`;
+            } else if (bVal > 0) {
+                badgeHtml = `<span class="text-emerald-700 font-bold font-mono">📦 ${bVal} Bx (= ${rowTotal})</span>`;
+            } else {
+                badgeHtml = `<span class="text-cyan-700 font-bold font-mono">🍦 ${pVal} Pcs</span>`;
+            }
+            if (rowTotal > stock) {
+                badgeHtml += ` <span class="text-rose-600 font-bold text-[9px] block">⚠️ Over stock (${stock})</span>`;
+            }
+            totalElem.innerHTML = badgeHtml;
         } else {
             totalElem.innerText = '0';
         }
@@ -1026,21 +1030,24 @@ function handleIssueInput(pid, changedType, maxBoxes, maxPieces) {
 function updateIssueTotals() {
     let totalBoxes = 0;
     let totalPieces = 0;
+    let totalUnits = 0;
 
     const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
     rows.forEach(row => {
         const pid = row.dataset.pid;
         const boxInp = document.getElementById('issue_box_' + pid);
         const pcsInp = document.getElementById('issue_pcs_' + pid);
+        const packInp = document.getElementById('issue_pack_' + pid);
 
         const b = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
         const p = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
+        const pack = parseInt(packInp ? packInp.value : 24, 10) || 24;
 
         totalBoxes += b;
         totalPieces += p;
+        totalUnits += (b * pack) + p;
     });
 
-    const totalUnits = totalBoxes + totalPieces;
     const bBadge = document.getElementById('totalIssueBoxesBadge');
     const pBadge = document.getElementById('totalIssuePiecesBadge');
     const uBadge = document.getElementById('totalIssueUnitsBadge');
@@ -1056,15 +1063,20 @@ function validateIssueForm() {
 
     const rows = document.querySelectorAll('#issueBulkTableBody tr.issue-item-row');
     rows.forEach(row => {
-        const boxInp = row.querySelector('input[name^="box_qty"]');
-        const pcsInp = row.querySelector('input[name^="pieces_qty"]');
+        const pid = row.dataset.pid;
+        const stock = parseInt(row.dataset.stock || '0', 10);
+        const boxInp = document.getElementById('issue_box_' + pid);
+        const pcsInp = document.getElementById('issue_pcs_' + pid);
+        const packInp = document.getElementById('issue_pack_' + pid);
+
         const b = parseInt(boxInp ? boxInp.value : 0, 10) || 0;
         const p = parseInt(pcsInp ? pcsInp.value : 0, 10) || 0;
+        const pack = parseInt(packInp ? packInp.value : 24, 10) || 24;
+        const total = (b * pack) + p;
 
-        if (b > 0 || p > 0) {
+        if (total > 0) {
             hasQuantity = true;
-            if (boxInp && boxInp.max && b > parseInt(boxInp.max, 10)) hasOverStock = true;
-            if (pcsInp && pcsInp.max && p > parseInt(pcsInp.max, 10)) hasOverStock = true;
+            if (total > stock) hasOverStock = true;
         }
     });
 

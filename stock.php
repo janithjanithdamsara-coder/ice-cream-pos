@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Action 1: Add New In Come Stock (GRN Invoice - Pure Manual Box or Pieces)
+    // Action 1: Add New In Come Stock (GRN Invoice - Auto Box-to-Pieces Multiplier)
     if ($action === 'create_grn') {
         $invNo = trim($_POST['invoice_no'] ?? '');
         $invDate = trim($_POST['invoice_date'] ?? date('Y-m-d'));
@@ -88,32 +88,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $itemsToProcess = [];
 
-        // Support bulk checklist format: selected_products[] + box_qty[pid] + quantity[pid]
+        // Support bulk checklist format: selected_products[] + box_qty[pid] + quantity[pid] + pack_size[pid]
         if (!empty($_POST['selected_products']) && is_array($_POST['selected_products'])) {
             foreach ($_POST['selected_products'] as $pid) {
                 $pid = intval($pid);
-                $boxQty = intval($_POST['box_qty'][$pid] ?? 0);
-                $pcsQty = intval($_POST['quantity'][$pid] ?? 0);
+                $boxQty = max(0, intval($_POST['box_qty'][$pid] ?? 0));
+                $pcsQty = max(0, intval($_POST['quantity'][$pid] ?? 0));
+                $packSize = max(1, intval($_POST['pack_size'][$pid] ?? 24));
 
                 if ($pid > 0 && ($boxQty > 0 || $pcsQty > 0)) {
-                    if ($boxQty > 0) {
-                        $unitType = 'box';
-                        $bQty = $boxQty;
-                        $pQty = 0;
-                        $finalQty = $boxQty;
-                    } else {
-                        $unitType = 'pcs';
-                        $bQty = 0;
-                        $pQty = $pcsQty;
-                        $finalQty = $pcsQty;
-                    }
+                    $totalUnits = ($boxQty * $packSize) + $pcsQty;
+                    $unitType = ($boxQty > 0 && $pcsQty > 0) ? 'mixed' : (($boxQty > 0) ? 'box' : 'pcs');
 
                     $itemsToProcess[] = [
                         'product_id' => $pid,
                         'unit_type' => $unitType,
-                        'box_qty' => $bQty,
-                        'pieces_qty' => $pQty,
-                        'quantity' => $finalQty
+                        'box_qty' => $boxQty,
+                        'pieces_qty' => $pcsQty,
+                        'units_per_box' => $packSize,
+                        'quantity' => $totalUnits
                     ];
                 }
             }
@@ -122,37 +115,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($invNo)) {
             setFlash('danger', 'Please enter the Invoice / Delivery Note number.');
         } elseif (empty($itemsToProcess)) {
-            setFlash('danger', 'Please select at least one item and enter either Box Qty OR Pieces Qty.');
+            setFlash('danger', 'Please select at least one item and enter Box Qty or Pieces Qty.');
         } else {
             try {
                 $pdo->beginTransaction();
 
                 $totalBoxes = 0;
                 $totalPieces = 0;
-                $totalItemsCount = 0;
+                $totalUnitsCount = 0;
                 foreach ($itemsToProcess as $item) {
                     $totalBoxes += $item['box_qty'];
                     $totalPieces += $item['pieces_qty'];
-                    $totalItemsCount += $item['quantity'];
+                    $totalUnitsCount += $item['quantity'];
                 }
 
                 // Insert Stock In Invoice
                 $stmt = $pdo->prepare("INSERT INTO stock_invoices 
                     (invoice_no, branch_id, invoice_date, supplier_name, total_items, notes, created_by) 
                     VALUES (?, ?, ?, ?, ?, '', ?)");
-                $stmt->execute([$invNo, $targetBranchId, $invDate, $supplier, $totalItemsCount, $user['id']]);
+                $stmt->execute([$invNo, $targetBranchId, $invDate, $supplier, $totalUnitsCount, $user['id']]);
                 $invoiceId = $pdo->lastInsertId();
 
-                // Insert Items & Update Warehouse Stock (box_qty & pieces_qty)
+                // Insert Items & Update Warehouse Stock
                 $stmtItem = $pdo->prepare("INSERT INTO stock_invoice_items 
-                    (invoice_id, product_id, quantity, box_qty, pieces_qty, unit_type) 
-                    VALUES (?, ?, ?, ?, ?, ?)");
+                    (invoice_id, product_id, quantity, box_qty, pieces_qty, units_per_box, unit_type) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)");
                 
                 $stmtStock = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, box_qty, pieces_qty, quantity) 
                     VALUES (?, ?, ?, ?, ?) 
                     ON DUPLICATE KEY UPDATE 
-                        box_qty = box_qty + VALUES(box_qty),
-                        pieces_qty = pieces_qty + VALUES(pieces_qty),
                         quantity = quantity + VALUES(quantity)");
 
                 foreach ($itemsToProcess as $item) {
@@ -162,6 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $item['quantity'], 
                         $item['box_qty'], 
                         $item['pieces_qty'], 
+                        $item['units_per_box'],
                         $item['unit_type']
                     ]);
                     $stmtStock->execute([
@@ -175,17 +167,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
                 $itemCount = count($itemsToProcess);
-                $summaryText = "";
-                if ($totalBoxes > 0 && $totalPieces > 0) {
-                    $summaryText = "{$totalBoxes} Boxes + {$totalPieces} Pieces";
-                } elseif ($totalBoxes > 0) {
-                    $summaryText = "{$totalBoxes} Boxes";
-                } else {
-                    $summaryText = "{$totalPieces} Pieces";
-                }
+                $summaryDetails = [];
+                if ($totalBoxes > 0) $summaryDetails[] = "{$totalBoxes} Boxes";
+                if ($totalPieces > 0) $summaryDetails[] = "{$totalPieces} Loose Pcs";
+                $breakdownStr = !empty($summaryDetails) ? ' (' . implode(' + ', $summaryDetails) . ')' : '';
 
-                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$summaryText} across {$itemCount} products into Cold Room from '{$supplier}'");
-                setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$summaryText} added to Cold Room warehouse.");
+                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: +{$totalUnitsCount} units{$breakdownStr} across {$itemCount} products into Cold Room from '{$supplier}'");
+                setFlash('success', "In Come Stock (GRN) #{$invNo} received! +{$totalUnitsCount} units{$breakdownStr} added to Cold Room warehouse.");
                 header("Location: stock.php");
                 exit;
 
@@ -194,6 +182,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->rollBack();
                 }
                 setFlash('danger', 'Error adding stock: ' . $e->getMessage());
+                header("Location: stock.php");
+                exit;
             }
         }
     }
@@ -421,27 +411,30 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
                                     <?php
-                                    $bCount = intval($prod['store_boxes'] ?? 0);
-                                    $pCount = intval($prod['store_pieces'] ?? 0);
+                                    $packSize = intval($prod['pack_size'] ?? 24);
+                                    if ($packSize <= 0) $packSize = 24;
                                     $totCount = intval($prod['store_stock'] ?? 0);
+                                    $bCount = floor($totCount / $packSize);
+                                    $pCount = $totCount % $packSize;
                                     ?>
-                                    <?php if ($bCount > 0 && $pCount > 0): ?>
-                                        <div class="inline-flex items-center gap-1.5 flex-wrap justify-center">
-                                            <span class="px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">📦 <?= number_format($bCount) ?> Bx</span>
-                                            <span class="px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">🍦 <?= number_format($pCount) ?> Pcs</span>
+                                    <?php if ($totCount > 0): ?>
+                                        <div class="inline-flex flex-col items-center justify-center">
+                                            <?php if ($bCount > 0 && $pCount > 0): ?>
+                                                <div class="inline-flex items-center gap-1 flex-wrap justify-center font-mono">
+                                                    <span class="px-2 py-0.5 rounded-lg font-black text-xs bg-amber-100 text-amber-900 border border-amber-300">📦 <?= number_format($bCount) ?> Bx</span>
+                                                    <span class="px-2 py-0.5 rounded-lg font-black text-xs bg-cyan-100 text-cyan-900 border border-cyan-300">+ 🍦 <?= number_format($pCount) ?> Pcs</span>
+                                                </div>
+                                                <span class="text-[10px] text-slate-500 font-bold font-mono mt-0.5">Total: <?= number_format($totCount) ?> Units</span>
+                                            <?php elseif ($bCount > 0): ?>
+                                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                                                    📦 <?= number_format($bCount) ?> Box<?= $bCount > 1 ? 'es' : '' ?> (<?= number_format($totCount) ?> Units)
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
+                                                    🍦 <?= number_format($totCount) ?> Loose Pieces
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
-                                    <?php elseif ($bCount > 0): ?>
-                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">
-                                            📦 <?= number_format($bCount) ?> Boxes
-                                        </span>
-                                    <?php elseif ($pCount > 0): ?>
-                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
-                                            🍦 <?= number_format($pCount) ?> Pieces
-                                        </span>
-                                    <?php elseif ($totCount > 0): ?>
-                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-slate-100 text-slate-800 border border-slate-300">
-                                            <?= number_format($totCount) ?> Units
-                                        </span>
                                     <?php else: ?>
                                         <span class="inline-block px-2.5 py-1 rounded-xl font-bold text-xs bg-rose-50 text-rose-600 border border-rose-200">
                                             0 (Out of Stock)
@@ -814,19 +807,22 @@ require_once __DIR__ . '/includes/header.php';
                                 <th class="py-2.5 px-3 w-10 text-center">
                                     <input type="checkbox" id="masterGrnCheckbox" onchange="toggleSelectAllGrn(this.checked)" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer">
                                 </th>
-                                <th class="py-2.5 px-3 w-28 font-mono">Product Code</th>
+                                <th class="py-2.5 px-3 w-24 font-mono">Code</th>
                                 <th class="py-2.5 px-3">Product Description</th>
-                                <th class="py-2.5 px-3 w-32 text-center">Cold Room Stock</th>
-                                <th class="py-2.5 px-3 w-28 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Box Qty</th>
-                                <th class="py-2.5 px-3 w-28 text-center bg-cyan-50 text-cyan-900 font-extrabold border-l border-cyan-100">🍦 Pieces (Pcs)</th>
-                                <th class="py-2.5 px-3 w-36 text-center text-emerald-900 font-extrabold border-l border-slate-200 whitespace-nowrap">🎯 Stock In Total</th>
+                                <th class="py-2.5 px-3 w-28 text-center">Cold Room Stock</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-slate-50 text-slate-700 font-bold border-l border-slate-200">Pcs/Box</th>
+                                <th class="py-2.5 px-3 w-24 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Box Qty</th>
+                                <th class="py-2.5 px-3 w-24 text-center bg-cyan-50 text-cyan-900 font-extrabold border-l border-cyan-100">🍦 Loose Pcs</th>
+                                <th class="py-2.5 px-3 w-36 text-center text-emerald-900 font-extrabold border-l border-slate-200 whitespace-nowrap">🎯 Total Added</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
                             <?php foreach ($inventory as $prod): 
-                                $bCur = intval($prod['store_boxes'] ?? 0);
-                                $pCur = intval($prod['store_pieces'] ?? 0);
+                                $packSize = intval($prod['pack_size'] ?? 24);
+                                if ($packSize <= 0) $packSize = 24;
                                 $tCur = intval($prod['store_stock'] ?? 0);
+                                $bCur = floor($tCur / $packSize);
+                                $pCur = $tCur % $packSize;
                             ?>
                             <tr class="grn-item-row hover:bg-slate-50/80 transition-colors" id="grn_row_<?= $prod['id'] ?>" data-search="<?= htmlspecialchars(strtolower($prod['code'] . ' ' . $prod['name'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                                 <td class="py-2 px-3 text-center">
@@ -843,30 +839,36 @@ require_once __DIR__ . '/includes/header.php';
                                     </div>
                                 </td>
                                 <td class="py-2 px-3 text-center whitespace-nowrap">
-                                    <?php if ($bCur > 0 && $pCur > 0): ?>
-                                        <div class="flex items-center justify-center gap-1">
-                                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] bg-amber-50 text-amber-900 border border-amber-200 font-mono">📦 <?= $bCur ?></span>
-                                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono">🍦 <?= $pCur ?></span>
+                                    <?php if ($tCur > 0): ?>
+                                        <div class="text-center font-mono">
+                                            <?php if ($bCur > 0 && $pCur > 0): ?>
+                                                <span class="text-[10px] font-black text-amber-900 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">📦<?= $bCur ?></span>
+                                                <span class="text-[10px] font-black text-cyan-900 bg-cyan-50 px-1 py-0.5 rounded border border-cyan-200">+<?= $pCur ?></span>
+                                            <?php elseif ($bCur > 0): ?>
+                                                <span class="text-[10px] font-black text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">📦 <?= $bCur ?> Bx</span>
+                                            <?php else: ?>
+                                                <span class="text-[10px] font-black text-cyan-900 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200">🍦 <?= $pCur ?> Pcs</span>
+                                            <?php endif; ?>
+                                            <div class="text-[9px] text-slate-400 font-bold"><?= number_format($tCur) ?> Units</div>
                                         </div>
-                                    <?php elseif ($bCur > 0): ?>
-                                        <span class="px-2 py-0.5 rounded font-bold text-[11px] bg-amber-50 text-amber-900 border border-amber-200 font-mono">📦 <?= $bCur ?> Bx</span>
-                                    <?php elseif ($pCur > 0): ?>
-                                        <span class="px-2 py-0.5 rounded font-bold text-[11px] bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono">🍦 <?= $pCur ?> Pcs</span>
-                                    <?php elseif ($tCur > 0): ?>
-                                        <span class="font-mono font-bold text-slate-600 text-xs"><?= number_format($tCur) ?></span>
                                     <?php else: ?>
                                         <span class="font-mono text-slate-400 text-xs">0</span>
                                     <?php endif; ?>
                                 </td>
+                                <td class="py-2 px-2 text-center border-l border-slate-100 bg-slate-50/50">
+                                    <input type="number" name="pack_size[<?= $prod['id'] ?>]" id="pack_<?= $prod['id'] ?>" value="<?= $packSize ?>" min="1" 
+                                           class="grn-pack-field w-14 text-center py-1.5 px-1 bg-white border border-slate-300 rounded-lg font-mono font-black text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500 shadow-2xs" 
+                                           oninput="handleGrnInput(<?= $prod['id'] ?>)">
+                                </td>
                                 <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
                                     <input type="number" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" min="0" placeholder="0" 
                                            class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
-                                           oninput="handleGrnInput(<?= $prod['id'] ?>, 'box')" onkeydown="handleGrnNav(event, this)">
+                                           oninput="handleGrnInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
                                 </td>
                                 <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                                     <input type="number" name="quantity[<?= $prod['id'] ?>]" id="qty_<?= $prod['id'] ?>" min="0" placeholder="0" 
                                            class="grn-qty-field w-20 text-center py-1.5 px-2 bg-white border border-cyan-300 rounded-xl font-mono font-black text-cyan-900 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-xs" 
-                                           oninput="handleGrnInput(<?= $prod['id'] ?>, 'pcs')" onkeydown="handleGrnNav(event, this)">
+                                           oninput="handleGrnInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
                                 </td>
                                 <td class="py-2 px-3 text-center border-l border-slate-100">
                                     <span id="total_units_<?= $prod['id'] ?>" class="font-mono text-xs font-bold text-slate-300">-</span>
@@ -1205,59 +1207,31 @@ require_once __DIR__ . '/includes/header.php';
         handleGrnInput(pid);
     }
 
-    function handleGrnInput(pid, changedType) {
+    function handleGrnInput(pid) {
         const row = document.getElementById('grn_row_' + pid);
         const chk = document.getElementById('chk_' + pid);
         const boxInput = document.getElementById('box_' + pid);
         const qtyInput = document.getElementById('qty_' + pid);
+        const packInput = document.getElementById('pack_' + pid);
         const totalSpan = document.getElementById('total_units_' + pid);
         if (!row || !chk) return;
 
-        const boxes = parseInt(boxInput ? boxInput.value : 0) || 0;
-        const pcs = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+        const boxes = Math.max(0, parseInt(boxInput ? boxInput.value : 0) || 0);
+        const pcs = Math.max(0, parseInt(qtyInput ? qtyInput.value : 0) || 0);
+        const packSize = Math.max(1, parseInt(packInput ? packInput.value : 24) || 24);
 
-        if (changedType === 'box' && boxes > 0) {
-            // Entering Box locks and clears Pieces
-            if (qtyInput) {
-                qtyInput.value = '';
-                qtyInput.disabled = true;
-                qtyInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
-            if (boxInput) {
-                boxInput.disabled = false;
-                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
-            if (totalSpan) {
-                totalSpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 font-black text-xs">📦 ${boxes} Boxes</span>`;
-            }
+        const totalUnits = (boxes * packSize) + pcs;
+
+        if (totalUnits > 0) {
             chk.checked = true;
             applyRowHighlight(row, true);
-        } else if (changedType === 'pcs' && pcs > 0) {
-            // Entering Pieces locks and clears Boxes
-            if (boxInput) {
-                boxInput.value = '';
-                boxInput.disabled = true;
-                boxInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
-            if (qtyInput) {
-                qtyInput.disabled = false;
-                qtyInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
+            let breakdown = [];
+            if (boxes > 0) breakdown.push(`📦 ${boxes} Bx (${boxes * packSize})`);
+            if (pcs > 0) breakdown.push(`🍦 ${pcs} Pcs`);
             if (totalSpan) {
-                totalSpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-cyan-100 text-cyan-900 border border-cyan-300 font-black text-xs">🍦 ${pcs} Pieces</span>`;
+                totalSpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-xs font-mono">+${totalUnits.toLocaleString()} Units</span><div class="text-[9px] text-slate-400 font-bold mt-0.5">${breakdown.join(' + ')}</div>`;
             }
-            chk.checked = true;
-            applyRowHighlight(row, true);
-        } else if (boxes === 0 && pcs === 0) {
-            // Both empty
-            if (boxInput) {
-                boxInput.disabled = false;
-                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
-            if (qtyInput) {
-                qtyInput.disabled = false;
-                qtyInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
-            }
+        } else {
             if (totalSpan) {
                 totalSpan.innerHTML = `<span class="text-slate-300 font-normal">-</span>`;
             }
@@ -1283,19 +1257,24 @@ require_once __DIR__ . '/includes/header.php';
     function updateGrnTotals() {
         let selectedCount = 0;
         let totalBoxes = 0;
-        let totalPieces = 0;
+        let totalLoosePieces = 0;
+        let grandTotalUnits = 0;
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
 
         rows.forEach(r => {
             const chk = r.querySelector('.grn-checkbox');
             const boxInput = r.querySelector('.grn-box-field');
             const qtyInput = r.querySelector('.grn-qty-field');
+            const packInput = r.querySelector('.grn-pack-field');
             if (chk && chk.checked) {
                 selectedCount++;
-                const b = parseInt(boxInput ? boxInput.value : 0) || 0;
-                const q = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+                const b = Math.max(0, parseInt(boxInput ? boxInput.value : 0) || 0);
+                const q = Math.max(0, parseInt(qtyInput ? qtyInput.value : 0) || 0);
+                const p = Math.max(1, parseInt(packInput ? packInput.value : 24) || 24);
+                const rowUnits = (b * p) + q;
                 totalBoxes += b;
-                totalPieces += q;
+                totalLoosePieces += q;
+                grandTotalUnits += rowUnits;
             }
         });
 
@@ -1307,12 +1286,13 @@ require_once __DIR__ . '/includes/header.php';
 
         if (countEl) countEl.innerText = selectedCount;
         if (boxEl) boxEl.innerText = totalBoxes.toLocaleString();
-        if (pcsEl) pcsEl.innerText = totalPieces.toLocaleString();
+        if (pcsEl) pcsEl.innerText = grandTotalUnits.toLocaleString();
         if (footerUnits) {
             let footerSummary = [];
             if (totalBoxes > 0) footerSummary.push(`${totalBoxes} Boxes`);
-            if (totalPieces > 0) footerSummary.push(`${totalPieces} Pieces`);
-            footerUnits.innerHTML = footerSummary.length > 0 ? footerSummary.join(' + ') : '0';
+            if (totalLoosePieces > 0) footerSummary.push(`${totalLoosePieces} Loose Pcs`);
+            const subtext = footerSummary.length > 0 ? ` (${footerSummary.join(' + ')})` : '';
+            footerUnits.innerHTML = `+${grandTotalUnits.toLocaleString()} Units${subtext}`;
         }
         if (footerItems) footerItems.innerText = selectedCount;
     }
