@@ -592,6 +592,136 @@ if (isset($_GET['action']) && $_GET['action'] === 'settle' && isset($_GET['dispa
 require_once __DIR__ . '/includes/header.php';
 ?>
 
+<!-- ==================== PRINTABLE LORRY DISPATCH & SETTLEMENT SHEET (1-PAGE CLEAN MONOCHROME) ==================== -->
+<?php if ($viewDispatch): 
+    $vLoaded = intval($viewDispatch['total_loaded_qty']);
+    $vReturned = intval($viewDispatch['total_return_store_qty']);
+    $vDamaged = intval($viewDispatch['total_damage_qty']);
+    $vDelivered = intval($viewDispatch['total_delivered_qty']);
+    $isSettled = ($viewDispatch['status'] === 'settled');
+?>
+<div class="print-only font-mono text-black p-4 max-w-2xl mx-auto border-2 border-black">
+    <div class="text-center pb-3 border-b-2 border-dashed border-black">
+        <h2 class="text-xl font-black uppercase tracking-wider">DHANESHA DISTRIBUTORS</h2>
+        <p class="text-sm font-bold">Cold Room &amp; Lorry Fleet Distribution Logistics</p>
+        <p class="text-xs"><?= htmlspecialchars($user['branch_name'] ?? 'Main Cold Room') ?> &bull; Pure Inventory (Units Only)</p>
+        <div class="mt-2 text-xs font-bold uppercase bg-black text-white px-3 py-0.5 inline-block">
+            LORRY LOADING &amp; 3:00 PM SETTLEMENT SHEET
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 text-xs py-3 border-b border-black gap-2">
+        <div><strong>Dispatch Voucher #:</strong> <?= htmlspecialchars($viewDispatch['dispatch_no']) ?></div>
+        <div><strong>Date:</strong> <?= htmlspecialchars($viewDispatch['dispatch_date']) ?> (Out: <?= htmlspecialchars($viewDispatch['dispatch_time']) ?><?= !empty($viewDispatch['settlement_time']) ? " | Settle: {$viewDispatch['settlement_time']}" : '' ?>)</div>
+        <div><strong>Lorry Plate:</strong> <?= htmlspecialchars($viewDispatch['plate_no']) ?></div>
+        <div><strong>Driver / Sales Rep:</strong> <?= htmlspecialchars($viewDispatch['driver_name']) ?></div>
+        <div><strong>Distribution Route:</strong> <?= htmlspecialchars($viewDispatch['route_name'] ?: 'General Route') ?></div>
+        <div><strong>Status:</strong> <span class="font-black uppercase"><?= htmlspecialchars($viewDispatch['status']) ?></span></div>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="grid grid-cols-4 text-center text-xs py-2 my-2 border border-black bg-gray-50">
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Total Loaded</span>
+            <strong class="text-sm font-black"><?= number_format($vLoaded) ?></strong>
+        </div>
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Store Return</span>
+            <strong class="text-sm font-black"><?= number_format($vReturned) ?></strong>
+        </div>
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Melted / Loss</span>
+            <strong class="text-sm font-black"><?= number_format($vDamaged) ?></strong>
+        </div>
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Delivered / Sold</span>
+            <strong class="text-sm font-black"><?= number_format($vDelivered) ?></strong>
+        </div>
+    </div>
+
+    <!-- Reloads Breakdown (if any) -->
+    <?php if (!empty($viewDispatchReloads)): ?>
+    <div class="my-2 p-2 border border-black text-xs">
+        <div class="font-bold uppercase text-[10px] mb-1">Mid-Day Extra Reloads on Route:</div>
+        <div class="space-y-1">
+            <?php foreach ($viewDispatchReloads as $rld): ?>
+                <div class="flex justify-between items-center border-b border-dashed border-gray-300 pb-0.5">
+                    <span><strong><?= htmlspecialchars($rld['reload_no']) ?></strong> (Time: <?= htmlspecialchars($rld['reload_time']) ?>)</span>
+                    <span class="font-bold">+<?= number_format($rld['total_reload_qty']) ?> Units</span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Items Breakdown Table -->
+    <div class="my-3">
+        <table class="w-full text-xs text-left border-collapse border border-black">
+            <thead>
+                <tr class="border-b border-black font-bold uppercase bg-gray-100">
+                    <th class="py-1 px-2 border-r border-black w-8">#</th>
+                    <th class="py-1 px-2 border-r border-black">Code</th>
+                    <th class="py-1 px-2 border-r border-black">Product Name</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Unit</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Loaded</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Return</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Damage</th>
+                    <th class="py-1 px-2 text-right">Delivered</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($viewDispatchItems as $idx => $vItem): 
+                    $vuType = $vItem['unit_type'] ?? 'box';
+                    $vuLabel = ($vuType === 'piece') ? 'PCS' : 'BOX';
+                ?>
+                <tr class="border-b border-dashed border-gray-300">
+                    <td class="py-1 px-2 border-r border-black"><?= $idx + 1 ?></td>
+                    <td class="py-1 px-2 border-r border-black font-mono"><?= htmlspecialchars($vItem['product_code']) ?></td>
+                    <td class="py-1 px-2 border-r border-black font-semibold"><?= htmlspecialchars($vItem['product_name']) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center font-bold"><?= $vuLabel ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center font-bold"><?= number_format($vItem['loaded_qty']) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($vItem['return_store_qty']) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($vItem['damage_qty']) ?></td>
+                    <td class="py-1 px-2 text-right font-black"><?= number_format($vItem['delivered_qty']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr class="border-t-2 border-black font-black uppercase bg-gray-100">
+                    <td colspan="4" class="py-1 px-2 border-r border-black text-right">TOTALS:</td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($vLoaded) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($vReturned) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($vDamaged) ?></td>
+                    <td class="py-1 px-2 text-right font-black"><?= number_format($vDelivered) ?></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <?php if (!empty($viewDispatch['notes'])): ?>
+    <div class="text-xs italic border-t border-gray-300 pt-2 mb-4">
+        <strong>Route Notes:</strong> <?= htmlspecialchars($viewDispatch['notes']) ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- 3 Signature Lines -->
+    <div class="grid grid-cols-3 text-center text-xs pt-8 border-t border-black gap-4 mt-4">
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Loaded By (Warehouse)</div>
+        </div>
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Driver / Sales Rep</div>
+        </div>
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Settled &amp; Verified By</div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Main Screen Content (Hidden in Print) -->
+<div class="no-print space-y-6">
+
 <!-- Header -->
 <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-3">
     <div>
@@ -844,9 +974,10 @@ require_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+</div>
 
 <!-- MODAL: Morning Dispatch (Store -> Lorry Bulk Loading Checklist - Zero Money) -->
-<div id="newDispatchModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div id="newDispatchModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
@@ -1059,7 +1190,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- MODAL: Mid-Day Lorry Reload / Top-up Stock (Store -> Lorry while on route) -->
-<div id="reloadDispatchModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div id="reloadDispatchModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
@@ -1246,9 +1377,9 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<<!-- MODAL: Evening 3:00 PM Returns & Reconciliation (Opens if ?action=settle) -->
+<!-- MODAL: Evening 3:00 PM Returns & Reconciliation (Opens if ?action=settle) -->
 <?php if ($settleDispatch): ?>
-<div id="settleModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div id="settleModal" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
@@ -1443,7 +1574,7 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- MODAL: View Settled Dispatch Sheet -->
 <?php if ($viewDispatch): ?>
-<div class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+<div class="no-print fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200">
         <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
             <div>
@@ -1541,7 +1672,7 @@ require_once __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <!-- MODAL: Add New Lorry -->
-<div id="newLorryModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+<div id="newLorryModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-slate-200">
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <h3 class="font-bold text-sm text-slate-800 flex items-center">

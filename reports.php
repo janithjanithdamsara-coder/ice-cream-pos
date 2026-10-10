@@ -252,15 +252,16 @@ require_once __DIR__ . '/includes/header.php';
 ?>
 
 <!-- Print Header (Visible only when printed) -->
-<div class="print-only mb-6 pb-4 border-b-2 border-slate-800">
+<div class="print-only mb-6 pb-4 border-b-2 border-black font-mono text-black">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-xl font-black text-slate-900 uppercase tracking-tight">FrostyFlow Ice Cream Distribution</h1>
-            <p class="text-xs text-slate-600 font-bold">Stock Movement & Distribution Audit Sheet (Pure Units Tracking)</p>
+            <h1 class="text-xl font-black uppercase tracking-tight">DHANESHA DISTRIBUTORS</h1>
+            <p class="text-xs font-bold">Cold Room &amp; Warehouse Stock Audit Sheet (Pure Units Tracking)</p>
+            <p class="text-[10px]"><?= htmlspecialchars($user['branch_name'] ?? 'Main Cold Room') ?></p>
         </div>
-        <div class="text-right text-xs">
-            <div class="font-bold text-slate-800">Period: <?= date('d M Y', strtotime($fromDate)) ?> to <?= date('d M Y', strtotime($toDate)) ?></div>
-            <div class="text-[10px] text-slate-500">Printed: <?= date('d M Y, h:i A') ?></div>
+        <div class="text-right text-xs font-mono">
+            <div class="font-bold">Period: <?= date('d M Y', strtotime($fromDate)) ?> to <?= date('d M Y', strtotime($toDate)) ?></div>
+            <div class="text-[10px] text-gray-600">Printed: <?= date('d M Y, h:i A') ?></div>
         </div>
     </div>
 </div>
@@ -317,7 +318,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ========================= TOP KPI SUMMARY METRICS ========================= -->
-<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 no-print">
     <!-- Metric 1: Current Cold Room Stock -->
     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center shrink-0">

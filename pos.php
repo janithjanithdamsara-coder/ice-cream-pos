@@ -295,7 +295,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- On-Screen Receipt Preview Modal -->
-<div id="slipPreviewModal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 hidden animate-in fade-in">
+<div id="slipPreviewModal" class="no-print fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 hidden animate-in fade-in">
     <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col max-h-[92vh]">
         <div class="p-3.5 bg-slate-900 text-white flex items-center justify-between">
             <span class="text-xs font-bold flex items-center">
@@ -715,7 +715,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ========================= RECENT SLIPS DRAWER / MODAL ========================= -->
-<div id="recentDrawer" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+<div id="recentDrawer" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden">
     <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
             <h3 class="text-sm font-bold flex items-center">

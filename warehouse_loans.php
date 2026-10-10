@@ -414,8 +414,132 @@ if (isset($_GET['action']) && $_GET['action'] === 'receive' && isset($_GET['loan
 require_once __DIR__ . '/includes/header.php';
 ?>
 
-<!-- ==================== MAIN CONTENT CONTAINER ==================== -->
-<div class="space-y-6">
+<!-- ==================== PRINTABLE LOAN SLIP (1-PAGE CLEAN MONOCHROME) ==================== -->
+<?php if ($viewLoan): 
+    $vIssued = intval($viewLoan['total_issued_qty']);
+    $vReturned = intval($viewLoan['total_returned_qty']);
+    $vDue = max(0, $vIssued - $vReturned);
+?>
+<div class="print-only font-mono text-black p-4 max-w-2xl mx-auto border-2 border-black">
+    <div class="text-center pb-3 border-b-2 border-dashed border-black">
+        <h2 class="text-xl font-black uppercase tracking-wider">DHANESHA DISTRIBUTORS</h2>
+        <p class="text-sm font-bold">Cold Room & Warehouse Stock Logistics</p>
+        <p class="text-xs"><?= htmlspecialchars($user['branch_name']) ?> &bull; Pure Inventory (Units Only)</p>
+        <div class="mt-2 text-xs font-bold uppercase bg-black text-white px-3 py-0.5 inline-block">
+            INTER-WAREHOUSE STOCK LOAN & REPLENISHMENT NOTE
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 text-xs py-3 border-b border-black gap-2">
+        <div><strong>Loan Slip No:</strong> <?= htmlspecialchars($viewLoan['loan_no']) ?></div>
+        <div><strong>Issue Date:</strong> <?= htmlspecialchars($viewLoan['issue_date']) ?> <?= htmlspecialchars($viewLoan['issue_time']) ?></div>
+        <div><strong>Borrower / Hub:</strong> <?= htmlspecialchars($viewLoan['borrower_name']) ?></div>
+        <div><strong>Contact Phone:</strong> <?= htmlspecialchars($viewLoan['contact_no'] ?: 'N/A') ?></div>
+        <div><strong>Vehicle & Driver:</strong> <?= htmlspecialchars($viewLoan['vehicle_no'] ?: 'N/A') ?> <?= htmlspecialchars($viewLoan['driver_name'] ? "({$viewLoan['driver_name']})" : '') ?></div>
+        <div><strong>Issued By:</strong> <?= htmlspecialchars($viewLoan['creator_name'] ?? 'Staff') ?></div>
+    </div>
+
+    <!-- Loan Status & Summary Box -->
+    <div class="grid grid-cols-3 text-center text-xs py-2 my-2 border border-black bg-gray-50">
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Total Issued</span>
+            <strong class="text-sm font-black"><?= number_format($vIssued) ?> Units</strong>
+        </div>
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Total Returned</span>
+            <strong class="text-sm font-black"><?= number_format($vReturned) ?> Units</strong>
+        </div>
+        <div>
+            <span class="block text-[10px] uppercase font-bold">Balance Due</span>
+            <strong class="text-sm font-black"><?= number_format($vDue) ?> Units (<?= strtoupper($viewLoan['status']) ?>)</strong>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <div class="my-3">
+        <div class="text-xs font-bold uppercase mb-1">Issued Stock Items:</div>
+        <table class="w-full text-xs text-left border-collapse border border-black">
+            <thead>
+                <tr class="border-b border-black font-bold uppercase bg-gray-100">
+                    <th class="py-1 px-2 border-r border-black w-8">#</th>
+                    <th class="py-1 px-2 border-r border-black">Code</th>
+                    <th class="py-1 px-2 border-r border-black">Product Name</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Issued</th>
+                    <th class="py-1 px-2 border-r border-black text-center">Returned</th>
+                    <th class="py-1 px-2 text-right">Remaining Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($viewLoanItems as $idx => $vItem): 
+                    $iIssued = intval($vItem['issued_qty']);
+                    $iReturned = intval($vItem['returned_qty']);
+                    $iDue = max(0, $iIssued - $iReturned);
+                ?>
+                <tr class="border-b border-dashed border-gray-300">
+                    <td class="py-1 px-2 border-r border-black"><?= $idx + 1 ?></td>
+                    <td class="py-1 px-2 border-r border-black font-mono"><?= htmlspecialchars($vItem['product_code']) ?></td>
+                    <td class="py-1 px-2 border-r border-black font-semibold"><?= htmlspecialchars($vItem['product_name']) ?> <?= htmlspecialchars($vItem['size'] ?? '') ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center font-bold"><?= number_format($iIssued) ?></td>
+                    <td class="py-1 px-2 border-r border-black text-center"><?= number_format($iReturned) ?></td>
+                    <td class="py-1 px-2 text-right font-black"><?= $iDue > 0 ? number_format($iDue) : '✓ Settled' ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Return Batches History (if any) -->
+    <?php if (!empty($viewLoanReturns)): ?>
+    <div class="my-3">
+        <div class="text-xs font-bold uppercase mb-1">Return & Restock History:</div>
+        <table class="w-full text-xs text-left border-collapse border border-black">
+            <thead>
+                <tr class="border-b border-black font-bold uppercase bg-gray-100">
+                    <th class="py-1 px-2 border-r border-black">Return Note</th>
+                    <th class="py-1 px-2 border-r border-black">Date & Time</th>
+                    <th class="py-1 px-2 border-r border-black">Received By</th>
+                    <th class="py-1 px-2 border-r border-black">Delivered By</th>
+                    <th class="py-1 px-2 text-right">Restocked</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($viewLoanReturns as $rBatch): ?>
+                <tr class="border-b border-dashed border-gray-300">
+                    <td class="py-1 px-2 border-r border-black font-mono font-bold"><?= htmlspecialchars($rBatch['return_no']) ?></td>
+                    <td class="py-1 px-2 border-r border-black"><?= htmlspecialchars($rBatch['return_date']) ?> <?= htmlspecialchars($rBatch['return_time']) ?></td>
+                    <td class="py-1 px-2 border-r border-black"><?= htmlspecialchars($rBatch['receiver_name'] ?? 'Staff') ?></td>
+                    <td class="py-1 px-2 border-r border-black"><?= htmlspecialchars($rBatch['delivered_by'] ?: 'N/A') ?></td>
+                    <td class="py-1 px-2 text-right font-black">+<?= number_format($rBatch['total_return_qty']) ?> Units</td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($viewLoan['notes'])): ?>
+    <div class="text-xs italic border-t border-gray-300 pt-2 mb-4">
+        <strong>Notes / Purpose:</strong> <?= htmlspecialchars($viewLoan['notes']) ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- 3 Signature Lines -->
+    <div class="grid grid-cols-3 text-center text-xs pt-8 border-t border-black gap-4 mt-4">
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Issued By (Warehouse)</div>
+        </div>
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Borrower Representative</div>
+        </div>
+        <div>
+            <div class="border-t border-dashed border-black pt-1">Restocked / Verified By</div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ==================== MAIN CONTENT CONTAINER (SCREEN ONLY) ==================== -->
+<div class="space-y-6 no-print">
 
     <!-- Top Breadcrumb & Actions Bar -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
@@ -716,7 +840,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ==================== MODAL 1: Issue Stock (New Loan) ==================== -->
-<div id="newLoanModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div id="newLoanModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
@@ -878,7 +1002,7 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- ==================== MODAL 2: Receive Return Stock (Replenishment) ==================== -->
 <?php if ($receiveLoan): ?>
-<div id="receiveReturnModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div id="receiveReturnModal" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Header -->
@@ -1025,7 +1149,7 @@ require_once __DIR__ . '/includes/header.php';
     $vReturned = intval($viewLoan['total_returned_qty']);
     $vDue = max(0, $vIssued - $vReturned);
 ?>
-<div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+<div class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Sheet Header -->

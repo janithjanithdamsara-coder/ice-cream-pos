@@ -43,9 +43,51 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
         @media print {
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            .print-full-width { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+            @page { 
+                margin: 8mm; 
+                size: auto; 
+            }
+            *, *::before, *::after {
+                box-shadow: none !important;
+                text-shadow: none !important;
+            }
+            html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                min-height: auto !important;
+                font-size: 11px !important;
+            }
+            .no-print, header, aside, footer, #toastContainer, #sidebarBackdrop, #floatingSupportBtn, #mrLinkSupportModal, #autoLockScreenModal, .modal-backdrop, .lg\:hidden, .md\:hidden {
+                display: none !important;
+            }
+            .hidden.lg\:block, .hidden.md\:block, .print-table {
+                display: block !important;
+            }
+            .print-only {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+            }
+            .print-full-width {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+            }
+            main {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
         }
         .print-only { display: none; }
         .sidebar-scroll::-webkit-scrollbar { width: 4px; }

@@ -655,7 +655,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ========================= CREATE DIRECT ISSUE MODAL (BULK CHECKLIST TABLE) ========================= -->
-<div id="issueModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 hidden">
+<div id="issueModal" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 hidden">
     <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         <!-- Modal Header -->
