@@ -1437,305 +1437,261 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- MODAL: Evening 3:00 PM Returns & Reconciliation (Opens if ?action=settle) -->
 <?php if ($settleDispatch): ?>
-<div id="settleModal" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+<div id="settleModal" class="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-5xl sm:max-w-6xl w-full h-[92vh] max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-600 via-rose-700 to-red-800 text-white shrink-0">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner">
-                    <i class="fa-solid fa-clock-rotate-left text-lg"></i>
-                </div>
-                <div>
-                    <h3 class="font-black text-base flex items-center tracking-tight">
-                        Evening 3:00 PM Lorry Returns & Settlement
-                    </h3>
-                    <p class="text-rose-100 text-xs mt-0.5">
-                        Lorry: <strong><?= htmlspecialchars($settleDispatch['plate_no']) ?></strong> &bull; Driver: <?= htmlspecialchars($settleDispatch['driver_name']) ?> &bull; Dispatch: <?= htmlspecialchars($settleDispatch['dispatch_no']) ?>
-                    </p>
-                </div>
+        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-600 via-rose-700 to-red-800 text-white shrink-0">
+            <div>
+                <h3 class="font-extrabold text-base flex items-center tracking-tight">
+                    <i class="fa-solid fa-clock-rotate-left text-rose-200 text-lg mr-2.5"></i> Evening 3:00 PM Lorry Returns & Settlement
+                </h3>
+                <p class="text-rose-100 text-xs mt-0.5">
+                    Lorry: <strong><?= htmlspecialchars($settleDispatch['plate_no']) ?></strong> &bull; Driver: <strong><?= htmlspecialchars($settleDispatch['driver_name']) ?></strong> &bull; Dispatch: <?= htmlspecialchars($settleDispatch['dispatch_no']) ?>
+                </p>
             </div>
-            <a href="lorry.php" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
+            <a href="lorry.php" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/90 hover:text-white transition cursor-pointer">
                 <i class="fa-solid fa-xmark"></i>
             </a>
         </div>
 
         <!-- Modal Form Body -->
-        <form method="POST" action="lorry.php" class="flex-1 flex flex-col min-h-0 overflow-hidden" id="settleForm">
+        <form method="POST" action="lorry.php" class="flex-1 flex flex-col overflow-hidden p-4 sm:p-5 space-y-3" id="settleForm">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="settle_dispatch">
             <input type="hidden" name="dispatch_id" value="<?= $settleDispatch['id'] ?>">
 
-            <!-- Top Controls & Search Bar -->
-            <div class="p-4 bg-slate-50 border-b border-slate-200 shrink-0 space-y-3">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                        <label class="block font-bold text-slate-700 mb-1">Return / Settlement Time *</label>
-                        <input type="time" name="settlement_time" value="15:00" required class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold font-mono text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block font-bold text-slate-700 mb-1">Return Notes / Reason</label>
-                        <input type="text" name="notes" placeholder="e.g. 3.00 PM Evening return completed" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none">
-                    </div>
+            <!-- Top Row: Meta Information (4 Clean Columns matching GRN Style) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs shrink-0">
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Lorry Vehicle</label>
+                    <input type="text" readonly value="<?= htmlspecialchars($settleDispatch['plate_no']) ?> (<?= htmlspecialchars($settleDispatch['driver_name']) ?>)"
+                           class="w-full px-2.5 py-1.5 bg-slate-100 border border-slate-300 rounded-xl font-bold text-slate-800 text-xs cursor-not-allowed">
                 </div>
 
-                <?php if (!empty($settleDispatchReloads)): ?>
-                <div class="p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-900 flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <i class="fa-solid fa-truck-ramp-box text-orange-600"></i>
-                        <span>Includes <strong><?= count($settleDispatchReloads) ?> Mid-Day Reload(s)</strong>: Extra stock automatically added into Total Loaded.</span>
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Dispatch #</label>
+                    <input type="text" readonly value="<?= htmlspecialchars($settleDispatch['dispatch_no']) ?>"
+                           class="w-full px-2.5 py-1.5 bg-slate-100 border border-slate-300 rounded-xl font-mono font-bold text-slate-800 text-xs cursor-not-allowed">
+                </div>
+
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Settlement Time *</label>
+                    <input type="time" name="settlement_time" value="15:00" required 
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold font-mono text-slate-800 text-xs focus:ring-1 focus:ring-rose-500">
+                </div>
+
+                <div class="col-span-1">
+                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Return Notes / Reason</label>
+                    <input type="text" name="notes" placeholder="e.g. 3.00 PM Evening return completed" 
+                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-rose-500">
+                </div>
+            </div>
+
+            <?php if (!empty($settleDispatchReloads)): ?>
+            <div class="p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-900 flex items-center justify-between shrink-0">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-truck-ramp-box text-orange-600"></i>
+                    <span>Includes <strong><?= count($settleDispatchReloads) ?> Mid-Day Reload(s)</strong>: Extra stock automatically added into Total Loaded.</span>
+                </div>
+                <span class="px-2 py-0.5 bg-orange-200/80 rounded-lg font-mono font-bold text-orange-800 text-[11px]">
+                    +<?= array_sum(array_column($settleDispatchReloads, 'total_reload_qty')) ?> Units Added
+                </span>
+            </div>
+            <?php endif; ?>
+
+            <!-- Toolbar: Search Box & Quick Action Buttons (Matching GRN Style) -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center space-x-2 flex-1">
+                    <div class="relative w-full sm:w-64">
+                        <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-400 text-xs">
+                            <i class="fa-solid fa-search"></i>
+                        </span>
+                        <input type="text" id="settleSearchInput" oninput="filterSettleList()" placeholder="Quick filter code or name..." 
+                               class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500 font-medium">
+                        <button type="button" id="settleSearchClearBtn" onclick="clearSettleSearch()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
-                    <span class="px-2 py-0.5 bg-orange-200/80 rounded-lg font-mono font-bold text-orange-800 text-[11px]">
-                        +<?= array_sum(array_column($settleDispatchReloads, 'total_reload_qty')) ?> Units Added
+                    <button type="button" onclick="clearSettleSearch()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200 transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-rotate-left mr-1 text-slate-400"></i> Clear Search
+                    </button>
+                    <button type="button" onclick="quickSettleAction('all_sold')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-bolt mr-1 text-emerald-200"></i> All Sold (0 Returns)
+                    </button>
+                    <button type="button" onclick="quickSettleAction('return_all')" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-rotate-left mr-1 text-purple-200"></i> Return All to Store
+                    </button>
+                </div>
+
+                <!-- Live Summary Badges -->
+                <div class="flex items-center justify-between sm:justify-end space-x-1.5 text-[11px] font-bold shrink-0">
+                    <span class="px-2 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70">
+                        📦 Loaded: <strong id="settleSummaryLoaded" class="font-black text-amber-800 font-mono">0 Units</strong>
+                    </span>
+                    <span class="px-2 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-200/70">
+                        💜 Good Ret: <strong id="settleSummaryReturns" class="font-black text-purple-800 font-mono">0 Units</strong>
+                    </span>
+                    <span class="px-2 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/70">
+                        💔 Melted: <strong id="settleSummaryDamages" class="font-black text-rose-800 font-mono">0 Units</strong>
+                    </span>
+                    <span class="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/70">
+                        🎯 Delivered: <strong id="settleSummaryDelivered" class="font-black text-emerald-800 font-mono">0 Units</strong>
                     </span>
                 </div>
-                <?php endif; ?>
-
-                <!-- Quick Action Buttons & Search Filter -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                    <div class="relative flex-1">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                        <input type="text" id="settleSearchInput" placeholder="Search loaded product name or code..." oninput="filterSettleList()"
-                               class="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-8 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500">
-                        <button type="button" id="settleSearchClearBtn" onclick="clearSettleSearch()" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs p-0.5">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </button>
-                    </div>
-
-                    <div class="flex items-center space-x-1.5 shrink-0 text-xs">
-                        <button type="button" onclick="quickSettleAction('all_sold')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold flex items-center transition shadow-2xs">
-                            <i class="fa-solid fa-bolt mr-1 text-emerald-600"></i> All Sold (0 Returns)
-                        </button>
-                        <button type="button" onclick="quickSettleAction('return_all')" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-bold flex items-center transition shadow-2xs">
-                            <i class="fa-solid fa-rotate-left mr-1 text-purple-600"></i> Return All to Store
-                        </button>
-                    </div>
-                </div>
             </div>
 
-            <!-- Pure Quantity Reconciliation Table -->
-            <div class="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-white border-y border-slate-200">
-                <table class="w-full text-left text-xs border-collapse" id="settleReconciliationTable">
-                    <thead class="bg-slate-100/95 sticky top-0 z-10 text-slate-600 uppercase text-[10px] font-black border-b border-slate-200 backdrop-blur-xs select-none">
-                        <tr>
-                            <th class="py-3 px-3.5 min-w-[220px]">
-                                <div class="flex items-center space-x-1.5">
-                                    <i class="fa-solid fa-cube text-slate-400"></i>
-                                    <span>Product Details</span>
-                                </div>
-                            </th>
-                            <th class="py-3 px-3 text-center min-w-[130px] bg-amber-50/70 text-amber-900 border-l border-amber-200/60">
-                                <span>Total Loaded</span>
-                                <?php if (!empty($settleDispatchReloads)): ?>
-                                    <span class="text-[9px] block text-amber-600 font-semibold">(Incl. Reloads)</span>
-                                <?php endif; ?>
-                            </th>
-                            <th class="py-3 px-3 text-center min-w-[170px] bg-purple-50/70 text-purple-900 border-l border-purple-200/60">
-                                <div class="flex items-center justify-center space-x-1">
-                                    <i class="fa-solid fa-rotate-left text-purple-600"></i>
-                                    <span>Good Returns</span>
-                                </div>
-                                <span class="text-[9px] block text-purple-600 font-normal lowercase">(Restock to Store)</span>
-                            </th>
-                            <th class="py-3 px-3 text-center min-w-[170px] bg-rose-50/70 text-rose-900 border-l border-rose-200/60">
-                                <div class="flex items-center justify-center space-x-1">
-                                    <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
-                                    <span>Melted / Damaged</span>
-                                </div>
-                                <span class="text-[9px] block text-rose-600 font-normal lowercase">(Wasted / Loss)</span>
-                            </th>
-                            <th class="py-3 px-3 text-center min-w-[140px] bg-emerald-50/70 text-emerald-900 border-l border-emerald-200/60">
-                                <div class="flex items-center justify-center space-x-1">
-                                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                                    <span>Delivered / Sold</span>
-                                </div>
-                                <span class="text-[9px] block text-emerald-600 font-normal lowercase">(Auto-Calculated)</span>
-                            </th>
-                            <th class="py-3 px-2 text-center w-24 border-l border-slate-200">Quick</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100" id="settleTableBody">
-                        <?php foreach ($settleDispatchItems as $idx => $it): 
-                            $packSize = intval($it['pack_size'] ?? 24);
-                            if ($packSize <= 0) $packSize = 24;
-                            $loadedUnits = intval($it['loaded_qty']);
-                            $lBoxes = intdiv($loadedUnits, $packSize);
-                            $lPcs = $loadedUnits % $packSize;
-                        ?>
-                            <tr class="settle-item-row hover:bg-slate-50/80 transition-colors" 
-                                id="settle_row_<?= $it['id'] ?>"
-                                data-id="<?= $it['id'] ?>"
-                                data-loaded="<?= $loadedUnits ?>"
-                                data-pack="<?= $packSize ?>"
-                                data-search="<?= htmlspecialchars(strtolower($it['product_name'] . ' ' . $it['product_code'])) ?>">
-                                <input type="hidden" name="item_id[]" value="<?= $it['id'] ?>">
-                                <input type="hidden" name="return_store_qty[]" id="settle_ret_total_<?= $it['id'] ?>" value="0" class="return-input">
-                                <input type="hidden" name="damage_qty[]" id="settle_dmg_total_<?= $it['id'] ?>" value="0" class="damage-input">
-                                
-                                <!-- Product Info -->
-                                <td class="py-3 px-3.5 align-middle">
-                                    <div class="font-bold text-slate-900 text-xs leading-snug"><?= htmlspecialchars($it['product_name']) ?></div>
-                                    <div class="flex items-center flex-wrap gap-1.5 text-[10px] text-slate-500 font-mono mt-1">
-                                        <span class="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-bold border border-slate-200/80"><?= htmlspecialchars($it['product_code']) ?></span>
-                                        <span class="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded font-bold border border-amber-200/60">📦 1 Box = <?= $packSize ?> Pcs</span>
-                                    </div>
-                                    <div class="settle-error-msg hidden text-[10px] text-rose-600 font-bold mt-1 animate-pulse">
-                                        <i class="fa-solid fa-circle-exclamation mr-1"></i> Exceeds loaded quantity!
-                                    </div>
-                                </td>
-
-                                <!-- Total Loaded -->
-                                <td class="py-3 px-3 text-center align-middle bg-amber-50/20 border-l border-amber-100/80 font-mono font-black text-slate-800 text-xs loaded-val whitespace-nowrap">
-                                    <div class="inline-flex flex-col items-center justify-center p-1.5 rounded-xl bg-amber-50/80 border border-amber-200/80 shadow-2xs">
-                                        <div class="flex items-center space-x-1 font-bold">
-                                            <?php if ($lBoxes > 0): ?>
-                                                <span class="px-1.5 py-0.5 rounded-md bg-amber-200/70 text-amber-900 text-[11px]">📦 <?= number_format($lBoxes) ?> Bx</span>
-                                            <?php endif; ?>
-                                            <?php if ($lBoxes > 0 && $lPcs > 0): ?>
-                                                <span class="text-amber-400 font-bold text-xs">+</span>
-                                            <?php endif; ?>
-                                            <?php if ($lPcs > 0 || $lBoxes === 0): ?>
-                                                <span class="px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-900 text-[11px]">🍦 <?= number_format($lPcs) ?> Pcs</span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <span class="text-[10px] text-amber-800 font-extrabold mt-0.5">(<?= number_format($loadedUnits) ?> Units)</span>
-                                    </div>
-                                </td>
-
-                                <!-- Good Returns Input (Dual Boxes & Loose Pcs) -->
-                                <td class="py-3 px-3 text-center align-middle bg-purple-50/15 border-l border-purple-100/80">
-                                    <div class="flex items-center justify-center space-x-1.5">
-                                        <div class="flex items-center rounded-xl bg-white border border-purple-300 focus-within:ring-2 focus-within:ring-purple-500 shadow-2xs overflow-hidden">
-                                            <span class="px-1.5 py-1 bg-purple-100/80 text-purple-900 text-[10px] font-black border-r border-purple-200 select-none">📦 Bx</span>
-                                            <input type="number" name="return_box_qty[]" min="0" placeholder="0" 
-                                                   oninput="recalcSettleRow(this)" 
-                                                   onkeydown="handleSettleNav(event, this)"
-                                                   class="ret-box-input w-12 py-1 px-1 text-center bg-transparent font-mono font-black text-purple-950 text-xs focus:outline-none">
-                                        </div>
-                                        <div class="flex items-center rounded-xl bg-white border border-purple-300 focus-within:ring-2 focus-within:ring-purple-500 shadow-2xs overflow-hidden">
-                                            <span class="px-1.5 py-1 bg-purple-100/80 text-purple-900 text-[10px] font-black border-r border-purple-200 select-none">🍦 Pcs</span>
-                                            <input type="number" name="return_pieces_qty[]" min="0" placeholder="0" 
-                                                   oninput="recalcSettleRow(this)" 
-                                                   onkeydown="handleSettleNav(event, this)"
-                                                   class="ret-pcs-input w-12 py-1 px-1 text-center bg-transparent font-mono font-black text-purple-950 text-xs focus:outline-none">
-                                        </div>
-                                    </div>
-                                    <div class="mt-1">
-                                        <span class="ret-units-text inline-block px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-mono text-[10px] font-bold border border-purple-200/50">
-                                            ➜ Restock: 0 Units
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <!-- Damaged Input (Dual Boxes & Loose Pcs) -->
-                                <td class="py-3 px-3 text-center align-middle bg-rose-50/15 border-l border-rose-100/80">
-                                    <div class="flex items-center justify-center space-x-1.5">
-                                        <div class="flex items-center rounded-xl bg-white border border-rose-300 focus-within:ring-2 focus-within:ring-rose-500 shadow-2xs overflow-hidden">
-                                            <span class="px-1.5 py-1 bg-rose-100/80 text-rose-900 text-[10px] font-black border-r border-rose-200 select-none">📦 Bx</span>
-                                            <input type="number" name="damage_box_qty[]" min="0" placeholder="0" 
-                                                   oninput="recalcSettleRow(this)" 
-                                                   onkeydown="handleSettleNav(event, this)"
-                                                   class="dmg-box-input w-12 py-1 px-1 text-center bg-transparent font-mono font-black text-rose-950 text-xs focus:outline-none">
-                                        </div>
-                                        <div class="flex items-center rounded-xl bg-white border border-rose-300 focus-within:ring-2 focus-within:ring-rose-500 shadow-2xs overflow-hidden">
-                                            <span class="px-1.5 py-1 bg-rose-100/80 text-rose-900 text-[10px] font-black border-r border-rose-200 select-none">🍦 Pcs</span>
-                                            <input type="number" name="damage_pieces_qty[]" min="0" placeholder="0" 
-                                                   oninput="recalcSettleRow(this)" 
-                                                   onkeydown="handleSettleNav(event, this)"
-                                                   class="dmg-pcs-input w-12 py-1 px-1 text-center bg-transparent font-mono font-black text-rose-950 text-xs focus:outline-none">
-                                        </div>
-                                    </div>
-                                    <div class="mt-1">
-                                        <span class="dmg-units-text inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-mono text-[10px] font-bold border border-rose-200/50">
-                                            ➜ Loss: 0 Units
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <!-- Delivered Calculated Output -->
-                                <td class="py-3 px-3 text-center align-middle bg-emerald-50/20 border-l border-emerald-100/80 font-mono font-black text-emerald-800 text-xs delivered-val whitespace-nowrap">
-                                    <div class="inline-flex flex-col items-center justify-center p-1.5 rounded-xl bg-emerald-50 border border-emerald-300 shadow-2xs min-w-[95px]">
-                                        <span class="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-black text-[11px] shadow-2xs">
-                                            <span class="delivered-number"><?= number_format($loadedUnits) ?></span> Units
-                                        </span>
-                                        <span class="text-[10px] text-emerald-700 font-extrabold mt-0.5 delivered-breakdown">
-                                            <?= ($lBoxes > 0 ? "📦 $lBoxes Bx " : '') . ($lPcs > 0 ? "🍦 $lPcs Pcs" : '') ?>
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <!-- Per-row Quick Buttons -->
-                                <td class="py-3 px-2 text-center align-middle border-l border-slate-100 whitespace-nowrap">
-                                    <div class="flex flex-col gap-1 items-center justify-center">
-                                        <button type="button" title="Mark this product fully sold (0 returns)" 
-                                                onclick="quickSettleRow(<?= $it['id'] ?>, 'sold')" 
-                                                class="w-full px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md text-[10px] font-bold border border-emerald-200 transition">
-                                            ⚡ Sold
-                                        </button>
-                                        <button type="button" title="Mark this product fully returned" 
-                                                onclick="quickSettleRow(<?= $it['id'] ?>, 'return')" 
-                                                class="w-full px-1.5 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-md text-[10px] font-bold border border-purple-200 transition">
-                                            🔄 Ret
-                                        </button>
-                                    </div>
-                                </td>
+            <!-- Reconciliation Bulk Table (Matching GRN Form Structure in Image 2) -->
+            <div class="flex-1 border border-slate-200 rounded-2xl overflow-hidden shadow-inner flex flex-col bg-white min-h-0">
+                <div class="flex-1 overflow-y-auto overscroll-contain">
+                    <table class="w-full text-left text-xs border-collapse" id="settleBulkTable">
+                        <thead class="sticky top-0 bg-slate-100 z-10 text-slate-600 uppercase text-[10px] font-bold border-b border-slate-200 select-none">
+                            <tr>
+                                <th class="py-2.5 px-3 w-24 font-mono">Code</th>
+                                <th class="py-2.5 px-3">Product Description</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-slate-50 text-slate-700 font-bold border-l border-slate-200">Pcs/Box</th>
+                                <th class="py-2.5 px-3 w-32 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Total Loaded</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-purple-50 text-purple-900 font-extrabold border-l border-purple-200">📦 Ret Box</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-purple-50 text-purple-900 font-extrabold border-l border-purple-100">🍦 Ret Pcs</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-rose-50 text-rose-900 font-extrabold border-l border-rose-200">📦 Dmg Box</th>
+                                <th class="py-2.5 px-2 w-20 text-center bg-rose-50 text-rose-900 font-extrabold border-l border-rose-100">🍦 Dmg Pcs</th>
+                                <th class="py-2.5 px-3 w-32 text-center text-emerald-900 font-extrabold border-l border-slate-200 whitespace-nowrap">🎯 Delivered</th>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700" id="settleTableBody">
+                            <?php foreach ($settleDispatchItems as $idx => $it): 
+                                $packSize = intval($it['pack_size'] ?? 24);
+                                if ($packSize <= 0) $packSize = 24;
+                                $loadedUnits = intval($it['loaded_qty']);
+                                $lBoxes = intdiv($loadedUnits, $packSize);
+                                $lPcs = $loadedUnits % $packSize;
+                            ?>
+                                <tr class="settle-item-row hover:bg-slate-50/80 transition-colors" 
+                                    id="settle_row_<?= $it['id'] ?>"
+                                    data-id="<?= $it['id'] ?>"
+                                    data-loaded="<?= $loadedUnits ?>"
+                                    data-pack="<?= $packSize ?>"
+                                    data-search="<?= htmlspecialchars(strtolower($it['product_name'] . ' ' . $it['product_code'])) ?>">
+                                    <input type="hidden" name="item_id[]" value="<?= $it['id'] ?>">
+                                    <input type="hidden" name="return_store_qty[]" id="settle_ret_total_<?= $it['id'] ?>" value="0" class="return-input">
+                                    <input type="hidden" name="damage_qty[]" id="settle_dmg_total_<?= $it['id'] ?>" value="0" class="damage-input">
+                                    
+                                    <!-- Code -->
+                                    <td class="py-2 px-3 font-mono font-bold text-slate-800 align-middle">
+                                        <span class="px-2 py-0.5 bg-slate-100 rounded text-[11px] border border-slate-200/70 font-mono"><?= htmlspecialchars($it['product_code']) ?></span>
+                                    </td>
+
+                                    <!-- Product Description -->
+                                    <td class="py-2 px-3 align-middle">
+                                        <div class="font-bold text-slate-900 text-xs leading-snug"><?= htmlspecialchars($it['product_name']) ?></div>
+                                        <div class="text-[10px] text-slate-400 mt-0.5 flex items-center space-x-1.5 flex-wrap">
+                                            <span><?= htmlspecialchars($it['category_name'] ?? 'Ice Cream') ?></span>
+                                            <?php if (!empty($it['size'])): ?><span>&bull; <?= htmlspecialchars($it['size']) ?></span><?php endif; ?>
+                                        </div>
+                                        <div class="settle-error-msg hidden text-[10px] text-rose-600 font-bold mt-0.5 animate-pulse">
+                                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Exceeds loaded stock!
+                                        </div>
+                                    </td>
+
+                                    <!-- Pcs / Box (Pack Size) -->
+                                    <td class="py-2 px-2 text-center align-middle bg-slate-50 border-l border-slate-200">
+                                        <span class="inline-block px-2 py-1 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-700 text-xs">
+                                            <?= $packSize ?>
+                                        </span>
+                                    </td>
+
+                                    <!-- Total Loaded (Badge formatted like GRN) -->
+                                    <td class="py-2 px-3 text-center align-middle bg-amber-50/40 border-l border-amber-100 whitespace-nowrap">
+                                        <?php if ($lBoxes > 0 && $lPcs > 0): ?>
+                                            <div class="flex items-center justify-center space-x-1 font-mono">
+                                                <span class="text-[10px] font-black text-amber-900 bg-amber-100/80 px-1.5 py-0.5 rounded border border-amber-200">📦 <?= $lBoxes ?> Bx</span>
+                                                <span class="text-[10px] font-black text-sky-900 bg-sky-100/80 px-1.5 py-0.5 rounded border border-sky-200">🍦 +<?= $lPcs ?></span>
+                                            </div>
+                                            <div class="text-[9px] text-amber-700 font-bold font-mono mt-0.5">(<?= $loadedUnits ?> Units)</div>
+                                        <?php elseif ($lBoxes > 0): ?>
+                                            <span class="text-[11px] font-black text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-200 font-mono">
+                                                📦 <?= $lBoxes ?> Bx (<?= $loadedUnits ?>)
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-[11px] font-black text-sky-900 bg-sky-100/80 px-2 py-0.5 rounded border border-sky-200 font-mono">
+                                                🍦 <?= $lPcs ?> Pcs
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+
+                                    <!-- Good Returns: Box Input (Clean GRN Style) -->
+                                    <td class="py-2 px-2 text-center align-middle bg-purple-50/20 border-l border-purple-200">
+                                        <input type="number" 
+                                               name="return_box_qty[]" 
+                                               min="0" 
+                                               placeholder="0" 
+                                               oninput="recalcSettleRow(this)" 
+                                               onkeydown="handleSettleNav(event, this)"
+                                               class="ret-box-input w-16 text-center py-1.5 px-2 bg-white border border-purple-300 rounded-xl font-mono font-black text-purple-900 text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all shadow-2xs">
+                                    </td>
+
+                                    <!-- Good Returns: Pieces Input (Clean GRN Style) -->
+                                    <td class="py-2 px-2 text-center align-middle bg-purple-50/20 border-l border-purple-100">
+                                        <input type="number" 
+                                               name="return_pieces_qty[]" 
+                                               min="0" 
+                                               placeholder="0" 
+                                               oninput="recalcSettleRow(this)" 
+                                               onkeydown="handleSettleNav(event, this)"
+                                               class="ret-pcs-input w-16 text-center py-1.5 px-2 bg-white border border-purple-300 rounded-xl font-mono font-black text-purple-900 text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all shadow-2xs">
+                                    </td>
+
+                                    <!-- Damaged: Box Input (Clean GRN Style) -->
+                                    <td class="py-2 px-2 text-center align-middle bg-rose-50/20 border-l border-rose-200">
+                                        <input type="number" 
+                                               name="damage_box_qty[]" 
+                                               min="0" 
+                                               placeholder="0" 
+                                               oninput="recalcSettleRow(this)" 
+                                               onkeydown="handleSettleNav(event, this)"
+                                               class="dmg-box-input w-16 text-center py-1.5 px-2 bg-white border border-rose-300 rounded-xl font-mono font-black text-rose-900 text-xs focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all shadow-2xs">
+                                    </td>
+
+                                    <!-- Damaged: Pieces Input (Clean GRN Style) -->
+                                    <td class="py-2 px-2 text-center align-middle bg-rose-50/20 border-l border-rose-100">
+                                        <input type="number" 
+                                               name="damage_pieces_qty[]" 
+                                               min="0" 
+                                               placeholder="0" 
+                                               oninput="recalcSettleRow(this)" 
+                                               onkeydown="handleSettleNav(event, this)"
+                                               class="dmg-pcs-input w-16 text-center py-1.5 px-2 bg-white border border-rose-300 rounded-xl font-mono font-black text-rose-900 text-xs focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all shadow-2xs">
+                                    </td>
+
+                                    <!-- Delivered Calculated Output (Clean GRN Style) -->
+                                    <td class="py-2 px-3 text-center align-middle bg-emerald-50/30 border-l border-slate-200 whitespace-nowrap font-mono">
+                                        <div class="inline-block px-2.5 py-1 rounded-xl font-black text-xs bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
+                                            <span class="delivered-number"><?= number_format($loadedUnits) ?></span> Units
+                                        </div>
+                                        <div class="text-[10px] text-emerald-700 font-bold mt-0.5 delivered-breakdown">
+                                            <?= ($lBoxes > 0 ? "📦 $lBoxes Bx " : '') . ($lPcs > 0 ? "🍦 $lPcs Pcs" : '') ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <!-- Sticky Bottom Summary Cards & Submit -->
-            <div class="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 shrink-0 space-y-3">
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
-                    <div class="p-2.5 bg-amber-50 border border-amber-200/90 rounded-2xl shadow-2xs">
-                        <span class="text-[10px] uppercase font-black text-amber-800 flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-truck-ramp-box text-amber-600"></i> Total Loaded
-                        </span>
-                        <strong class="text-base font-mono font-black text-amber-950 block mt-0.5" id="settleSummaryLoaded">0 Units</strong>
-                        <span class="text-[10px] text-amber-700 font-bold block" id="settleSummaryLoadedBkp">0 Bx + 0 Pcs</span>
-                    </div>
-
-                    <div class="p-2.5 bg-purple-50 border border-purple-200/90 rounded-2xl shadow-2xs">
-                        <span class="text-[10px] uppercase font-black text-purple-800 flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-rotate-left text-purple-600"></i> Good Returns (Restock)
-                        </span>
-                        <strong class="text-base font-mono font-black text-purple-950 block mt-0.5" id="settleSummaryReturns">0 Units</strong>
-                        <span class="text-[10px] text-purple-700 font-bold block" id="settleSummaryReturnsBkp">0 Bx + 0 Pcs</span>
-                    </div>
-
-                    <div class="p-2.5 bg-rose-50 border border-rose-200/90 rounded-2xl shadow-2xs">
-                        <span class="text-[10px] uppercase font-black text-rose-800 flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-triangle-exclamation text-rose-600"></i> Melted / Damaged
-                        </span>
-                        <strong class="text-base font-mono font-black text-rose-950 block mt-0.5" id="settleSummaryDamages">0 Units</strong>
-                        <span class="text-[10px] text-rose-700 font-bold block" id="settleSummaryDamagesBkp">0 Bx + 0 Pcs</span>
-                    </div>
-
-                    <div class="p-2.5 bg-emerald-50 border border-emerald-300 rounded-2xl shadow-2xs">
-                        <span class="text-[10px] uppercase font-black text-emerald-800 flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-circle-check text-emerald-600"></i> Delivered / Sold
-                        </span>
-                        <strong class="text-base font-mono font-black text-emerald-950 block mt-0.5" id="settleSummaryDelivered">0 Units</strong>
-                        <div class="flex items-center justify-center gap-1 mt-0.5">
-                            <span class="text-[10px] text-emerald-700 font-bold" id="settleSummaryDeliveredBkp">0 Bx + 0 Pcs</span>
-                            <span id="settleSummaryPercent" class="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-900 rounded font-black text-[9px]">100%</span>
-                        </div>
-                    </div>
+            <!-- Modal Footer (Matching GRN Form Footer Style in Image 2) -->
+            <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 bg-white">
+                <div class="text-xs text-slate-600 flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+                    <span>Ready to settle: <strong id="settleFooterDelivered" class="font-black text-emerald-700 text-sm font-mono">0</strong> units delivered across <strong id="settleFooterItems" class="font-bold text-slate-800"><?= count($settleDispatchItems) ?></strong> products (<span id="settleFooterReturns" class="font-mono font-bold text-purple-700">0</span> returns, <span id="settleFooterDamages" class="font-mono font-bold text-rose-700">0</span> melted).</span>
                 </div>
-
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-slate-200/80">
-                    <div class="flex items-center text-xs font-bold text-emerald-800">
-                        <i class="fa-solid fa-circle-check mr-1.5 text-sm text-emerald-600"></i>
-                        <span>Formula: <strong>Loaded = Good Returns + Damaged + Delivered</strong></span>
-                    </div>
-
-                    <div class="flex items-center justify-end space-x-2">
-                        <a href="lorry.php" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition">Cancel</a>
-                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-black text-xs rounded-xl shadow-md shadow-rose-200 transition flex items-center">
-                            <i class="fa-solid fa-check-double mr-1.5"></i> Confirm 3:00 PM Return & Restock
-                        </button>
-                    </div>
+                <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                    <a href="lorry.php" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+                        Cancel
+                    </a>
+                    <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-200 flex items-center transition cursor-pointer">
+                        <i class="fa-solid fa-check-double mr-1.5"></i> Confirm 3:00 PM Return & Restock
+                    </button>
                 </div>
             </div>
         </form>
@@ -2465,6 +2421,13 @@ require_once __DIR__ . '/includes/header.php';
             const pct = totalLoaded > 0 ? Math.round((totalDelivered / totalLoaded) * 100) : 0;
             elPercent.innerText = pct + '% Sold';
         }
+
+        const footerDelivered = document.getElementById('settleFooterDelivered');
+        const footerReturns = document.getElementById('settleFooterReturns');
+        const footerDamages = document.getElementById('settleFooterDamages');
+        if (footerDelivered) footerDelivered.innerText = totalDelivered.toLocaleString();
+        if (footerReturns) footerReturns.innerText = totalReturns.toLocaleString();
+        if (footerDamages) footerDamages.innerText = totalDamages.toLocaleString();
     }
 
     // Auto-calculate settlement summary on load if modal is open
