@@ -290,11 +290,20 @@ function migrateSchema($pdo) {
             $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
         }
 
-        // 5.1 Ensure stock_invoice_items has box_qty, units_per_box
+        // 5.1 Ensure stock_invoice_items has box_qty, pieces_qty, unit_type
         $colsSiiBox = $pdo->query("SHOW COLUMNS FROM `stock_invoice_items` LIKE 'box_qty'")->fetchAll();
         if (empty($colsSiiBox)) {
             $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `quantity`");
-            $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+            $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+            $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box' AFTER `pieces_qty`");
+            $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `unit_type`");
+        }
+
+        // 5.2 Ensure branch_stock has box_qty, pieces_qty
+        $colsBsBox = $pdo->query("SHOW COLUMNS FROM `branch_stock` LIKE 'box_qty'")->fetchAll();
+        if (empty($colsBsBox)) {
+            $pdo->exec("ALTER TABLE `branch_stock` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `quantity`");
+            $pdo->exec("ALTER TABLE `branch_stock` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
         }
 
         // 6. Ensure warehouse_loans tables exist

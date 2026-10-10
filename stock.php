@@ -79,99 +79,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Action 1: Add New In Come Stock (GRN Invoice - Pure Stock Units)
+    // Action 1: Add New In Come Stock (GRN Invoice - Pure Manual Box or Pieces)
     if ($action === 'create_grn') {
         $invNo = trim($_POST['invoice_no'] ?? '');
         $invDate = trim($_POST['invoice_date'] ?? date('Y-m-d'));
         $targetBranchId = intval($_POST['branch_id'] ?? $branchId);
         $supplier = trim($_POST['supplier_name'] ?? 'Factory Production');
-        $notes = trim($_POST['notes'] ?? '');
 
         $itemsToProcess = [];
-        $packMap = $pdo->query("SELECT id, pack_size FROM products")->fetchAll(PDO::FETCH_KEY_PAIR);
 
         // Support bulk checklist format: selected_products[] + box_qty[pid] + quantity[pid]
         if (!empty($_POST['selected_products']) && is_array($_POST['selected_products'])) {
             foreach ($_POST['selected_products'] as $pid) {
                 $pid = intval($pid);
-                $pack = max(1, intval($packMap[$pid] ?? 1));
-
                 $boxQty = intval($_POST['box_qty'][$pid] ?? 0);
                 $pcsQty = intval($_POST['quantity'][$pid] ?? 0);
 
-                $totalUnits = ($boxQty * $pack) + $pcsQty;
+                if ($pid > 0 && ($boxQty > 0 || $pcsQty > 0)) {
+                    if ($boxQty > 0) {
+                        $unitType = 'box';
+                        $bQty = $boxQty;
+                        $pQty = 0;
+                        $finalQty = $boxQty;
+                    } else {
+                        $unitType = 'pcs';
+                        $bQty = 0;
+                        $pQty = $pcsQty;
+                        $finalQty = $pcsQty;
+                    }
 
-                if ($pid > 0 && $totalUnits > 0) {
                     $itemsToProcess[] = [
                         'product_id' => $pid,
-                        'quantity' => $totalUnits,
-                        'box_qty' => $boxQty,
-                        'units_per_box' => $pack
-                    ];
-                }
-            }
-        } elseif (!empty($_POST['product_id']) && is_array($_POST['product_id'])) {
-            // Fallback for row-by-row structure
-            $boxQtys = $_POST['box_qty'] ?? [];
-            $pcsQtys = $_POST['quantity'] ?? [];
-            foreach ($_POST['product_id'] as $idx => $pid) {
-                $pid = intval($pid);
-                $pack = max(1, intval($packMap[$pid] ?? 1));
-
-                $boxQty = intval($boxQtys[$idx] ?? 0);
-                $pcsQty = intval($pcsQtys[$idx] ?? 0);
-
-                $totalUnits = ($boxQty * $pack) + $pcsQty;
-
-                if ($pid > 0 && $totalUnits > 0) {
-                    $itemsToProcess[] = [
-                        'product_id' => $pid,
-                        'quantity' => $totalUnits,
-                        'box_qty' => $boxQty,
-                        'units_per_box' => $pack
+                        'unit_type' => $unitType,
+                        'box_qty' => $bQty,
+                        'pieces_qty' => $pQty,
+                        'quantity' => $finalQty
                     ];
                 }
             }
         }
 
         if (empty($invNo)) {
-            setFlash('danger', 'Invoice / Delivery Note number is required.');
+            setFlash('danger', 'Please enter the Invoice / Delivery Note number.');
         } elseif (empty($itemsToProcess)) {
-            setFlash('danger', 'Please select at least one item and enter a Box or Pieces quantity greater than 0.');
+            setFlash('danger', 'Please select at least one item and enter either Box Qty OR Pieces Qty.');
         } else {
             try {
                 $pdo->beginTransaction();
 
-                $totalItems = 0;
+                $totalBoxes = 0;
+                $totalPieces = 0;
+                $totalItemsCount = 0;
                 foreach ($itemsToProcess as $item) {
-                    $totalItems += $item['quantity'];
+                    $totalBoxes += $item['box_qty'];
+                    $totalPieces += $item['pieces_qty'];
+                    $totalItemsCount += $item['quantity'];
                 }
 
                 // Insert Stock In Invoice
                 $stmt = $pdo->prepare("INSERT INTO stock_invoices 
                     (invoice_no, branch_id, invoice_date, supplier_name, total_items, notes, created_by) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$invNo, $targetBranchId, $invDate, $supplier, $totalItems, $notes, $user['id']]);
+                    VALUES (?, ?, ?, ?, ?, '', ?)");
+                $stmt->execute([$invNo, $targetBranchId, $invDate, $supplier, $totalItemsCount, $user['id']]);
                 $invoiceId = $pdo->lastInsertId();
 
-                // Insert Items & Update Warehouse Stock
+                // Insert Items & Update Warehouse Stock (box_qty & pieces_qty)
                 $stmtItem = $pdo->prepare("INSERT INTO stock_invoice_items 
-                    (invoice_id, product_id, quantity, box_qty, units_per_box) 
-                    VALUES (?, ?, ?, ?, ?)");
+                    (invoice_id, product_id, quantity, box_qty, pieces_qty, unit_type) 
+                    VALUES (?, ?, ?, ?, ?, ?)");
                 
-                $stmtStock = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) 
-                    VALUES (?, ?, ?) 
-                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
+                $stmtStock = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, box_qty, pieces_qty, quantity) 
+                    VALUES (?, ?, ?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE 
+                        box_qty = box_qty + VALUES(box_qty),
+                        pieces_qty = pieces_qty + VALUES(pieces_qty),
+                        quantity = quantity + VALUES(quantity)");
 
                 foreach ($itemsToProcess as $item) {
-                    $stmtItem->execute([$invoiceId, $item['product_id'], $item['quantity'], $item['box_qty'], $item['units_per_box']]);
-                    $stmtStock->execute([$targetBranchId, $item['product_id'], $item['quantity']]);
+                    $stmtItem->execute([
+                        $invoiceId, 
+                        $item['product_id'], 
+                        $item['quantity'], 
+                        $item['box_qty'], 
+                        $item['pieces_qty'], 
+                        $item['unit_type']
+                    ]);
+                    $stmtStock->execute([
+                        $targetBranchId, 
+                        $item['product_id'], 
+                        $item['box_qty'], 
+                        $item['pieces_qty'], 
+                        $item['quantity']
+                    ]);
                 }
 
                 $pdo->commit();
                 $itemCount = count($itemsToProcess);
-                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$totalItems} units across {$itemCount} products into Cold Room from '{$supplier}'");
-                setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$totalItems} units ({$itemCount} products) added to Cold Room warehouse.");
+                $summaryText = "";
+                if ($totalBoxes > 0 && $totalPieces > 0) {
+                    $summaryText = "{$totalBoxes} Boxes + {$totalPieces} Pieces";
+                } elseif ($totalBoxes > 0) {
+                    $summaryText = "{$totalBoxes} Boxes";
+                } else {
+                    $summaryText = "{$totalPieces} Pieces";
+                }
+
+                logActivity('grn_stock_in', 'stock', "Received GRN #{$invNo}: {$summaryText} across {$itemCount} products into Cold Room from '{$supplier}'");
+                setFlash('success', "In Come Stock (GRN) #{$invNo} received! {$summaryText} added to Cold Room warehouse.");
                 header("Location: stock.php");
                 exit;
 
@@ -284,8 +298,11 @@ $branches = $pdo->query("SELECT id, name FROM branches ORDER BY id ASC")->fetchA
 // Fetch categories
 $categories = $pdo->query("SELECT * FROM categories ORDER BY id ASC")->fetchAll();
 
-// Fetch products with their categories & current branch stock
-$stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity, 0) as store_stock 
+// Fetch products with their categories & current branch stock (boxes and pieces)
+$stmt = $pdo->prepare("SELECT p.*, c.name as category_name, 
+    COALESCE(bs.quantity, 0) as store_stock,
+    COALESCE(bs.box_qty, 0) as store_boxes,
+    COALESCE(bs.pieces_qty, 0) as store_pieces
     FROM products p 
     LEFT JOIN categories c ON p.category_id = c.id 
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
@@ -403,9 +420,33 @@ require_once __DIR__ . '/includes/header.php';
                                     <?= htmlspecialchars($prod['size'] ?? '-') ?>
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
-                                    <span class="inline-block px-3 py-1 rounded-xl font-extrabold text-sm font-mono <?= $isZero ? 'bg-rose-100 text-rose-700 border border-rose-200' : ($isLow ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-cyan-50 text-cyan-800 border border-cyan-200') ?>">
-                                        <?= number_format($prod['store_stock']) ?> <?= htmlspecialchars($prod['unit'] ?? 'Units') ?>
-                                    </span>
+                                    <?php
+                                    $bCount = intval($prod['store_boxes'] ?? 0);
+                                    $pCount = intval($prod['store_pieces'] ?? 0);
+                                    $totCount = intval($prod['store_stock'] ?? 0);
+                                    ?>
+                                    <?php if ($bCount > 0 && $pCount > 0): ?>
+                                        <div class="inline-flex items-center gap-1.5 flex-wrap justify-center">
+                                            <span class="px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">📦 <?= number_format($bCount) ?> Bx</span>
+                                            <span class="px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">🍦 <?= number_format($pCount) ?> Pcs</span>
+                                        </div>
+                                    <?php elseif ($bCount > 0): ?>
+                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                                            📦 <?= number_format($bCount) ?> Boxes
+                                        </span>
+                                    <?php elseif ($pCount > 0): ?>
+                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
+                                            🍦 <?= number_format($pCount) ?> Pieces
+                                        </span>
+                                    <?php elseif ($totCount > 0): ?>
+                                        <span class="inline-block px-3 py-1 rounded-xl font-black text-xs font-mono bg-slate-100 text-slate-800 border border-slate-300">
+                                            <?= number_format($totCount) ?> Units
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-block px-2.5 py-1 rounded-xl font-bold text-xs bg-rose-50 text-rose-600 border border-rose-200">
+                                            0 (Out of Stock)
+                                        </span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
                                     <?php if ($isZero): ?>
@@ -471,9 +512,33 @@ require_once __DIR__ . '/includes/header.php';
 
                         <!-- Big Stock Count Badge -->
                         <div class="text-right shrink-0">
-                            <span class="inline-block px-3 py-1.5 rounded-xl font-black text-sm font-mono tracking-tight <?= $isZero ? 'bg-rose-100 text-rose-700 border border-rose-200' : ($isLow ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-cyan-50 text-cyan-800 border border-cyan-200') ?>">
-                                <?= number_format($prod['store_stock']) ?> <span class="text-[10px] font-semibold"><?= htmlspecialchars($prod['unit'] ?? 'Units') ?></span>
-                            </span>
+                            <?php
+                            $mbCount = intval($prod['store_boxes'] ?? 0);
+                            $mpCount = intval($prod['store_pieces'] ?? 0);
+                            $mtCount = intval($prod['store_stock'] ?? 0);
+                            ?>
+                            <?php if ($mbCount > 0 && $mpCount > 0): ?>
+                                <div class="flex flex-col items-end gap-1">
+                                    <span class="px-2 py-0.5 rounded-lg font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">📦 <?= number_format($mbCount) ?> Bx</span>
+                                    <span class="px-2 py-0.5 rounded-lg font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">🍦 <?= number_format($mpCount) ?> Pcs</span>
+                                </div>
+                            <?php elseif ($mbCount > 0): ?>
+                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                                    📦 <?= number_format($mbCount) ?> Boxes
+                                </span>
+                            <?php elseif ($mpCount > 0): ?>
+                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
+                                    🍦 <?= number_format($mpCount) ?> Pieces
+                                </span>
+                            <?php elseif ($mtCount > 0): ?>
+                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-slate-100 text-slate-800 border border-slate-300">
+                                    <?= number_format($mtCount) ?> Units
+                                </span>
+                            <?php else: ?>
+                                <span class="inline-block px-2 py-0.5 rounded-lg font-bold text-xs bg-rose-50 text-rose-600 border border-rose-200">
+                                    0 (Empty)
+                                </span>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -619,11 +684,11 @@ require_once __DIR__ . '/includes/header.php';
             <?= csrfField() ?>
             <input type="hidden" name="action" value="create_grn">
 
-            <!-- Top Row: Invoice Meta Details -->
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs shrink-0">
+            <!-- Top Row: Invoice Meta Details (4 Columns, Remarks removed) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs shrink-0">
                 <div class="col-span-1">
                     <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Invoice / DN # *</label>
-                    <input type="text" name="invoice_no" required value="INV-<?= date('ymd') ?>-<?= rand(100, 999) ?>"
+                    <input type="text" name="invoice_no" required placeholder="Type Invoice / DN #"
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
 
@@ -633,7 +698,7 @@ require_once __DIR__ . '/includes/header.php';
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
 
-                <div class="col-span-2 sm:col-span-1">
+                <div class="col-span-1">
                     <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Receiving Hub *</label>
                     <select name="branch_id" class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 font-bold text-xs focus:ring-1 focus:ring-cyan-500">
                         <?php foreach ($branches as $b): ?>
@@ -644,15 +709,9 @@ require_once __DIR__ . '/includes/header.php';
                     </select>
                 </div>
 
-                <div class="col-span-2 sm:col-span-1">
+                <div class="col-span-1">
                     <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Supplier / Factory</label>
                     <input type="text" name="supplier_name" value="Central Cold Storage Factory" 
-                           class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
-                </div>
-
-                <div class="col-span-2 sm:col-span-1">
-                    <label class="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">Remarks / Lorry</label>
-                    <input type="text" name="notes" placeholder="e.g. Factory Lorry" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500">
                 </div>
             </div>
@@ -666,7 +725,7 @@ require_once __DIR__ . '/includes/header.php';
                             <i class="fa-solid fa-search"></i>
                         </span>
                         <input type="text" id="grnSearchInput" oninput="filterGrnList()" placeholder="Quick filter code or name..." 
-                               class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                                class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
                     </div>
                     <button type="button" onclick="toggleSelectAllGrn(true)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
                         <i class="fa-solid fa-check-double mr-1 text-cyan-400"></i> Select All
@@ -676,7 +735,7 @@ require_once __DIR__ . '/includes/header.php';
                     </button>
                 </div>
 
-                <!-- Quick Add & Counters -->
+                <!-- Quick Add & Live Counters -->
                 <div class="flex items-center justify-between sm:justify-end space-x-2 shrink-0">
                     <button type="button" onclick="toggleQuickAddDrawer()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-xs flex items-center transition cursor-pointer">
                         <i class="fa-solid fa-plus-circle mr-1.5"></i> + Quick Add Product
@@ -685,8 +744,11 @@ require_once __DIR__ . '/includes/header.php';
                         <span class="px-2 py-1 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200/70">
                             Selected: <strong id="grnSelectedCount" class="font-extrabold text-cyan-900">0</strong>
                         </span>
-                        <span class="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/70">
-                            Units: <strong id="grnTotalQty" class="font-black text-emerald-700 font-mono">0</strong>
+                        <span class="px-2 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70">
+                            📦 Boxes: <strong id="grnTotalBoxes" class="font-black text-amber-800 font-mono">0</strong>
+                        </span>
+                        <span class="px-2 py-1 rounded-lg bg-sky-50 text-sky-900 border border-sky-200/70">
+                            🍦 Pieces: <strong id="grnTotalPieces" class="font-black text-sky-800 font-mono">0</strong>
                         </span>
                     </div>
                 </div>
@@ -722,7 +784,7 @@ require_once __DIR__ . '/includes/header.php';
                         <input type="text" id="quickSize" placeholder="e.g. 120ml / 1 Litre" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-xs">
                     </div>
                     <div>
-                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Incoming Qty (Units)</label>
+                        <label class="block font-bold text-slate-700 mb-0.5 text-[10px]">Incoming Qty</label>
                         <input type="number" id="quickQty" min="0" placeholder="0" class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-cyan-800 text-xs">
                     </div>
                 </div>
@@ -748,14 +810,18 @@ require_once __DIR__ . '/includes/header.php';
                                 </th>
                                 <th class="py-2.5 px-3 w-28 font-mono">Product Code</th>
                                 <th class="py-2.5 px-3">Product Description</th>
-                                <th class="py-2.5 px-3 w-24 text-center">Cold Room</th>
+                                <th class="py-2.5 px-3 w-32 text-center">Cold Room Stock</th>
                                 <th class="py-2.5 px-3 w-28 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Box Qty</th>
                                 <th class="py-2.5 px-3 w-28 text-center bg-cyan-50 text-cyan-900 font-extrabold border-l border-cyan-100">🍦 Pieces (Pcs)</th>
-                                <th class="py-2.5 px-3 w-32 text-center text-emerald-900 font-extrabold border-l border-slate-200">🎯 Total Units</th>
+                                <th class="py-2.5 px-3 w-32 text-center text-emerald-900 font-extrabold border-l border-slate-200">🎯 Stock In Total</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
-                            <?php foreach ($inventory as $prod): ?>
+                            <?php foreach ($inventory as $prod): 
+                                $bCur = intval($prod['store_boxes'] ?? 0);
+                                $pCur = intval($prod['store_pieces'] ?? 0);
+                                $tCur = intval($prod['store_stock'] ?? 0);
+                            ?>
                             <tr class="grn-item-row hover:bg-slate-50/80 transition-colors" id="grn_row_<?= $prod['id'] ?>" data-search="<?= htmlspecialchars(strtolower($prod['code'] . ' ' . $prod['name'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                                 <td class="py-2 px-3 text-center">
                                     <input type="checkbox" name="selected_products[]" value="<?= $prod['id'] ?>" id="chk_<?= $prod['id'] ?>" class="grn-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer w-4 h-4" onchange="handleGrnCheck(<?= $prod['id'] ?>)">
@@ -768,22 +834,33 @@ require_once __DIR__ . '/includes/header.php';
                                     <div class="text-[10px] text-slate-400 mt-0.5 flex items-center space-x-1.5 flex-wrap">
                                         <span><?= htmlspecialchars($prod['category_name'] ?? 'General') ?></span>
                                         <?php if (!empty($prod['size'])): ?><span>&bull; <?= htmlspecialchars($prod['size']) ?></span><?php endif; ?>
-                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">📦 <?= $prod['pack_size'] ?> pcs/box</span>
                                     </div>
                                 </td>
-                                <td class="py-2 px-3 text-center">
-                                    <span class="font-mono font-bold text-slate-600 text-xs"><?= number_format($prod['store_stock']) ?></span>
+                                <td class="py-2 px-3 text-center whitespace-nowrap">
+                                    <?php if ($bCur > 0 && $pCur > 0): ?>
+                                        <div class="flex items-center justify-center gap-1">
+                                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] bg-amber-50 text-amber-900 border border-amber-200 font-mono">📦 <?= $bCur ?></span>
+                                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono">🍦 <?= $pCur ?></span>
+                                        </div>
+                                    <?php elseif ($bCur > 0): ?>
+                                        <span class="px-2 py-0.5 rounded font-bold text-[11px] bg-amber-50 text-amber-900 border border-amber-200 font-mono">📦 <?= $bCur ?> Bx</span>
+                                    <?php elseif ($pCur > 0): ?>
+                                        <span class="px-2 py-0.5 rounded font-bold text-[11px] bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono">🍦 <?= $pCur ?> Pcs</span>
+                                    <?php elseif ($tCur > 0): ?>
+                                        <span class="font-mono font-bold text-slate-600 text-xs"><?= number_format($tCur) ?></span>
+                                    <?php else: ?>
+                                        <span class="font-mono text-slate-400 text-xs">0</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
                                     <input type="number" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" min="0" placeholder="0" 
-                                           data-pack="<?= $prod['pack_size'] ?>"
                                            class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
-                                           oninput="calculateRowGrn(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                           oninput="handleGrnInput(<?= $prod['id'] ?>, 'box')" onkeydown="handleGrnNav(event, this)">
                                 </td>
                                 <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                                     <input type="number" name="quantity[<?= $prod['id'] ?>]" id="qty_<?= $prod['id'] ?>" min="0" placeholder="0" 
                                            class="grn-qty-field w-20 text-center py-1.5 px-2 bg-white border border-cyan-300 rounded-xl font-mono font-black text-cyan-900 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-xs" 
-                                           oninput="calculateRowGrn(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                           oninput="handleGrnInput(<?= $prod['id'] ?>, 'pcs')" onkeydown="handleGrnNav(event, this)">
                                 </td>
                                 <td class="py-2 px-3 text-center border-l border-slate-100">
                                     <span id="total_units_<?= $prod['id'] ?>" class="font-mono text-xs font-bold text-slate-300">-</span>
@@ -1095,19 +1172,19 @@ require_once __DIR__ . '/includes/header.php';
             const b = parseInt(boxInput ? boxInput.value : 0) || 0;
             const q = parseInt(qtyInput ? qtyInput.value : 0) || 0;
             if (b === 0 && q === 0) {
-                if (boxInput) {
+                if (boxInput && !boxInput.disabled) {
                     boxInput.focus();
                     boxInput.select();
-                } else if (qtyInput) {
+                } else if (qtyInput && !qtyInput.disabled) {
                     qtyInput.focus();
                     qtyInput.select();
                 }
             }
         }
-        calculateRowGrn(pid);
+        handleGrnInput(pid);
     }
 
-    function calculateRowGrn(pid) {
+    function handleGrnInput(pid, changedType) {
         const row = document.getElementById('grn_row_' + pid);
         const chk = document.getElementById('chk_' + pid);
         const boxInput = document.getElementById('box_' + pid);
@@ -1115,30 +1192,54 @@ require_once __DIR__ . '/includes/header.php';
         const totalSpan = document.getElementById('total_units_' + pid);
         if (!row || !chk) return;
 
-        const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
         const boxes = parseInt(boxInput ? boxInput.value : 0) || 0;
         const pcs = parseInt(qtyInput ? qtyInput.value : 0) || 0;
 
-        const total = (boxes * pack) + pcs;
-
-        if (totalSpan) {
-            if (total > 0) {
-                let badge = `<span class="text-emerald-700 font-extrabold">${total.toLocaleString()}</span> <span class="text-[10px] text-emerald-600 font-normal">units</span>`;
-                if (boxes > 0 && pcs > 0) {
-                    badge += `<div class="text-[9px] text-slate-400 font-normal">(${boxes} bx + ${pcs})</div>`;
-                } else if (boxes > 0) {
-                    badge += `<div class="text-[9px] text-amber-600 font-normal">(${boxes} bx × ${pack})</div>`;
-                }
-                totalSpan.innerHTML = badge;
-            } else {
-                totalSpan.innerHTML = `<span class="text-slate-300 font-normal">-</span>`;
+        if (changedType === 'box' && boxes > 0) {
+            // Entering Box locks and clears Pieces
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.disabled = true;
+                qtyInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
             }
-        }
-
-        if (total > 0) {
+            if (boxInput) {
+                boxInput.disabled = false;
+                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (totalSpan) {
+                totalSpan.innerHTML = `<span class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs">📦 ${boxes} Boxes</span>`;
+            }
             chk.checked = true;
             applyRowHighlight(row, true);
-        } else {
+        } else if (changedType === 'pcs' && pcs > 0) {
+            // Entering Pieces locks and clears Boxes
+            if (boxInput) {
+                boxInput.value = '';
+                boxInput.disabled = true;
+                boxInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (qtyInput) {
+                qtyInput.disabled = false;
+                qtyInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (totalSpan) {
+                totalSpan.innerHTML = `<span class="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 border border-cyan-300 font-extrabold text-xs">🍦 ${pcs} Pieces</span>`;
+            }
+            chk.checked = true;
+            applyRowHighlight(row, true);
+        } else if (boxes === 0 && pcs === 0) {
+            // Both empty
+            if (boxInput) {
+                boxInput.disabled = false;
+                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (qtyInput) {
+                qtyInput.disabled = false;
+                qtyInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (totalSpan) {
+                totalSpan.innerHTML = `<span class="text-slate-300 font-normal">-</span>`;
+            }
             if (!chk.dataset.userChecked) {
                 chk.checked = false;
                 applyRowHighlight(row, false);
@@ -1160,8 +1261,8 @@ require_once __DIR__ . '/includes/header.php';
 
     function updateGrnTotals() {
         let selectedCount = 0;
-        let totalUnits = 0;
         let totalBoxes = 0;
+        let totalPieces = 0;
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
 
         rows.forEach(r => {
@@ -1170,28 +1271,27 @@ require_once __DIR__ . '/includes/header.php';
             const qtyInput = r.querySelector('.grn-qty-field');
             if (chk && chk.checked) {
                 selectedCount++;
-                const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
                 const b = parseInt(boxInput ? boxInput.value : 0) || 0;
                 const q = parseInt(qtyInput ? qtyInput.value : 0) || 0;
-                const rowTotal = (b * pack) + q;
-                totalUnits += rowTotal;
                 totalBoxes += b;
+                totalPieces += q;
             }
         });
 
         const countEl = document.getElementById('grnSelectedCount');
-        const qtyEl = document.getElementById('grnTotalQty');
+        const boxEl = document.getElementById('grnTotalBoxes');
+        const pcsEl = document.getElementById('grnTotalPieces');
         const footerUnits = document.getElementById('footerUnits');
         const footerItems = document.getElementById('footerItems');
 
         if (countEl) countEl.innerText = selectedCount;
-        if (qtyEl) qtyEl.innerText = totalUnits.toLocaleString();
+        if (boxEl) boxEl.innerText = totalBoxes.toLocaleString();
+        if (pcsEl) pcsEl.innerText = totalPieces.toLocaleString();
         if (footerUnits) {
-            let footerText = totalUnits.toLocaleString();
-            if (totalBoxes > 0) {
-                footerText += ` <span class="text-xs text-amber-700 font-bold font-sans">(${totalBoxes} boxes)</span>`;
-            }
-            footerUnits.innerHTML = footerText;
+            let footerSummary = [];
+            if (totalBoxes > 0) footerSummary.push(`${totalBoxes} Boxes`);
+            if (totalPieces > 0) footerSummary.push(`${totalPieces} Pieces`);
+            footerUnits.innerHTML = footerSummary.length > 0 ? footerSummary.join(' + ') : '0';
         }
         if (footerItems) footerItems.innerText = selectedCount;
     }
@@ -1207,8 +1307,8 @@ require_once __DIR__ . '/includes/header.php';
             }
             if (nextRow) {
                 const targetInput = input.classList.contains('grn-box-field') 
-                    ? (nextRow.querySelector('.grn-box-field') || nextRow.querySelector('.grn-qty-field'))
-                    : (nextRow.querySelector('.grn-qty-field') || nextRow.querySelector('.grn-box-field'));
+                    ? (nextRow.querySelector('.grn-box-field:not(:disabled)') || nextRow.querySelector('.grn-qty-field:not(:disabled)'))
+                    : (nextRow.querySelector('.grn-qty-field:not(:disabled)') || nextRow.querySelector('.grn-box-field:not(:disabled)'));
                 if (targetInput) {
                     targetInput.focus();
                     targetInput.select();
@@ -1223,8 +1323,8 @@ require_once __DIR__ . '/includes/header.php';
             }
             if (prevRow) {
                 const targetInput = input.classList.contains('grn-box-field') 
-                    ? (prevRow.querySelector('.grn-box-field') || prevRow.querySelector('.grn-qty-field'))
-                    : (prevRow.querySelector('.grn-qty-field') || prevRow.querySelector('.grn-box-field'));
+                    ? (prevRow.querySelector('.grn-box-field:not(:disabled)') || prevRow.querySelector('.grn-qty-field:not(:disabled)'))
+                    : (prevRow.querySelector('.grn-qty-field:not(:disabled)') || prevRow.querySelector('.grn-box-field:not(:disabled)'));
                 if (targetInput) {
                     targetInput.focus();
                     targetInput.select();
@@ -1286,7 +1386,6 @@ require_once __DIR__ . '/includes/header.php';
             }
 
             const p = data.product;
-            const packSize = p.pack_size || 24;
 
             // Prepend new row to table
             const tbody = document.getElementById('grnBulkTableBody');
@@ -1309,22 +1408,20 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                     <div class="text-[10px] text-slate-400 mt-0.5 flex items-center space-x-1.5 flex-wrap">
                         <span>${escapeHtml(p.category_name)} ${p.size ? '&bull; ' + escapeHtml(p.size) : ''}</span>
-                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">📦 ${packSize} pcs/box</span>
                     </div>
                 </td>
                 <td class="py-2 px-3 text-center">
-                    <span class="font-mono font-bold text-slate-600 text-xs">0</span>
+                    <span class="font-mono text-slate-400 text-xs">0</span>
                 </td>
                 <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
                     <input type="number" name="box_qty[${p.id}]" id="box_${p.id}" min="0" placeholder="0" 
-                           data-pack="${packSize}"
                            class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
-                           oninput="calculateRowGrn(${p.id})" onkeydown="handleGrnNav(event, this)">
+                           oninput="handleGrnInput(${p.id}, 'box')" onkeydown="handleGrnNav(event, this)">
                 </td>
                 <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                     <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" value="${p.incoming_qty > 0 ? p.incoming_qty : ''}" 
                            class="grn-qty-field w-20 text-center py-1.5 px-2 bg-white border border-cyan-300 rounded-xl font-mono font-black text-cyan-900 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-xs" 
-                           oninput="calculateRowGrn(${p.id})" onkeydown="handleGrnNav(event, this)">
+                           oninput="handleGrnInput(${p.id}, 'pcs')" onkeydown="handleGrnNav(event, this)">
                 </td>
                 <td class="py-2 px-3 text-center border-l border-slate-100">
                     <span id="total_units_${p.id}" class="font-mono text-xs font-bold text-slate-300">-</span>
@@ -1341,7 +1438,7 @@ require_once __DIR__ . '/includes/header.php';
             toggleQuickAddDrawer();
 
             if (p.incoming_qty > 0) {
-                calculateRowGrn(p.id);
+                handleGrnInput(p.id, 'pcs');
             }
 
             // Focus new row box input
@@ -1375,10 +1472,9 @@ require_once __DIR__ . '/includes/header.php';
             const boxInput = r.querySelector('.grn-box-field');
             const qtyField = r.querySelector('.grn-qty-field');
             if (chk && chk.checked) {
-                const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
                 const b = parseInt(boxInput ? boxInput.value : 0) || 0;
                 const q = parseInt(qtyField ? qtyField.value : 0) || 0;
-                if ((b * pack) + q > 0) hasItem = true;
+                if (b > 0 || q > 0) hasItem = true;
             }
         });
 
