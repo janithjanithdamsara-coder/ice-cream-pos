@@ -59,7 +59,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 min-height: auto !important;
                 font-size: 11px !important;
             }
-            .no-print, header, aside, footer, #toastContainer, #sidebarBackdrop, #floatingSupportBtn, #mrLinkSupportModal, #autoLockScreenModal, .modal-backdrop, .lg\:hidden, .md\:hidden {
+            .no-print, #flashAlert, .alert, .flash-message, header, aside, footer, #toastContainer, #sidebarBackdrop, #floatingSupportBtn, #mrLinkSupportModal, #autoLockScreenModal, .modal-backdrop, .lg\:hidden, .md\:hidden {
                 display: none !important;
             }
             .hidden.lg\:block, .hidden.md\:block, .print-table {
@@ -381,7 +381,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             
             <!-- Flash Alert -->
             <?php if ($flash): ?>
-                <div id="flashAlert" class="mb-5 flex items-center p-4 rounded-xl text-xs sm:text-sm font-medium shadow-sm transition-all duration-300 <?= $flash['type'] === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : ($flash['type'] === 'danger' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-amber-50 text-amber-800 border border-amber-200') ?>">
+                <div id="flashAlert" class="no-print mb-5 flex items-center p-4 rounded-xl text-xs sm:text-sm font-medium shadow-sm transition-all duration-300 <?= $flash['type'] === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : ($flash['type'] === 'danger' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-amber-50 text-amber-800 border border-amber-200') ?>">
                     <i class="fa-solid <?= $flash['type'] === 'success' ? 'fa-circle-check text-emerald-500' : 'fa-circle-exclamation text-rose-500' ?> text-base sm:text-lg mr-3 flex-shrink-0"></i>
                     <div class="flex-1"><?= htmlspecialchars($flash['message']) ?></div>
                     <button type="button" onclick="document.getElementById('flashAlert').remove()" class="text-slate-400 hover:text-slate-600 p-1">
