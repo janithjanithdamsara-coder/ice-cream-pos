@@ -373,7 +373,7 @@ function ensureBaseAccounts($pdo) {
             (1, 1, 'Business Owner (Super Admin)', 'admin', '$passHash', 'super_admin', '077-1234567');");
     }
 
-    // Check Categories
+    // Check Categories (Ensure base categories exist if empty)
     $stmtCat = $pdo->query("SELECT COUNT(*) FROM `categories`");
     if ($stmtCat->fetchColumn() == 0) {
         $pdo->exec("INSERT INTO `categories` (`id`, `name`) VALUES
@@ -384,21 +384,7 @@ function ensureBaseAccounts($pdo) {
             (5, 'Ice Chocs & Sticks');");
     }
 
-    // Check Products: Ensure 10 core items exist
-    $stmtProd = $pdo->query("SELECT COUNT(*) FROM `products`");
-    if ($stmtProd->fetchColumn() == 0) {
-        $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `alert_quantity`) VALUES
-            (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 20),
-            (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 20),
-            (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 15),
-            (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 15),
-            (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 25),
-            (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 25),
-            (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 50),
-            (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 50),
-            (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 60),
-            (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
-    }
+    // Products catalog is managed directly by user without auto-forcing seed items
 
     // Check Lorries: Ensure exactly 2 Lorries exist
     $stmtLorry = $pdo->query("SELECT COUNT(*) FROM `lorries`");
