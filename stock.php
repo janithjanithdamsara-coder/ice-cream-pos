@@ -725,13 +725,19 @@ require_once __DIR__ . '/includes/header.php';
                             <i class="fa-solid fa-search"></i>
                         </span>
                         <input type="text" id="grnSearchInput" oninput="filterGrnList()" placeholder="Quick filter code or name..." 
-                                class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                                class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                        <button type="button" id="grnSearchClearBtn" onclick="clearGrnSearch()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
+                    <button type="button" onclick="clearGrnSearch()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200 transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-rotate-left mr-1 text-slate-400"></i> Clear Search
+                    </button>
                     <button type="button" onclick="toggleSelectAllGrn(true)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
                         <i class="fa-solid fa-check-double mr-1 text-cyan-400"></i> Select All
                     </button>
-                    <button type="button" onclick="toggleSelectAllGrn(false)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200/80 transition shrink-0">
-                        Clear
+                    <button type="button" onclick="toggleSelectAllGrn(false)" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[11px] font-bold border border-rose-200 transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-xmark mr-1"></i> Deselect All
                     </button>
                 </div>
 
@@ -1141,6 +1147,19 @@ require_once __DIR__ . '/includes/header.php';
         if (grnEmpty) {
             grnEmpty.classList.toggle('hidden', grnMatches > 0 || !query.trim());
         }
+        const clearBtn = document.getElementById('grnSearchClearBtn');
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !query.trim());
+        }
+    }
+
+    function clearGrnSearch() {
+        const input = document.getElementById('grnSearchInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        filterGrnList();
     }
 
     function toggleSelectAllGrn(isChecked) {

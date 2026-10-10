@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $issueTime = trim($_POST['issue_time'] ?? date('H:i'));
         $notes = trim($_POST['notes'] ?? '');
         $productIds = $_POST['product_id'] ?? [];
+        $boxQtys = $_POST['box_qty'] ?? [];
+        $piecesQtys = $_POST['pieces_qty'] ?? [];
         $quantities = $_POST['quantity'] ?? [];
 
         if (empty($recipient)) {
@@ -35,30 +37,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $issueNo = 'ISU-' . date('ymd') . '-' . rand(1000, 9999);
                 $totalUnits = 0;
+                $totalBoxes = 0;
+                $totalPieces = 0;
+                $itemsToIssue = [];
 
-                // Validate stock availability
                 foreach ($productIds as $idx => $pid) {
-                    $qty = intval($quantities[$idx] ?? 0);
                     $pid = intval($pid);
-                    if ($qty > 0 && $pid > 0) {
-                        $stmtCheck = $pdo->prepare("SELECT p.name, COALESCE(bs.quantity, 0) as stock 
-                            FROM products p 
-                            LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
-                            WHERE p.id = ?");
-                        $stmtCheck->execute([$branchId, $pid]);
-                        $pData = $stmtCheck->fetch();
+                    $bQty = intval($boxQtys[$idx] ?? 0);
+                    $pQty = intval($piecesQtys[$idx] ?? 0);
+                    $legacyQty = intval($quantities[$idx] ?? 0);
 
-                        if (!$pData || $pData['stock'] < $qty) {
-                            $pName = $pData['name'] ?? "Item #$pid";
-                            $avail = $pData['stock'] ?? 0;
-                            throw new Exception("Insufficient stock for '{$pName}'. Available: {$avail} units, Requested: {$qty} units.");
+                    if ($pid > 0) {
+                        if ($bQty > 0) {
+                            $itemsToIssue[] = [
+                                'product_id' => $pid,
+                                'unit_type' => 'box',
+                                'box_qty' => $bQty,
+                                'pieces_qty' => 0,
+                                'qty' => $bQty
+                            ];
+                        } elseif ($pQty > 0) {
+                            $itemsToIssue[] = [
+                                'product_id' => $pid,
+                                'unit_type' => 'piece',
+                                'box_qty' => 0,
+                                'pieces_qty' => $pQty,
+                                'qty' => $pQty
+                            ];
+                        } elseif ($legacyQty > 0) {
+                            $itemsToIssue[] = [
+                                'product_id' => $pid,
+                                'unit_type' => 'box',
+                                'box_qty' => $legacyQty,
+                                'pieces_qty' => 0,
+                                'qty' => $legacyQty
+                            ];
                         }
-                        $totalUnits += $qty;
                     }
                 }
 
-                if ($totalUnits <= 0) {
-                    throw new Exception("Total quantity to issue must be greater than 0.");
+                if (empty($itemsToIssue)) {
+                    throw new Exception("Please enter a Box or Pieces quantity greater than 0 for at least one item.");
+                }
+
+                // Validate stock availability
+                foreach ($itemsToIssue as $item) {
+                    $pid = $item['product_id'];
+                    $uType = $item['unit_type'];
+                    $bQty = $item['box_qty'];
+                    $pQty = $item['pieces_qty'];
+                    $qty = $item['qty'];
+
+                    $stmtCheck = $pdo->prepare("SELECT p.name, 
+                        COALESCE(bs.quantity, 0) as stock, 
+                        COALESCE(bs.box_qty, 0) as store_boxes, 
+                        COALESCE(bs.pieces_qty, 0) as store_pieces 
+                        FROM products p 
+                        LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
+                        WHERE p.id = ?");
+                    $stmtCheck->execute([$branchId, $pid]);
+                    $pData = $stmtCheck->fetch();
+                    $pName = $pData['name'] ?? "Item #$pid";
+
+                    if ($uType === 'box') {
+                        $availBoxes = intval($pData['store_boxes'] ?? 0);
+                        if ($bQty > $availBoxes) {
+                            throw new Exception("Insufficient stock for '{$pName}'. Available: {$availBoxes} Boxes, Requested: {$bQty} Boxes.");
+                        }
+                        $totalBoxes += $bQty;
+                    } else {
+                        $availPieces = intval($pData['store_pieces'] ?? 0);
+                        if ($pQty > $availPieces) {
+                            throw new Exception("Insufficient stock for '{$pName}'. Available: {$availPieces} Pieces, Requested: {$pQty} Pieces.");
+                        }
+                        $totalPieces += $pQty;
+                    }
+                    $totalUnits += $qty;
                 }
 
                 // Insert into store_dispatches
@@ -69,21 +123,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $dispatchId = $pdo->lastInsertId();
 
                 // Insert items & deduct from Cold Room
-                $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity) VALUES (?, ?, ?)");
-                $stmtDeduct = $pdo->prepare("UPDATE branch_stock SET quantity = quantity - ? WHERE branch_id = ? AND product_id = ?");
+                $stmtItem = $pdo->prepare("INSERT INTO store_dispatch_items (dispatch_id, product_id, quantity, box_qty, pieces_qty, unit_type) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmtDeductBox = $pdo->prepare("UPDATE branch_stock SET box_qty = GREATEST(0, box_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
+                $stmtDeductPiece = $pdo->prepare("UPDATE branch_stock SET pieces_qty = GREATEST(0, pieces_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
 
-                foreach ($productIds as $idx => $pid) {
-                    $qty = intval($quantities[$idx] ?? 0);
-                    $pid = intval($pid);
-                    if ($qty > 0 && $pid > 0) {
-                        $stmtItem->execute([$dispatchId, $pid, $qty]);
-                        $stmtDeduct->execute([$qty, $branchId, $pid]);
+                foreach ($itemsToIssue as $item) {
+                    $stmtItem->execute([
+                        $dispatchId, 
+                        $item['product_id'], 
+                        $item['qty'], 
+                        $item['box_qty'], 
+                        $item['pieces_qty'], 
+                        $item['unit_type']
+                    ]);
+
+                    if ($item['unit_type'] === 'box') {
+                        $stmtDeductBox->execute([$item['box_qty'], $item['box_qty'], $branchId, $item['product_id']]);
+                    } else {
+                        $stmtDeductPiece->execute([$item['pieces_qty'], $item['pieces_qty'], $branchId, $item['product_id']]);
                     }
                 }
 
                 $pdo->commit();
-                logActivity('direct_issue', 'store_out', "Goods Issue Note #{$issueNo}: {$totalUnits} units issued to '{$recipient}'");
-                setFlash('success', "Goods Issue Note #{$issueNo} created successfully! {$totalUnits} units issued out of Cold Room.");
+                $summaryBreakdown = [];
+                if ($totalBoxes > 0) $summaryBreakdown[] = "{$totalBoxes} Boxes";
+                if ($totalPieces > 0) $summaryBreakdown[] = "{$totalPieces} Pieces";
+                $summaryText = !empty($summaryBreakdown) ? implode(' + ', $summaryBreakdown) : "{$totalUnits} Units";
+
+                logActivity('direct_issue', 'store_out', "Goods Issue Note #{$issueNo}: {$summaryText} issued to '{$recipient}'");
+                setFlash('success', "Goods Issue Note #{$issueNo} created successfully! {$summaryText} issued out of Cold Room.");
                 header("Location: direct_issue.php?view_id=" . $dispatchId);
                 exit;
 
@@ -105,14 +173,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             // Fetch issue items
-            $stmt = $pdo->prepare("SELECT product_id, quantity FROM store_dispatch_items WHERE dispatch_id = ?");
+            $stmt = $pdo->prepare("SELECT product_id, quantity, box_qty, pieces_qty, unit_type FROM store_dispatch_items WHERE dispatch_id = ?");
             $stmt->execute([$issueId]);
             $items = $stmt->fetchAll();
 
             // Return stock to warehouse
-            $stmtReturn = $pdo->prepare("UPDATE branch_stock SET quantity = quantity + ? WHERE branch_id = ? AND product_id = ?");
+            $stmtReturnBox = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, box_qty, quantity) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE box_qty = box_qty + VALUES(box_qty), quantity = quantity + VALUES(quantity)");
+            $stmtReturnPiece = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, pieces_qty, quantity) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE pieces_qty = pieces_qty + VALUES(pieces_qty), quantity = quantity + VALUES(quantity)");
+
             foreach ($items as $item) {
-                $stmtReturn->execute([$item['quantity'], $branchId, $item['product_id']]);
+                $qty = intval($item['quantity']);
+                $uType = $item['unit_type'] ?? 'box';
+                if ($uType === 'piece') {
+                    $stmtReturnPiece->execute([$branchId, $item['product_id'], $qty, $qty]);
+                } else {
+                    $stmtReturnBox->execute([$branchId, $item['product_id'], $qty, $qty]);
+                }
             }
 
             // Delete records
@@ -133,7 +209,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch Active Products with Live Stock
-$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, COALESCE(bs.quantity, 0) as stock
+$stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, 
+    COALESCE(bs.quantity, 0) as stock, 
+    COALESCE(bs.box_qty, 0) as store_boxes, 
+    COALESCE(bs.pieces_qty, 0) as store_pieces
     FROM products p
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ?
     WHERE p.status = 'active'
@@ -213,12 +292,15 @@ require_once __DIR__ . '/includes/header.php';
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($viewItems as $idx => $it): ?>
+            <?php foreach ($viewItems as $idx => $it): 
+                $uType = $it['unit_type'] ?? 'box';
+                $uLabel = ($uType === 'piece') ? 'Pieces' : 'Boxes';
+            ?>
             <tr class="border-b border-dashed border-gray-300">
                 <td class="py-1"><?= $idx + 1 ?></td>
                 <td class="py-1 font-semibold"><?= htmlspecialchars($it['name']) ?></td>
                 <td class="py-1"><?= htmlspecialchars($it['size']) ?></td>
-                <td class="py-1 text-right font-bold"><?= number_format($it['quantity']) ?> <?= htmlspecialchars($it['unit']) ?></td>
+                <td class="py-1 text-right font-bold"><?= number_format($it['quantity']) ?> <?= $uLabel ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>
@@ -367,7 +449,9 @@ require_once __DIR__ . '/includes/header.php';
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <?php foreach ($viewItems as $idx => $it): ?>
+                    <?php foreach ($viewItems as $idx => $it): 
+                        $uType = $it['unit_type'] ?? 'box';
+                    ?>
                     <tr class="hover:bg-slate-50/50">
                         <td class="py-2.5 px-3 text-slate-400 font-mono"><?= $idx + 1 ?></td>
                         <td class="py-2.5 px-3 font-bold text-slate-800">
@@ -375,7 +459,17 @@ require_once __DIR__ . '/includes/header.php';
                             <span class="text-[10px] text-slate-400 font-mono block"><?= htmlspecialchars($it['code']) ?></span>
                         </td>
                         <td class="py-2.5 px-3 text-slate-600"><?= htmlspecialchars($it['flavor']) ?> &bull; <?= htmlspecialchars($it['size']) ?></td>
-                        <td class="py-2.5 px-3 text-right font-black text-emerald-700 font-mono text-sm"><?= number_format($it['quantity']) ?> <?= htmlspecialchars($it['unit']) ?></td>
+                        <td class="py-2.5 px-3 text-right font-black font-mono text-sm">
+                            <?php if ($uType === 'piece'): ?>
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    🍦 <?= number_format($it['quantity']) ?> Pieces
+                                </span>
+                            <?php else: ?>
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    📦 <?= number_format($it['quantity']) ?> Boxes
+                                </span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -599,19 +693,34 @@ require_once __DIR__ . '/includes/header.php';
             <!-- Product Selection Table -->
             <div class="border border-slate-200 rounded-2xl overflow-hidden">
                 <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-600">Select Items to Issue Out</span>
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-600">Select Items to Issue Out (Box or Pieces)</span>
                     <button type="button" onclick="addIssueRow()" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center">
                         <i class="fa-solid fa-plus-circle mr-1"></i> Add Another Item
                     </button>
+                </div>
+
+                <!-- Table Header for clarity -->
+                <div class="hidden sm:grid grid-cols-12 gap-2 px-3 pt-2.5 pb-1 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                    <div class="col-span-6">Ice Cream Product</div>
+                    <div class="col-span-3 text-center">📦 Box Qty</div>
+                    <div class="col-span-2 text-center">🍦 Pieces Qty</div>
+                    <div class="col-span-1 text-center">Del</div>
                 </div>
 
                 <div class="p-3 space-y-3" id="issueItemsContainer">
                     <!-- Dynamic Rows appended here -->
                 </div>
 
-                <div class="bg-emerald-50/60 p-3 border-t border-emerald-100 flex items-center justify-between text-xs font-bold text-slate-700">
-                    <span>Total Units to Dispatch:</span>
-                    <span id="totalUnitsBadge" class="text-sm font-black text-emerald-700 font-mono">0 Units</span>
+                <div class="bg-emerald-50/60 p-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700">
+                    <div class="flex items-center space-x-3 text-xs">
+                        <span class="text-slate-500">Summary:</span>
+                        <span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold" id="totalBoxesBadge">📦 Boxes: 0</span>
+                        <span class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 font-bold" id="totalPiecesBadge">🍦 Pieces: 0</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 mr-1">Total Units:</span>
+                        <span id="totalUnitsBadge" class="text-sm font-black text-emerald-700 font-mono">0 Units</span>
+                    </div>
                 </div>
             </div>
 
@@ -649,29 +758,44 @@ function addIssueRow() {
 
     let optionsHtml = '<option value="">-- Choose Ice Cream --</option>';
     productsCatalog.forEach(p => {
-        optionsHtml += `<option value="${p.id}" data-stock="${p.stock}">
-            ${p.name} (${p.flavor || 'Standard'}) - Stock: ${p.stock}
+        const b = parseInt(p.store_boxes || 0);
+        const pcs = parseInt(p.store_pieces || 0);
+        const stockLabel = (b === 0 && pcs === 0) ? '0 Out of stock' : `${b} Bx + ${pcs} Pcs`;
+        optionsHtml += `<option value="${p.id}" data-boxes="${b}" data-pieces="${pcs}" data-stock="${p.stock}">
+            ${p.name} (${p.flavor || 'Standard'}) [Stock: ${stockLabel}]
         </option>`;
     });
 
     const rowDiv = document.createElement('div');
     rowDiv.id = rowId;
-    rowDiv.className = 'grid grid-cols-12 gap-2 items-center bg-slate-50/70 p-2 rounded-xl border border-slate-100';
+    rowDiv.className = 'grid grid-cols-12 gap-2 items-center bg-slate-50/70 p-2.5 rounded-xl border border-slate-200';
 
     rowDiv.innerHTML = `
-        <div class="col-span-7 sm:col-span-8">
+        <div class="col-span-12 sm:col-span-6">
             <select name="product_id[]" required onchange="handleProductSelect('${rowId}', this)"
                     class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                 ${optionsHtml}
             </select>
-            <div id="${rowId}_stock_info" class="text-[10px] text-slate-400 mt-0.5 ml-1">Available: -</div>
+            <div id="${rowId}_stock_info" class="text-[10px] text-slate-500 mt-1 ml-1 flex items-center gap-1.5 font-medium">
+                <span class="text-slate-400">Available:</span> <span>Select an item</span>
+            </div>
         </div>
-        <div class="col-span-4 sm:col-span-3">
-            <input type="number" name="quantity[]" min="1" placeholder="Units" required oninput="calcTotalUnits()"
-                   class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+        <div class="col-span-5 sm:col-span-3">
+            <div class="relative">
+                <span class="absolute left-2 top-1.5 text-[11px]">📦</span>
+                <input type="number" name="box_qty[]" min="0" placeholder="Boxes" oninput="handleRowInput('${rowId}', 'box')"
+                       class="w-full bg-white border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
+            </div>
         </div>
-        <div class="col-span-1 text-center">
-            <button type="button" onclick="removeIssueRow('${rowId}')" class="text-rose-400 hover:text-rose-600 text-xs p-1">
+        <div class="col-span-5 sm:col-span-2">
+            <div class="relative">
+                <span class="absolute left-2 top-1.5 text-[11px]">🍦</span>
+                <input type="number" name="pieces_qty[]" min="0" placeholder="Pieces" oninput="handleRowInput('${rowId}', 'piece')"
+                       class="w-full bg-white border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-right">
+            </div>
+        </div>
+        <div class="col-span-2 sm:col-span-1 text-center">
+            <button type="button" onclick="removeIssueRow('${rowId}')" class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs flex items-center justify-center mx-auto transition">
                 <i class="fa-solid fa-trash-can"></i>
             </button>
         </div>
@@ -682,17 +806,71 @@ function addIssueRow() {
 
 function handleProductSelect(rowId, selectElem) {
     const selectedOption = selectElem.options[selectElem.selectedIndex];
-    const stock = selectedOption.getAttribute('data-stock') || 0;
+    const boxes = parseInt(selectedOption.getAttribute('data-boxes') || 0);
+    const pieces = parseInt(selectedOption.getAttribute('data-pieces') || 0);
     const infoDiv = document.getElementById(`${rowId}_stock_info`);
-    const qtyInput = document.querySelector(`#${rowId} input[name="quantity[]"]`);
+    const boxInput = document.querySelector(`#${rowId} input[name="box_qty[]"]`);
+    const piecesInput = document.querySelector(`#${rowId} input[name="pieces_qty[]"]`);
 
     if (selectedOption.value) {
-        infoDiv.innerHTML = `<span class="text-emerald-600 font-bold">Cold Room Stock: ${stock} units</span>`;
-        qtyInput.max = stock;
+        let badgeHtml = `<span class="text-slate-500 font-bold">Cold Room:</span> `;
+        if (boxes === 0 && pieces === 0) {
+            badgeHtml += `<span class="text-rose-600 font-bold">0 Out of Stock</span>`;
+        } else {
+            badgeHtml += `<span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold font-mono">📦 ${boxes} Boxes</span>
+                          <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-bold font-mono">🍦 ${pieces} Pieces</span>`;
+        }
+        infoDiv.innerHTML = badgeHtml;
+        boxInput.max = boxes;
+        piecesInput.max = pieces;
     } else {
-        infoDiv.innerHTML = `Available: -`;
-        qtyInput.removeAttribute('max');
+        infoDiv.innerHTML = `<span class="text-slate-400">Available:</span> <span>Select an item</span>`;
+        boxInput.removeAttribute('max');
+        piecesInput.removeAttribute('max');
     }
+    calcTotalUnits();
+}
+
+function handleRowInput(rowId, changedType) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+
+    const select = row.querySelector('select[name="product_id[]"]');
+    const boxInput = row.querySelector('input[name="box_qty[]"]');
+    const piecesInput = row.querySelector('input[name="pieces_qty[]"]');
+    const selectedOption = select.options[select.selectedIndex];
+
+    const maxBoxes = parseInt(selectedOption ? selectedOption.getAttribute('data-boxes') : 0) || 0;
+    const maxPieces = parseInt(selectedOption ? selectedOption.getAttribute('data-pieces') : 0) || 0;
+
+    if (changedType === 'box') {
+        const val = parseInt(boxInput.value, 10);
+        if (!isNaN(val) && val > 0) {
+            piecesInput.value = '';
+            if (val > maxBoxes && selectedOption.value) {
+                boxInput.classList.add('border-rose-500', 'bg-rose-50');
+            } else {
+                boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+            }
+        } else {
+            boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+        }
+        piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+    } else if (changedType === 'piece') {
+        const val = parseInt(piecesInput.value, 10);
+        if (!isNaN(val) && val > 0) {
+            boxInput.value = '';
+            if (val > maxPieces && selectedOption.value) {
+                piecesInput.classList.add('border-rose-500', 'bg-rose-50');
+            } else {
+                piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+            }
+        } else {
+            piecesInput.classList.remove('border-rose-500', 'bg-rose-50');
+        }
+        boxInput.classList.remove('border-rose-500', 'bg-rose-50');
+    }
+
     calcTotalUnits();
 }
 
@@ -705,15 +883,29 @@ function removeIssueRow(rowId) {
 }
 
 function calcTotalUnits() {
-    let sum = 0;
-    const inputs = document.querySelectorAll('#issueItemsContainer input[name="quantity[]"]');
-    inputs.forEach(inp => {
+    let totalBoxes = 0;
+    let totalPieces = 0;
+
+    const boxInputs = document.querySelectorAll('#issueItemsContainer input[name="box_qty[]"]');
+    boxInputs.forEach(inp => {
         const val = parseInt(inp.value, 10);
         if (!isNaN(val) && val > 0) {
-            sum += val;
+            totalBoxes += val;
         }
     });
-    document.getElementById('totalUnitsBadge').innerText = sum.toLocaleString() + ' Units';
+
+    const piecesInputs = document.querySelectorAll('#issueItemsContainer input[name="pieces_qty[]"]');
+    piecesInputs.forEach(inp => {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val > 0) {
+            totalPieces += val;
+        }
+    });
+
+    const totalUnits = totalBoxes + totalPieces;
+    document.getElementById('totalBoxesBadge').innerText = `📦 Boxes: ${totalBoxes}`;
+    document.getElementById('totalPiecesBadge').innerText = `🍦 Pieces: ${totalPieces}`;
+    document.getElementById('totalUnitsBadge').innerText = totalUnits.toLocaleString() + ' Units';
 }
 </script>
 

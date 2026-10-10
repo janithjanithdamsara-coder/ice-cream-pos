@@ -42,16 +42,40 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         $itemsToDispatch = [];
 
-        // Support bulk checklist format: selected_products[] + loaded_qty[pid]
+        // Support bulk checklist format: selected_products[] + box_qty[pid] OR pieces_qty[pid] / loaded_qty[pid]
         if (!empty($_POST['selected_products']) && is_array($_POST['selected_products'])) {
             foreach ($_POST['selected_products'] as $pid) {
                 $pid = intval($pid);
-                $qty = intval($_POST['loaded_qty'][$pid] ?? 0);
-                if ($pid > 0 && $qty > 0) {
-                    $itemsToDispatch[] = [
-                        'product_id' => $pid,
-                        'qty' => $qty
-                    ];
+                $boxes = intval($_POST['box_qty'][$pid] ?? 0);
+                $pieces = intval($_POST['pieces_qty'][$pid] ?? 0);
+                $legacyQty = intval($_POST['loaded_qty'][$pid] ?? 0);
+
+                if ($pid > 0) {
+                    if ($boxes > 0) {
+                        $itemsToDispatch[] = [
+                            'product_id' => $pid,
+                            'unit_type' => 'box',
+                            'box_qty' => $boxes,
+                            'pieces_qty' => 0,
+                            'qty' => $boxes
+                        ];
+                    } elseif ($pieces > 0) {
+                        $itemsToDispatch[] = [
+                            'product_id' => $pid,
+                            'unit_type' => 'piece',
+                            'box_qty' => 0,
+                            'pieces_qty' => $pieces,
+                            'qty' => $pieces
+                        ];
+                    } elseif ($legacyQty > 0) {
+                        $itemsToDispatch[] = [
+                            'product_id' => $pid,
+                            'unit_type' => 'box',
+                            'box_qty' => $legacyQty,
+                            'pieces_qty' => 0,
+                            'qty' => $legacyQty
+                        ];
+                    }
                 }
             }
         } elseif (!empty($_POST['product_id']) && is_array($_POST['product_id'])) {
@@ -63,6 +87,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 if ($pid > 0 && $qty > 0) {
                     $itemsToDispatch[] = [
                         'product_id' => $pid,
+                        'unit_type' => 'box',
+                        'box_qty' => $qty,
+                        'pieces_qty' => 0,
                         'qty' => $qty
                     ];
                 }
@@ -76,7 +103,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
 
         if (empty($itemsToDispatch)) {
-            setFlash('danger', "Please select at least one product and enter a load quantity greater than 0.");
+            setFlash('danger', "Please select at least one product and enter a Box or Pieces quantity greater than 0.");
             header("Location: lorry.php");
             exit;
         }
@@ -101,23 +128,40 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
             $dispatchNo = 'DSP-' . date('ymd') . '-' . rand(100, 999);
             $totalLoaded = 0;
+            $totalBoxes = 0;
+            $totalPieces = 0;
 
             // Validate stock availability in Cold Room
             foreach ($itemsToDispatch as $item) {
                 $pid = $item['product_id'];
+                $uType = $item['unit_type'];
+                $bQty = $item['box_qty'];
+                $pQty = $item['pieces_qty'];
                 $qty = $item['qty'];
 
-                $sCheck = $pdo->prepare("SELECT p.name, p.code, COALESCE(bs.quantity, 0) as available 
+                $sCheck = $pdo->prepare("SELECT p.name, p.code, 
+                    COALESCE(bs.quantity, 0) as available_units, 
+                    COALESCE(bs.box_qty, 0) as available_boxes, 
+                    COALESCE(bs.pieces_qty, 0) as available_pieces 
                     FROM products p 
                     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
                     WHERE p.id = ?");
                 $sCheck->execute([$branchId, $pid]);
                 $prodStock = $sCheck->fetch();
 
-                $available = intval($prodStock['available'] ?? 0);
                 $pName = $prodStock['name'] ?? "Item #$pid";
-                if ($qty > $available) {
-                    throw new Exception("Not enough stock in Cold Room for [{$pName}] (Available: {$available}, Requested to load: {$qty}).");
+                if ($uType === 'box') {
+                    $availBoxes = intval($prodStock['available_boxes'] ?? 0);
+                    if ($bQty > $availBoxes) {
+                        throw new Exception("Not enough Boxes in Cold Room for [{$pName}] (Available: {$availBoxes} Boxes, Requested to load: {$bQty} Boxes).");
+                    }
+                    $totalBoxes += $bQty;
+                } else {
+                    $availPcs = intval($prodStock['available_pieces'] ?? 0);
+                    if ($pQty > $availPcs) {
+                        throw new Exception("Not enough Pieces in Cold Room for [{$pName}] (Available: {$availPcs} Pieces, Requested to load: {$pQty} Pieces).");
+                    }
+                    $totalPieces += $pQty;
                 }
                 $totalLoaded += $qty;
             }
@@ -131,12 +175,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
             // Insert dispatch items & deduct from Cold Room
             $stmtItem = $pdo->prepare("INSERT INTO lorry_dispatch_items 
-                (dispatch_id, product_id, loaded_qty) VALUES (?, ?, ?)");
-            $stmtDeductStore = $pdo->prepare("UPDATE branch_stock SET quantity = quantity - ? WHERE branch_id = ? AND product_id = ?");
+                (dispatch_id, product_id, loaded_qty, box_qty, pieces_qty, unit_type) VALUES (?, ?, ?, ?, ?, ?)");
+            
+            $stmtDeductBox = $pdo->prepare("UPDATE branch_stock SET box_qty = GREATEST(0, box_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
+            $stmtDeductPiece = $pdo->prepare("UPDATE branch_stock SET pieces_qty = GREATEST(0, pieces_qty - ?), quantity = GREATEST(0, quantity - ?) WHERE branch_id = ? AND product_id = ?");
 
             foreach ($itemsToDispatch as $item) {
-                $stmtItem->execute([$dispatchId, $item['product_id'], $item['qty']]);
-                $stmtDeductStore->execute([$item['qty'], $branchId, $item['product_id']]);
+                $stmtItem->execute([
+                    $dispatchId, 
+                    $item['product_id'], 
+                    $item['qty'], 
+                    $item['box_qty'], 
+                    $item['pieces_qty'], 
+                    $item['unit_type']
+                ]);
+
+                if ($item['unit_type'] === 'box') {
+                    $stmtDeductBox->execute([$item['box_qty'], $item['box_qty'], $branchId, $item['product_id']]);
+                } else {
+                    $stmtDeductPiece->execute([$item['pieces_qty'], $item['pieces_qty'], $branchId, $item['product_id']]);
+                }
             }
 
             // Update lorry status to on_route
@@ -144,8 +202,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
             $pdo->commit();
             $itemCount = count($itemsToDispatch);
-            logActivity('lorry_dispatch', 'lorry', "Morning dispatch #{$dispatchNo}: {$totalLoaded} units ({$itemCount} products) loaded onto {$lorryRow['plate_no']} ({$lorryRow['driver_name']})");
-            setFlash('success', "Morning Dispatch #{$dispatchNo} created! {$totalLoaded} units ({$itemCount} products) loaded from Cold Room onto Lorry {$lorryRow['plate_no']}.");
+            $summaryBreakdown = [];
+            if ($totalBoxes > 0) $summaryBreakdown[] = "{$totalBoxes} Boxes";
+            if ($totalPieces > 0) $summaryBreakdown[] = "{$totalPieces} Pieces";
+            $summaryText = !empty($summaryBreakdown) ? implode(' + ', $summaryBreakdown) : "{$totalLoaded} Units";
+
+            logActivity('lorry_dispatch', 'lorry', "Morning dispatch #{$dispatchNo}: {$summaryText} ({$itemCount} products) loaded onto {$lorryRow['plate_no']} ({$lorryRow['driver_name']})");
+            setFlash('success', "Morning Dispatch #{$dispatchNo} created! {$summaryText} loaded from Cold Room onto Lorry {$lorryRow['plate_no']}.");
             header("Location: lorry.php");
             exit;
 
@@ -307,23 +370,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $totalDamage = 0;
 
                 $stmtUpdateItem = $pdo->prepare("UPDATE lorry_dispatch_items 
-                    SET return_store_qty = ?, damage_qty = ?, delivered_qty = ? 
+                    SET return_store_qty = ?, damage_qty = ?, delivered_qty = ?,
+                        return_store_box_qty = ?, return_store_pieces_qty = ?,
+                        damage_box_qty = ?, damage_pieces_qty = ?,
+                        delivered_box_qty = ?, delivered_pieces_qty = ?
                     WHERE id = ? AND dispatch_id = ?");
 
-                $stmtCreditStore = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) 
-                    VALUES (?, ?, ?) 
-                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
+                $stmtCreditStoreBox = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, box_qty, quantity) 
+                    VALUES (?, ?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE box_qty = box_qty + VALUES(box_qty), quantity = quantity + VALUES(quantity)");
+
+                $stmtCreditStorePiece = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, pieces_qty, quantity) 
+                    VALUES (?, ?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE pieces_qty = pieces_qty + VALUES(pieces_qty), quantity = quantity + VALUES(quantity)");
 
                 foreach ($itemIds as $idx => $itemId) {
                     $retStore = intval($returnStoreQtys[$idx] ?? 0);
                     $damage = intval($damageQtys[$idx] ?? 0);
 
-                    $itStmt = $pdo->prepare("SELECT product_id, loaded_qty FROM lorry_dispatch_items WHERE id = ?");
+                    $itStmt = $pdo->prepare("SELECT product_id, loaded_qty, box_qty, pieces_qty, unit_type FROM lorry_dispatch_items WHERE id = ?");
                     $itStmt->execute([$itemId]);
                     $itemData = $itStmt->fetch();
 
                     if ($itemData) {
                         $loaded = intval($itemData['loaded_qty']);
+                        $unitType = $itemData['unit_type'] ?? 'box';
 
                         if (($retStore + $damage) > $loaded) {
                             throw new Exception("Returns + Damages ({$retStore} + {$damage}) cannot exceed loaded quantity ({$loaded})!");
@@ -335,11 +406,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                         $totalReturnStore += $retStore;
                         $totalDamage += $damage;
 
-                        $stmtUpdateItem->execute([$retStore, $damage, $delivered, $itemId, $dispatchId]);
+                        $retBox = ($unitType === 'box') ? $retStore : 0;
+                        $retPcs = ($unitType === 'piece') ? $retStore : 0;
+                        $dmgBox = ($unitType === 'box') ? $damage : 0;
+                        $dmgPcs = ($unitType === 'piece') ? $damage : 0;
+                        $delBox = ($unitType === 'box') ? $delivered : 0;
+                        $delPcs = ($unitType === 'piece') ? $delivered : 0;
+
+                        $stmtUpdateItem->execute([
+                            $retStore, $damage, $delivered,
+                            $retBox, $retPcs,
+                            $dmgBox, $dmgPcs,
+                            $delBox, $delPcs,
+                            $itemId, $dispatchId
+                        ]);
 
                         // Add Good Returns back into Cold Room Store Stock!
                         if ($retStore > 0) {
-                            $stmtCreditStore->execute([$branchId, $itemData['product_id'], $retStore]);
+                            if ($unitType === 'piece') {
+                                $stmtCreditStorePiece->execute([$branchId, $itemData['product_id'], $retStore, $retStore]);
+                            } else {
+                                $stmtCreditStoreBox->execute([$branchId, $itemData['product_id'], $retStore, $retStore]);
+                            }
                         }
                     }
                 }
@@ -413,7 +501,7 @@ $stmt->execute([$branchId]);
 $dispatches = $stmt->fetchAll();
 
 // Products with Store Stock for Morning Loading
-$stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity, 0) as store_stock 
+$stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity, 0) as store_stock, COALESCE(bs.box_qty, 0) as store_boxes, COALESCE(bs.pieces_qty, 0) as store_pieces 
     FROM products p 
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
@@ -828,13 +916,19 @@ require_once __DIR__ . '/includes/header.php';
                             <i class="fa-solid fa-search"></i>
                         </span>
                         <input type="text" id="dispatchSearchInput" oninput="filterDispatchList()" placeholder="Quick filter code or name..." 
-                               class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium">
+                               class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium">
+                        <button type="button" id="dispatchSearchClearBtn" onclick="clearDispatchSearch()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
+                    <button type="button" onclick="clearDispatchSearch()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200 transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-rotate-left mr-1 text-slate-400"></i> Clear Search
+                    </button>
                     <button type="button" onclick="toggleSelectAvailableDispatch(true)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-white rounded-xl text-[11px] font-bold shadow-xs transition shrink-0 flex items-center">
                         <i class="fa-solid fa-check-double mr-1 text-amber-400"></i> Select In-Stock
                     </button>
-                    <button type="button" onclick="toggleSelectAvailableDispatch(false)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold border border-slate-200/80 transition shrink-0">
-                        Clear
+                    <button type="button" onclick="toggleSelectAvailableDispatch(false)" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[11px] font-bold border border-rose-200 transition shrink-0 flex items-center">
+                        <i class="fa-solid fa-xmark mr-1"></i> Deselect All
                     </button>
                 </div>
 
@@ -844,8 +938,11 @@ require_once __DIR__ . '/includes/header.php';
                         <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
                             Selected: <strong id="dispatchSelectedCount" class="font-extrabold text-slate-900">0</strong>
                         </span>
-                        <span class="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200/80">
-                            Units to Load: <strong id="dispatchTotalUnits" class="font-black text-amber-700 font-mono">0</strong>
+                        <span class="px-2 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70">
+                            📦 Boxes: <strong id="dispatchTotalBoxes" class="font-black text-amber-800 font-mono">0</strong>
+                        </span>
+                        <span class="px-2 py-1 rounded-lg bg-sky-50 text-sky-900 border border-sky-200/70">
+                            🍦 Pieces: <strong id="dispatchTotalPieces" class="font-black text-sky-800 font-mono">0</strong>
                         </span>
                     </div>
                 </div>
@@ -853,7 +950,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Products Checklist Table -->
             <div class="flex-1 border border-slate-200 rounded-2xl overflow-hidden shadow-inner flex flex-col bg-white min-h-0">
-                <div class="flex-1 overflow-y-auto">
+                <div class="flex-1 overflow-y-auto overscroll-contain">
                     <table class="w-full text-left text-xs border-collapse" id="dispatchBulkTable">
                         <thead class="sticky top-0 bg-slate-100 z-10 text-slate-600 uppercase text-[10px] font-bold border-b border-slate-200 select-none">
                             <tr>
@@ -863,17 +960,27 @@ require_once __DIR__ . '/includes/header.php';
                                 <th class="py-2.5 px-3 w-32 font-mono">Product Code</th>
                                 <th class="py-2.5 px-3">Product Description</th>
                                 <th class="py-2.5 px-3 w-36 text-center">Cold Room Available</th>
-                                <th class="py-2.5 px-3 w-40 text-center text-amber-800 font-extrabold">Load Quantity (Units) *</th>
+                                <th class="py-2.5 px-3 w-28 text-center bg-amber-50 text-amber-900 border-l border-amber-200/60 font-black">
+                                    📦 Load Boxes
+                                </th>
+                                <th class="py-2.5 px-3 w-28 text-center bg-sky-50 text-sky-900 border-l border-sky-200/60 font-black">
+                                    🍦 Load Pieces
+                                </th>
+                                <th class="py-2.5 px-3 w-32 text-center border-l border-slate-200">Total to Load</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="dispatchBulkTableBody">
                             <?php foreach ($products as $p): 
-                                $stock = intval($p['store_stock']);
+                                $boxes = intval($p['store_boxes'] ?? 0);
+                                $pieces = intval($p['store_pieces'] ?? 0);
+                                $stock = intval($p['store_stock'] ?? 0);
                                 $isOut = $stock <= 0;
                             ?>
                             <tr class="dispatch-item-row hover:bg-slate-50/80 transition-colors <?= $isOut ? 'opacity-60 bg-slate-50/40' : '' ?>" 
                                 id="disp_row_<?= $p['id'] ?>" 
                                 data-stock="<?= $stock ?>" 
+                                data-boxes="<?= $boxes ?>"
+                                data-pieces="<?= $pieces ?>"
                                 data-search="<?= htmlspecialchars(strtolower($p['code'] . ' ' . $p['name'] . ' ' . ($p['flavor'] ?? '') . ' ' . ($p['category_name'] ?? ''))) ?>">
                                 <td class="py-2 px-3 text-center">
                                     <input type="checkbox" name="selected_products[]" value="<?= $p['id'] ?>" id="disp_chk_<?= $p['id'] ?>" 
@@ -896,21 +1003,34 @@ require_once __DIR__ . '/includes/header.php';
                                         <span class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-mono text-[10px] font-bold border border-rose-200">
                                             0 (Out of stock)
                                         </span>
-                                    <?php elseif ($stock <= 15): ?>
-                                        <span class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-mono text-[11px] font-extrabold border border-amber-200">
-                                            <?= number_format($stock) ?> Units (Low)
+                                    <?php elseif ($boxes > 0 && $pieces > 0): ?>
+                                        <div class="flex items-center justify-center space-x-1 font-mono text-[11px] font-extrabold whitespace-nowrap">
+                                            <span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">📦 <?= number_format($boxes) ?> Bx</span>
+                                            <span class="text-slate-300 font-normal">+</span>
+                                            <span class="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200">🍦 <?= number_format($pieces) ?> Pcs</span>
+                                        </div>
+                                    <?php elseif ($boxes > 0): ?>
+                                        <span class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-mono text-[11px] font-extrabold border border-amber-200 whitespace-nowrap">
+                                            📦 <?= number_format($boxes) ?> Boxes
                                         </span>
                                     <?php else: ?>
-                                        <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono text-[11px] font-extrabold border border-emerald-200">
-                                            <?= number_format($stock) ?> Units
+                                        <span class="px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-800 font-mono text-[11px] font-extrabold border border-sky-200 whitespace-nowrap">
+                                            🍦 <?= number_format($pieces) ?> Pieces
                                         </span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="py-2 px-3 text-center">
-                                    <input type="number" name="loaded_qty[<?= $p['id'] ?>]" id="disp_qty_<?= $p['id'] ?>" min="0" max="<?= $stock ?>" placeholder="0" 
-                                           <?= $isOut ? 'disabled title="Cannot load: 0 stock in cold room"' : '' ?>
-                                           class="dispatch-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-amber-800 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all disabled:bg-slate-100 disabled:text-slate-400" 
-                                           oninput="handleDispatchQtyInput(<?= $p['id'] ?>, <?= $stock ?>)" onkeydown="handleDispatchNav(event, this)">
+                                <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
+                                    <input type="number" name="box_qty[<?= $p['id'] ?>]" id="disp_box_<?= $p['id'] ?>" min="0" max="<?= $boxes ?>" placeholder="0" 
+                                           <?= ($isOut || $boxes <= 0) ? 'disabled class="disp-box-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="disp-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs"' ?>
+                                           oninput="handleDispatchInput(<?= $p['id'] ?>, 'box', <?= $boxes ?>, <?= $pieces ?>)" onkeydown="handleDispatchNav(event, this)">
+                                </td>
+                                <td class="py-2 px-3 text-center bg-sky-50/30 border-l border-sky-100/60">
+                                    <input type="number" name="pieces_qty[<?= $p['id'] ?>]" id="disp_pcs_<?= $p['id'] ?>" min="0" max="<?= $pieces ?>" placeholder="0" 
+                                           <?= ($isOut || $pieces <= 0) ? 'disabled class="disp-pcs-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="disp-pcs-field w-20 text-center py-1.5 px-2 bg-white border border-sky-300 rounded-xl font-mono font-black text-sky-900 text-xs focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all shadow-xs"' ?>
+                                           oninput="handleDispatchInput(<?= $p['id'] ?>, 'pcs', <?= $boxes ?>, <?= $pieces ?>)" onkeydown="handleDispatchNav(event, this)">
+                                </td>
+                                <td class="py-2 px-3 text-center border-l border-slate-100">
+                                    <span id="disp_summary_<?= $p['id'] ?>" class="font-mono text-xs font-bold text-slate-300">-</span>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -1194,15 +1314,22 @@ require_once __DIR__ . '/includes/header.php';
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        <?php foreach ($settleDispatchItems as $it): ?>
+                        <?php foreach ($settleDispatchItems as $it): 
+                            $uType = $it['unit_type'] ?? 'box';
+                            $uLabel = ($uType === 'piece') ? 'Pieces' : 'Boxes';
+                            $uIcon = ($uType === 'piece') ? '🍦' : '📦';
+                        ?>
                             <tr class="settle-item-row" data-loaded="<?= $it['loaded_qty'] ?>">
                                 <input type="hidden" name="item_id[]" value="<?= $it['id'] ?>">
                                 <td class="p-2.5 font-bold text-slate-800">
                                     <?= htmlspecialchars($it['product_name']) ?>
-                                    <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($it['product_code']) ?></div>
+                                    <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                                        <?= htmlspecialchars($it['product_code']) ?> &bull; 
+                                        <span class="font-bold <?= $uType === 'piece' ? 'text-sky-700' : 'text-amber-700' ?>"><?= $uIcon ?> <?= $uLabel ?></span>
+                                    </div>
                                 </td>
                                 <td class="p-2.5 text-center font-mono font-black text-amber-700 text-sm loaded-val">
-                                    <?= $it['loaded_qty'] ?>
+                                    <?= $it['loaded_qty'] ?> <span class="text-[10px] font-normal text-slate-400"><?= $uLabel ?></span>
                                 </td>
                                 <td class="p-2.5">
                                     <input type="number" name="return_store_qty[]" min="0" max="<?= $it['loaded_qty'] ?>" value="0" 
@@ -1215,7 +1342,7 @@ require_once __DIR__ . '/includes/header.php';
                                            class="w-24 mx-auto block p-2 text-center bg-rose-50 border border-rose-300 text-rose-800 rounded-xl font-mono font-bold text-xs damage-input">
                                 </td>
                                 <td class="p-2.5 text-center font-mono font-black text-emerald-700 text-base delivered-val">
-                                    <?= $it['loaded_qty'] ?>
+                                    <?= $it['loaded_qty'] ?> <span class="text-[10px] font-normal text-slate-400"><?= $uLabel ?></span>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -1312,13 +1439,23 @@ require_once __DIR__ . '/includes/header.php';
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <?php foreach ($viewDispatchItems as $vItem): ?>
+                    <?php foreach ($viewDispatchItems as $vItem): 
+                        $vuType = $vItem['unit_type'] ?? 'box';
+                        $vuLabel = ($vuType === 'piece') ? 'Pieces' : 'Boxes';
+                        $vuIcon = ($vuType === 'piece') ? '🍦' : '📦';
+                    ?>
                         <tr>
-                            <td class="p-2.5 font-bold"><?= htmlspecialchars($vItem['product_name']) ?></td>
-                            <td class="p-2.5 text-center font-mono font-bold text-amber-700"><?= $vItem['loaded_qty'] ?></td>
+                            <td class="p-2.5 font-bold">
+                                <?= htmlspecialchars($vItem['product_name']) ?>
+                                <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                                    <?= htmlspecialchars($vItem['product_code']) ?> &bull;
+                                    <span class="font-bold <?= $vuType === 'piece' ? 'text-sky-700' : 'text-amber-700' ?>"><?= $vuIcon ?> <?= $vuLabel ?></span>
+                                </div>
+                            </td>
+                            <td class="p-2.5 text-center font-mono font-bold text-amber-700"><?= $vItem['loaded_qty'] ?> <?= $vuLabel ?></td>
                             <td class="p-2.5 text-center font-mono text-purple-700"><?= $vItem['return_store_qty'] ?></td>
                             <td class="p-2.5 text-center font-mono text-rose-600"><?= $vItem['damage_qty'] ?></td>
-                            <td class="p-2.5 text-center font-mono font-black text-emerald-700"><?= $vItem['delivered_qty'] ?></td>
+                            <td class="p-2.5 text-center font-mono font-black text-emerald-700"><?= $vItem['delivered_qty'] ?> <?= $vuLabel ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -1446,6 +1583,19 @@ require_once __DIR__ . '/includes/header.php';
             const text = (r.getAttribute('data-search') || r.innerText).toLowerCase();
             r.style.display = smartMatch(text, query) ? '' : 'none';
         });
+        const clearBtn = document.getElementById('dispatchSearchClearBtn');
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !query.trim());
+        }
+    }
+
+    function clearDispatchSearch() {
+        const input = document.getElementById('dispatchSearchInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        filterDispatchList();
     }
 
     function toggleSelectAvailableDispatch(isChecked) {
@@ -1473,39 +1623,98 @@ require_once __DIR__ . '/includes/header.php';
     function handleDispatchCheck(pid) {
         const row = document.getElementById('disp_row_' + pid);
         const chk = document.getElementById('disp_chk_' + pid);
-        const qtyInput = document.getElementById('disp_qty_' + pid);
+        const boxInput = document.getElementById('disp_box_' + pid);
+        const pcsInput = document.getElementById('disp_pcs_' + pid);
         if (!row || !chk) return;
 
+        chk.dataset.userChecked = chk.checked ? '1' : '';
         applyDispatchRowHighlight(row, chk.checked);
 
-        if (chk.checked && qtyInput && (!qtyInput.value || parseInt(qtyInput.value) <= 0)) {
-            qtyInput.focus();
-            qtyInput.select();
+        if (chk.checked) {
+            const b = parseInt(boxInput ? boxInput.value : 0) || 0;
+            const p = parseInt(pcsInput ? pcsInput.value : 0) || 0;
+            if (b === 0 && p === 0) {
+                if (boxInput && !boxInput.disabled) {
+                    boxInput.focus();
+                    boxInput.select();
+                } else if (pcsInput && !pcsInput.disabled) {
+                    pcsInput.focus();
+                    pcsInput.select();
+                }
+            }
         }
         updateDispatchTotals();
     }
 
-    function handleDispatchQtyInput(pid, availableStock) {
+    function handleDispatchInput(pid, changedType, maxBoxes, maxPieces) {
         const row = document.getElementById('disp_row_' + pid);
         const chk = document.getElementById('disp_chk_' + pid);
-        const qtyInput = document.getElementById('disp_qty_' + pid);
-        if (!row || !chk || !qtyInput) return;
+        const boxInput = document.getElementById('disp_box_' + pid);
+        const pcsInput = document.getElementById('disp_pcs_' + pid);
+        const summarySpan = document.getElementById('disp_summary_' + pid);
+        if (!row || !chk) return;
 
-        let val = parseInt(qtyInput.value) || 0;
+        let boxes = parseInt(boxInput ? boxInput.value : 0) || 0;
+        let pcs = parseInt(pcsInput ? pcsInput.value : 0) || 0;
 
-        // Cap to available stock in Cold Room
-        if (val > availableStock) {
-            qtyInput.value = availableStock;
-            val = availableStock;
-            if (typeof showToast === 'function') {
-                showToast(`Max available in Cold Room is ${availableStock} Units!`, 'warning', 'Stock Limit Exceeded');
+        if (changedType === 'box' && boxes > 0) {
+            if (boxes > maxBoxes) {
+                alert('Cannot load more than available Cold Room boxes (' + maxBoxes + ')!');
+                boxInput.value = maxBoxes;
+                boxes = maxBoxes;
+            }
+            if (pcsInput) {
+                pcsInput.value = '';
+                pcsInput.disabled = true;
+                pcsInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (boxInput) {
+                boxInput.disabled = false;
+                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (summarySpan) {
+                summarySpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 font-black text-xs">📦 ${boxes} Boxes</span>`;
+            }
+            chk.checked = true;
+            applyDispatchRowHighlight(row, true);
+        } else if (changedType === 'pcs' && pcs > 0) {
+            if (pcs > maxPieces) {
+                alert('Cannot load more than available Cold Room pieces (' + maxPieces + ')!');
+                pcsInput.value = maxPieces;
+                pcs = maxPieces;
+            }
+            if (boxInput) {
+                boxInput.value = '';
+                boxInput.disabled = true;
+                boxInput.classList.add('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (pcsInput) {
+                pcsInput.disabled = false;
+                pcsInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (summarySpan) {
+                summarySpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-sky-100 text-sky-900 border border-sky-300 font-black text-xs">🍦 ${pcs} Pieces</span>`;
+            }
+            chk.checked = true;
+            applyDispatchRowHighlight(row, true);
+        } else if (boxes === 0 && pcs === 0) {
+            if (boxInput && maxBoxes > 0) {
+                boxInput.disabled = false;
+                boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (pcsInput && maxPieces > 0) {
+                pcsInput.disabled = false;
+                pcsInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
+            }
+            if (summarySpan) {
+                summarySpan.innerHTML = `<span class="text-slate-300 font-normal">-</span>`;
+            }
+            if (!chk.dataset.userChecked) {
+                chk.checked = false;
+                applyDispatchRowHighlight(row, false);
             }
         }
 
-        if (val > 0) {
-            chk.checked = true;
-            applyDispatchRowHighlight(row, true);
-        }
         updateDispatchTotals();
     }
 
@@ -1521,60 +1730,72 @@ require_once __DIR__ . '/includes/header.php';
 
     function updateDispatchTotals() {
         let selectedCount = 0;
-        let totalUnits = 0;
+        let totalBoxes = 0;
+        let totalPieces = 0;
         const rows = document.querySelectorAll('#dispatchBulkTableBody tr.dispatch-item-row');
 
         rows.forEach(r => {
             const chk = r.querySelector('.dispatch-checkbox');
-            const qtyField = r.querySelector('.dispatch-qty-field');
+            const boxField = r.querySelector('.disp-box-field');
+            const pcsField = r.querySelector('.disp-pcs-field');
             if (chk && chk.checked) {
                 selectedCount++;
-                if (qtyField) {
-                    const q = parseInt(qtyField.value) || 0;
-                    totalUnits += q;
-                }
+                const b = parseInt(boxField ? boxField.value : 0) || 0;
+                const p = parseInt(pcsField ? pcsField.value : 0) || 0;
+                totalBoxes += b;
+                totalPieces += p;
             }
         });
 
         const countEl = document.getElementById('dispatchSelectedCount');
-        const qtyEl = document.getElementById('dispatchTotalUnits');
+        const boxEl = document.getElementById('dispatchTotalBoxes');
+        const pcsEl = document.getElementById('dispatchTotalPieces');
         const footerUnits = document.getElementById('dispatchFooterUnits');
         const footerItems = document.getElementById('dispatchFooterItems');
 
         if (countEl) countEl.innerText = selectedCount;
-        if (qtyEl) qtyEl.innerText = totalUnits.toLocaleString();
-        if (footerUnits) footerUnits.innerText = totalUnits.toLocaleString();
+        if (boxEl) boxEl.innerText = totalBoxes.toLocaleString();
+        if (pcsEl) pcsEl.innerText = totalPieces.toLocaleString();
+        if (footerUnits) {
+            let summary = [];
+            if (totalBoxes > 0) summary.push(`${totalBoxes} Boxes`);
+            if (totalPieces > 0) summary.push(`${totalPieces} Pieces`);
+            footerUnits.innerHTML = summary.length > 0 ? summary.join(' + ') : '0';
+        }
         if (footerItems) footerItems.innerText = selectedCount;
     }
 
     function handleDispatchNav(e, input) {
-        // Fast keyboard navigation between quantities (Down Arrow / Enter = Next, Up Arrow = Prev)
         if (e.key === 'ArrowDown' || e.key === 'Enter') {
             e.preventDefault();
             const currentRow = input.closest('tr');
             let nextRow = currentRow.nextElementSibling;
-            while (nextRow && (nextRow.style.display === 'none' || nextRow.querySelector('.dispatch-qty-field[disabled]'))) {
+            while (nextRow && (nextRow.style.display === 'none' || nextRow.classList.contains('opacity-60'))) {
                 nextRow = nextRow.nextElementSibling;
             }
             if (nextRow) {
-                const nextInput = nextRow.querySelector('.dispatch-qty-field:not([disabled])');
-                if (nextInput) {
-                    nextInput.focus();
-                    nextInput.select();
+                const targetInput = input.classList.contains('disp-box-field') 
+                    ? (nextRow.querySelector('.disp-box-field:not(:disabled)') || nextRow.querySelector('.disp-pcs-field:not(:disabled)'))
+                    : (nextRow.querySelector('.disp-pcs-field:not(:disabled)') || nextRow.querySelector('.disp-box-field:not(:disabled)'));
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.select();
                 }
             }
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             const currentRow = input.closest('tr');
             let prevRow = currentRow.previousElementSibling;
-            while (prevRow && (prevRow.style.display === 'none' || prevRow.querySelector('.dispatch-qty-field[disabled]'))) {
+            while (prevRow && (prevRow.style.display === 'none' || prevRow.classList.contains('opacity-60'))) {
                 prevRow = prevRow.previousElementSibling;
             }
             if (prevRow) {
-                const prevInput = prevRow.querySelector('.dispatch-qty-field:not([disabled])');
-                if (prevInput) {
-                    prevInput.focus();
-                    prevInput.select();
+                const targetInput = input.classList.contains('disp-box-field') 
+                    ? (prevRow.querySelector('.disp-box-field:not(:disabled)') || prevRow.querySelector('.disp-pcs-field:not(:disabled)'))
+                    : (prevRow.querySelector('.disp-pcs-field:not(:disabled)') || prevRow.querySelector('.disp-box-field:not(:disabled)'));
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.select();
                 }
             }
         }
@@ -1591,15 +1812,17 @@ require_once __DIR__ . '/includes/header.php';
         const rows = document.querySelectorAll('#dispatchBulkTableBody tr.dispatch-item-row');
         rows.forEach(r => {
             const chk = r.querySelector('.dispatch-checkbox');
-            const qtyField = r.querySelector('.dispatch-qty-field');
+            const boxField = r.querySelector('.disp-box-field');
+            const pcsField = r.querySelector('.disp-pcs-field');
             if (chk && chk.checked) {
-                const q = parseInt(qtyField ? qtyField.value : 0) || 0;
-                if (q > 0) hasItem = true;
+                const b = parseInt(boxField ? boxField.value : 0) || 0;
+                const p = parseInt(pcsField ? pcsField.value : 0) || 0;
+                if (b > 0 || p > 0) hasItem = true;
             }
         });
 
         if (!hasItem) {
-            alert('Please select at least one product with a load quantity greater than 0.');
+            alert('Please select at least one product with a Box or Pieces quantity greater than 0.');
             return false;
         }
 

@@ -282,12 +282,78 @@ function migrateSchema($pdo) {
             $pdo->exec("ALTER TABLE `store_dispatches` ADD COLUMN `bill_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `extra_label`");
         }
 
-        // 5. Ensure store_dispatch_items has unit_type, box_qty, units_per_box
+        // 5. Ensure store_dispatch_items has unit_type, box_qty, pieces_qty, units_per_box
         $colsSdiUnit = $pdo->query("SHOW COLUMNS FROM `store_dispatch_items` LIKE 'unit_type'")->fetchAll();
         if (empty($colsSdiUnit)) {
-            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'pcs' AFTER `quantity`");
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box' AFTER `quantity`");
+        }
+        $colsSdiBox = $pdo->query("SHOW COLUMNS FROM `store_dispatch_items` LIKE 'box_qty'")->fetchAll();
+        if (empty($colsSdiBox)) {
             $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `unit_type`");
-            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+        $colsSdiPieces = $pdo->query("SHOW COLUMNS FROM `store_dispatch_items` LIKE 'pieces_qty'")->fetchAll();
+        if (empty($colsSdiPieces)) {
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+        $colsSdiUpb = $pdo->query("SHOW COLUMNS FROM `store_dispatch_items` LIKE 'units_per_box'")->fetchAll();
+        if (empty($colsSdiUpb)) {
+            $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `pieces_qty`");
+        }
+
+        // 5.0 Ensure lorry_dispatch_items has box_qty, pieces_qty, unit_type, return_store_box_qty, return_store_pieces_qty, damage_box_qty, damage_pieces_qty
+        $colsLdiBox = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'box_qty'")->fetchAll();
+        if (empty($colsLdiBox)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `loaded_qty`");
+        }
+        $colsLdiPieces = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'pieces_qty'")->fetchAll();
+        if (empty($colsLdiPieces)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+        $colsLdiUnit = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'unit_type'")->fetchAll();
+        if (empty($colsLdiUnit)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box' AFTER `pieces_qty`");
+        }
+        $colsLdiRetBox = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'return_store_box_qty'")->fetchAll();
+        if (empty($colsLdiRetBox)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `return_store_box_qty` INT NOT NULL DEFAULT 0 AFTER `return_store_qty`");
+        }
+        $colsLdiRetPcs = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'return_store_pieces_qty'")->fetchAll();
+        if (empty($colsLdiRetPcs)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `return_store_pieces_qty` INT NOT NULL DEFAULT 0 AFTER `return_store_box_qty`");
+        }
+        $colsLdiDmgBox = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'damage_box_qty'")->fetchAll();
+        if (empty($colsLdiDmgBox)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `damage_box_qty` INT NOT NULL DEFAULT 0 AFTER `damage_qty`");
+        }
+        $colsLdiDmgPcs = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'damage_pieces_qty'")->fetchAll();
+        if (empty($colsLdiDmgPcs)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `damage_pieces_qty` INT NOT NULL DEFAULT 0 AFTER `damage_box_qty`");
+        }
+
+        // 5.01 Ensure lorry_dispatch_reload_items table and columns exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `lorry_dispatch_reload_items` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `reload_id` INT NOT NULL,
+            `dispatch_id` INT NOT NULL,
+            `product_id` INT NOT NULL,
+            `quantity` INT NOT NULL DEFAULT 0,
+            `box_qty` INT NOT NULL DEFAULT 0,
+            `pieces_qty` INT NOT NULL DEFAULT 0,
+            `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box',
+            INDEX (`reload_id`),
+            INDEX (`dispatch_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        $colsLriBox = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_reload_items` LIKE 'box_qty'")->fetchAll();
+        if (empty($colsLriBox)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_reload_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `quantity`");
+        }
+        $colsLriPcs = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_reload_items` LIKE 'pieces_qty'")->fetchAll();
+        if (empty($colsLriPcs)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_reload_items` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+        $colsLriUnit = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_reload_items` LIKE 'unit_type'")->fetchAll();
+        if (empty($colsLriUnit)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_reload_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box' AFTER `pieces_qty`");
         }
 
         // 5.1 Ensure stock_invoice_items has box_qty, pieces_qty, unit_type, units_per_box
