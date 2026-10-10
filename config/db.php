@@ -290,12 +290,21 @@ function migrateSchema($pdo) {
             $pdo->exec("ALTER TABLE `store_dispatch_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
         }
 
-        // 5.1 Ensure stock_invoice_items has box_qty, pieces_qty, unit_type
+        // 5.1 Ensure stock_invoice_items has box_qty, pieces_qty, unit_type, units_per_box
         $colsSiiBox = $pdo->query("SHOW COLUMNS FROM `stock_invoice_items` LIKE 'box_qty'")->fetchAll();
         if (empty($colsSiiBox)) {
             $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `quantity`");
+        }
+        $colsSiiPieces = $pdo->query("SHOW COLUMNS FROM `stock_invoice_items` LIKE 'pieces_qty'")->fetchAll();
+        if (empty($colsSiiPieces)) {
             $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
+        }
+        $colsSiiUnit = $pdo->query("SHOW COLUMNS FROM `stock_invoice_items` LIKE 'unit_type'")->fetchAll();
+        if (empty($colsSiiUnit)) {
             $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `unit_type` VARCHAR(20) NOT NULL DEFAULT 'box' AFTER `pieces_qty`");
+        }
+        $colsSiiUpb = $pdo->query("SHOW COLUMNS FROM `stock_invoice_items` LIKE 'units_per_box'")->fetchAll();
+        if (empty($colsSiiUpb)) {
             $pdo->exec("ALTER TABLE `stock_invoice_items` ADD COLUMN `units_per_box` INT NOT NULL DEFAULT 0 AFTER `unit_type`");
         }
 
@@ -303,6 +312,9 @@ function migrateSchema($pdo) {
         $colsBsBox = $pdo->query("SHOW COLUMNS FROM `branch_stock` LIKE 'box_qty'")->fetchAll();
         if (empty($colsBsBox)) {
             $pdo->exec("ALTER TABLE `branch_stock` ADD COLUMN `box_qty` INT NOT NULL DEFAULT 0 AFTER `quantity`");
+        }
+        $colsBsPieces = $pdo->query("SHOW COLUMNS FROM `branch_stock` LIKE 'pieces_qty'")->fetchAll();
+        if (empty($colsBsPieces)) {
             $pdo->exec("ALTER TABLE `branch_stock` ADD COLUMN `pieces_qty` INT NOT NULL DEFAULT 0 AFTER `box_qty`");
         }
 

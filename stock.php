@@ -664,8 +664,8 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- MODAL: Add New In Come Stock (GRN - Invoice Bulk Checklist - Zero Money) -->
-<div id="newGrnModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+<div id="newGrnModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full h-[92vh] max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in duration-200">
         
         <!-- Modal Header -->
         <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 text-white shrink-0">
@@ -801,7 +801,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- In Come Stock Bulk Checklist Table -->
             <div class="flex-1 border border-slate-200 rounded-2xl overflow-hidden shadow-inner flex flex-col bg-white min-h-0">
-                <div class="flex-1 overflow-y-auto">
+                <div class="flex-1 overflow-y-auto overscroll-contain">
                     <table class="w-full text-left text-xs border-collapse" id="grnBulkTable">
                         <thead class="sticky top-0 bg-slate-100 z-10 text-slate-600 uppercase text-[10px] font-bold border-b border-slate-200 select-none">
                             <tr>
@@ -813,7 +813,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <th class="py-2.5 px-3 w-32 text-center">Cold Room Stock</th>
                                 <th class="py-2.5 px-3 w-28 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Box Qty</th>
                                 <th class="py-2.5 px-3 w-28 text-center bg-cyan-50 text-cyan-900 font-extrabold border-l border-cyan-100">🍦 Pieces (Pcs)</th>
-                                <th class="py-2.5 px-3 w-32 text-center text-emerald-900 font-extrabold border-l border-slate-200">🎯 Stock In Total</th>
+                                <th class="py-2.5 px-3 w-36 text-center text-emerald-900 font-extrabold border-l border-slate-200 whitespace-nowrap">🎯 Stock In Total</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
@@ -1026,6 +1026,7 @@ require_once __DIR__ . '/includes/header.php';
 
     function openNewGrnModal() { 
         document.getElementById('newGrnModal').classList.remove('hidden'); 
+        document.body.classList.add('overflow-hidden');
         updateGrnTotals();
         setTimeout(() => {
             const search = document.getElementById('grnSearchInput');
@@ -1034,6 +1035,7 @@ require_once __DIR__ . '/includes/header.php';
     }
     function closeNewGrnModal() { 
         document.getElementById('newGrnModal').classList.add('hidden'); 
+        document.body.classList.remove('overflow-hidden');
     }
 
     function switchTab(tabId, el) {
@@ -1207,7 +1209,7 @@ require_once __DIR__ . '/includes/header.php';
                 boxInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
             }
             if (totalSpan) {
-                totalSpan.innerHTML = `<span class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs">📦 ${boxes} Boxes</span>`;
+                totalSpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 font-black text-xs">📦 ${boxes} Boxes</span>`;
             }
             chk.checked = true;
             applyRowHighlight(row, true);
@@ -1223,7 +1225,7 @@ require_once __DIR__ . '/includes/header.php';
                 qtyInput.classList.remove('bg-slate-100', 'cursor-not-allowed', 'opacity-40');
             }
             if (totalSpan) {
-                totalSpan.innerHTML = `<span class="px-2 py-0.5 rounded-lg bg-cyan-100 text-cyan-900 border border-cyan-300 font-extrabold text-xs">🍦 ${pcs} Pieces</span>`;
+                totalSpan.innerHTML = `<span class="inline-block whitespace-nowrap px-2.5 py-1 rounded-xl bg-cyan-100 text-cyan-900 border border-cyan-300 font-black text-xs">🍦 ${pcs} Pieces</span>`;
             }
             chk.checked = true;
             applyRowHighlight(row, true);
