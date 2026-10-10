@@ -88,41 +88,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes = trim($_POST['notes'] ?? '');
 
         $itemsToProcess = [];
+        $packMap = $pdo->query("SELECT id, pack_size FROM products")->fetchAll(PDO::FETCH_KEY_PAIR);
 
-        // Support bulk checklist format: selected_products[] + quantity[pid]
+        // Support bulk checklist format: selected_products[] + box_qty[pid] + quantity[pid]
         if (!empty($_POST['selected_products']) && is_array($_POST['selected_products'])) {
             foreach ($_POST['selected_products'] as $pid) {
                 $pid = intval($pid);
-                $qty = intval($_POST['quantity'][$pid] ?? 0);
-                $batch = trim($_POST['batch_no'][$pid] ?? '');
-                $exp = !empty($_POST['expire_date'][$pid]) ? $_POST['expire_date'][$pid] : null;
+                $pack = max(1, intval($packMap[$pid] ?? 1));
 
-                if ($pid > 0 && $qty > 0) {
+                $boxQty = intval($_POST['box_qty'][$pid] ?? 0);
+                $pcsQty = intval($_POST['quantity'][$pid] ?? 0);
+
+                $totalUnits = ($boxQty * $pack) + $pcsQty;
+
+                if ($pid > 0 && $totalUnits > 0) {
                     $itemsToProcess[] = [
                         'product_id' => $pid,
-                        'quantity' => $qty,
-                        'batch_no' => $batch,
-                        'expire_date' => $exp
+                        'quantity' => $totalUnits,
+                        'box_qty' => $boxQty,
+                        'units_per_box' => $pack
                     ];
                 }
             }
         } elseif (!empty($_POST['product_id']) && is_array($_POST['product_id'])) {
             // Fallback for row-by-row structure
-            $quantities = $_POST['quantity'] ?? [];
-            $batchNos = $_POST['batch_no'] ?? [];
-            $expireDates = $_POST['expire_date'] ?? [];
+            $boxQtys = $_POST['box_qty'] ?? [];
+            $pcsQtys = $_POST['quantity'] ?? [];
             foreach ($_POST['product_id'] as $idx => $pid) {
                 $pid = intval($pid);
-                $qty = intval($quantities[$idx] ?? 0);
-                $batch = trim($batchNos[$idx] ?? '');
-                $exp = !empty($expireDates[$idx]) ? $expireDates[$idx] : null;
+                $pack = max(1, intval($packMap[$pid] ?? 1));
 
-                if ($pid > 0 && $qty > 0) {
+                $boxQty = intval($boxQtys[$idx] ?? 0);
+                $pcsQty = intval($pcsQtys[$idx] ?? 0);
+
+                $totalUnits = ($boxQty * $pack) + $pcsQty;
+
+                if ($pid > 0 && $totalUnits > 0) {
                     $itemsToProcess[] = [
                         'product_id' => $pid,
-                        'quantity' => $qty,
-                        'batch_no' => $batch,
-                        'expire_date' => $exp
+                        'quantity' => $totalUnits,
+                        'box_qty' => $boxQty,
+                        'units_per_box' => $pack
                     ];
                 }
             }
@@ -131,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($invNo)) {
             setFlash('danger', 'Invoice / Delivery Note number is required.');
         } elseif (empty($itemsToProcess)) {
-            setFlash('danger', 'Please select at least one item and enter an incoming quantity greater than 0.');
+            setFlash('danger', 'Please select at least one item and enter a Box or Pieces quantity greater than 0.');
         } else {
             try {
                 $pdo->beginTransaction();
@@ -150,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Insert Items & Update Warehouse Stock
                 $stmtItem = $pdo->prepare("INSERT INTO stock_invoice_items 
-                    (invoice_id, product_id, quantity, batch_no, expire_date) 
+                    (invoice_id, product_id, quantity, box_qty, units_per_box) 
                     VALUES (?, ?, ?, ?, ?)");
                 
                 $stmtStock = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) 
@@ -158,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
 
                 foreach ($itemsToProcess as $item) {
-                    $stmtItem->execute([$invoiceId, $item['product_id'], $item['quantity'], $item['batch_no'], $item['expire_date']]);
+                    $stmtItem->execute([$invoiceId, $item['product_id'], $item['quantity'], $item['box_qty'], $item['units_per_box']]);
                     $stmtStock->execute([$targetBranchId, $item['product_id'], $item['quantity']]);
                 }
 
@@ -740,10 +746,12 @@ require_once __DIR__ . '/includes/header.php';
                                 <th class="py-2.5 px-3 w-10 text-center">
                                     <input type="checkbox" id="masterGrnCheckbox" onchange="toggleSelectAllGrn(this.checked)" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer">
                                 </th>
-                                <th class="py-2.5 px-3 w-32 font-mono">Product Code</th>
+                                <th class="py-2.5 px-3 w-28 font-mono">Product Code</th>
                                 <th class="py-2.5 px-3">Product Description</th>
-                                <th class="py-2.5 px-3 w-28 text-center">Cold Room</th>
-                                <th class="py-2.5 px-3 w-36 text-center text-cyan-800 font-extrabold">Incoming Qty *</th>
+                                <th class="py-2.5 px-3 w-24 text-center">Cold Room</th>
+                                <th class="py-2.5 px-3 w-28 text-center bg-amber-50 text-amber-900 font-extrabold border-l border-amber-100">📦 Box Qty</th>
+                                <th class="py-2.5 px-3 w-28 text-center bg-cyan-50 text-cyan-900 font-extrabold border-l border-cyan-100">🍦 Pieces (Pcs)</th>
+                                <th class="py-2.5 px-3 w-32 text-center text-emerald-900 font-extrabold border-l border-slate-200">🎯 Total Units</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700" id="grnBulkTableBody">
@@ -757,23 +765,33 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                                 <td class="py-2 px-3">
                                     <div class="font-bold text-slate-900 text-xs leading-snug"><?= htmlspecialchars($prod['name']) ?></div>
-                                    <div class="text-[10px] text-slate-400 mt-0.5">
-                                        <?= htmlspecialchars($prod['category_name'] ?? 'General') ?>
-                                        <?php if (!empty($prod['size'])): ?> &bull; <?= htmlspecialchars($prod['size']) ?><?php endif; ?>
+                                    <div class="text-[10px] text-slate-400 mt-0.5 flex items-center space-x-1.5 flex-wrap">
+                                        <span><?= htmlspecialchars($prod['category_name'] ?? 'General') ?></span>
+                                        <?php if (!empty($prod['size'])): ?><span>&bull; <?= htmlspecialchars($prod['size']) ?></span><?php endif; ?>
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">📦 <?= $prod['pack_size'] ?> pcs/box</span>
                                     </div>
                                 </td>
                                 <td class="py-2 px-3 text-center">
                                     <span class="font-mono font-bold text-slate-600 text-xs"><?= number_format($prod['store_stock']) ?></span>
                                 </td>
-                                <td class="py-2 px-3 text-center">
+                                <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
+                                    <input type="number" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" min="0" placeholder="0" 
+                                           data-pack="<?= $prod['pack_size'] ?>"
+                                           class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
+                                           oninput="calculateRowGrn(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                </td>
+                                <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                                     <input type="number" name="quantity[<?= $prod['id'] ?>]" id="qty_<?= $prod['id'] ?>" min="0" placeholder="0" 
-                                           class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
-                                           oninput="handleGrnQtyInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                           class="grn-qty-field w-20 text-center py-1.5 px-2 bg-white border border-cyan-300 rounded-xl font-mono font-black text-cyan-900 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-xs" 
+                                           oninput="calculateRowGrn(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                </td>
+                                <td class="py-2 px-3 text-center border-l border-slate-100">
+                                    <span id="total_units_<?= $prod['id'] ?>" class="font-mono text-xs font-bold text-slate-300">-</span>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
                             <tr id="grnNoResultsRow" class="hidden">
-                                <td colspan="5" class="py-8 text-center text-slate-400 font-bold text-xs">
+                                <td colspan="7" class="py-8 text-center text-slate-400 font-bold text-xs">
                                     <i class="fa-solid fa-magnifying-glass text-slate-300 text-sm mb-1 block"></i>
                                     No matching products in GRN list.
                                 </td>
@@ -1066,40 +1084,76 @@ require_once __DIR__ . '/includes/header.php';
     function handleGrnCheck(pid) {
         const row = document.getElementById('grn_row_' + pid);
         const chk = document.getElementById('chk_' + pid);
+        const boxInput = document.getElementById('box_' + pid);
         const qtyInput = document.getElementById('qty_' + pid);
         if (!row || !chk) return;
 
+        chk.dataset.userChecked = chk.checked ? '1' : '';
         applyRowHighlight(row, chk.checked);
 
-        if (chk.checked && qtyInput && (!qtyInput.value || parseInt(qtyInput.value) <= 0)) {
-            qtyInput.focus();
-            qtyInput.select();
+        if (chk.checked) {
+            const b = parseInt(boxInput ? boxInput.value : 0) || 0;
+            const q = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+            if (b === 0 && q === 0) {
+                if (boxInput) {
+                    boxInput.focus();
+                    boxInput.select();
+                } else if (qtyInput) {
+                    qtyInput.focus();
+                    qtyInput.select();
+                }
+            }
         }
-        updateGrnTotals();
+        calculateRowGrn(pid);
     }
 
-    function handleGrnQtyInput(pid) {
+    function calculateRowGrn(pid) {
         const row = document.getElementById('grn_row_' + pid);
         const chk = document.getElementById('chk_' + pid);
+        const boxInput = document.getElementById('box_' + pid);
         const qtyInput = document.getElementById('qty_' + pid);
-        if (!row || !chk || !qtyInput) return;
+        const totalSpan = document.getElementById('total_units_' + pid);
+        if (!row || !chk) return;
 
-        const val = parseInt(qtyInput.value) || 0;
-        if (val > 0) {
+        const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
+        const boxes = parseInt(boxInput ? boxInput.value : 0) || 0;
+        const pcs = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+
+        const total = (boxes * pack) + pcs;
+
+        if (totalSpan) {
+            if (total > 0) {
+                let badge = `<span class="text-emerald-700 font-extrabold">${total.toLocaleString()}</span> <span class="text-[10px] text-emerald-600 font-normal">units</span>`;
+                if (boxes > 0 && pcs > 0) {
+                    badge += `<div class="text-[9px] text-slate-400 font-normal">(${boxes} bx + ${pcs})</div>`;
+                } else if (boxes > 0) {
+                    badge += `<div class="text-[9px] text-amber-600 font-normal">(${boxes} bx × ${pack})</div>`;
+                }
+                totalSpan.innerHTML = badge;
+            } else {
+                totalSpan.innerHTML = `<span class="text-slate-300 font-normal">-</span>`;
+            }
+        }
+
+        if (total > 0) {
             chk.checked = true;
             applyRowHighlight(row, true);
-        } else if (val === 0 && !chk.dataset.userChecked) {
-            // Keep checked if user checked it intentionally
+        } else {
+            if (!chk.dataset.userChecked) {
+                chk.checked = false;
+                applyRowHighlight(row, false);
+            }
         }
+
         updateGrnTotals();
     }
 
     function applyRowHighlight(row, isHighlighted) {
         if (isHighlighted) {
-            row.classList.add('bg-cyan-50/70', 'border-l-4', 'border-l-cyan-600');
+            row.classList.add('bg-cyan-50/60', 'border-l-4', 'border-l-cyan-600');
             row.classList.remove('hover:bg-slate-50/80');
         } else {
-            row.classList.remove('bg-cyan-50/70', 'border-l-4', 'border-l-cyan-600');
+            row.classList.remove('bg-cyan-50/60', 'border-l-4', 'border-l-cyan-600');
             row.classList.add('hover:bg-slate-50/80');
         }
     }
@@ -1107,17 +1161,21 @@ require_once __DIR__ . '/includes/header.php';
     function updateGrnTotals() {
         let selectedCount = 0;
         let totalUnits = 0;
+        let totalBoxes = 0;
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
 
         rows.forEach(r => {
             const chk = r.querySelector('.grn-checkbox');
-            const qtyField = r.querySelector('.grn-qty-field');
+            const boxInput = r.querySelector('.grn-box-field');
+            const qtyInput = r.querySelector('.grn-qty-field');
             if (chk && chk.checked) {
                 selectedCount++;
-                if (qtyField) {
-                    const q = parseInt(qtyField.value) || 0;
-                    totalUnits += q;
-                }
+                const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
+                const b = parseInt(boxInput ? boxInput.value : 0) || 0;
+                const q = parseInt(qtyInput ? qtyInput.value : 0) || 0;
+                const rowTotal = (b * pack) + q;
+                totalUnits += rowTotal;
+                totalBoxes += b;
             }
         });
 
@@ -1128,7 +1186,13 @@ require_once __DIR__ . '/includes/header.php';
 
         if (countEl) countEl.innerText = selectedCount;
         if (qtyEl) qtyEl.innerText = totalUnits.toLocaleString();
-        if (footerUnits) footerUnits.innerText = totalUnits.toLocaleString();
+        if (footerUnits) {
+            let footerText = totalUnits.toLocaleString();
+            if (totalBoxes > 0) {
+                footerText += ` <span class="text-xs text-amber-700 font-bold font-sans">(${totalBoxes} boxes)</span>`;
+            }
+            footerUnits.innerHTML = footerText;
+        }
         if (footerItems) footerItems.innerText = selectedCount;
     }
 
@@ -1138,28 +1202,32 @@ require_once __DIR__ . '/includes/header.php';
             e.preventDefault();
             const currentRow = input.closest('tr');
             let nextRow = currentRow.nextElementSibling;
-            while (nextRow && nextRow.style.display === 'none') {
+            while (nextRow && (nextRow.style.display === 'none' || nextRow.id === 'grnNoResultsRow')) {
                 nextRow = nextRow.nextElementSibling;
             }
             if (nextRow) {
-                const nextInput = nextRow.querySelector('.grn-qty-field');
-                if (nextInput) {
-                    nextInput.focus();
-                    nextInput.select();
+                const targetInput = input.classList.contains('grn-box-field') 
+                    ? (nextRow.querySelector('.grn-box-field') || nextRow.querySelector('.grn-qty-field'))
+                    : (nextRow.querySelector('.grn-qty-field') || nextRow.querySelector('.grn-box-field'));
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.select();
                 }
             }
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             const currentRow = input.closest('tr');
             let prevRow = currentRow.previousElementSibling;
-            while (prevRow && prevRow.style.display === 'none') {
+            while (prevRow && (prevRow.style.display === 'none' || prevRow.id === 'grnNoResultsRow')) {
                 prevRow = prevRow.previousElementSibling;
             }
             if (prevRow) {
-                const prevInput = prevRow.querySelector('.grn-qty-field');
-                if (prevInput) {
-                    prevInput.focus();
-                    prevInput.select();
+                const targetInput = input.classList.contains('grn-box-field') 
+                    ? (prevRow.querySelector('.grn-box-field') || prevRow.querySelector('.grn-qty-field'))
+                    : (prevRow.querySelector('.grn-qty-field') || prevRow.querySelector('.grn-box-field'));
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.select();
                 }
             }
         }
@@ -1218,6 +1286,8 @@ require_once __DIR__ . '/includes/header.php';
             }
 
             const p = data.product;
+            const packSize = p.pack_size || 24;
+
             // Prepend new row to table
             const tbody = document.getElementById('grnBulkTableBody');
             const newTr = document.createElement('tr');
@@ -1237,17 +1307,27 @@ require_once __DIR__ . '/includes/header.php';
                         ${escapeHtml(p.name)} 
                         <span class="ml-1.5 px-1.5 py-0.2 bg-emerald-200 text-emerald-800 rounded text-[9px] font-bold">NEW</span>
                     </div>
-                    <div class="text-[10px] text-slate-400 mt-0.5">
-                        ${escapeHtml(p.category_name)} ${p.size ? '&bull; ' + escapeHtml(p.size) : ''}
+                    <div class="text-[10px] text-slate-400 mt-0.5 flex items-center space-x-1.5 flex-wrap">
+                        <span>${escapeHtml(p.category_name)} ${p.size ? '&bull; ' + escapeHtml(p.size) : ''}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70">📦 ${packSize} pcs/box</span>
                     </div>
                 </td>
                 <td class="py-2 px-3 text-center">
                     <span class="font-mono font-bold text-slate-600 text-xs">0</span>
                 </td>
-                <td class="py-2 px-3 text-center">
+                <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
+                    <input type="number" name="box_qty[${p.id}]" id="box_${p.id}" min="0" placeholder="0" 
+                           data-pack="${packSize}"
+                           class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
+                           oninput="calculateRowGrn(${p.id})" onkeydown="handleGrnNav(event, this)">
+                </td>
+                <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                     <input type="number" name="quantity[${p.id}]" id="qty_${p.id}" min="0" placeholder="0" value="${p.incoming_qty > 0 ? p.incoming_qty : ''}" 
-                           class="grn-qty-field w-28 text-center py-1.5 px-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-cyan-800 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all" 
-                           oninput="handleGrnQtyInput(${p.id})" onkeydown="handleGrnNav(event, this)">
+                           class="grn-qty-field w-20 text-center py-1.5 px-2 bg-white border border-cyan-300 rounded-xl font-mono font-black text-cyan-900 text-xs focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-xs" 
+                           oninput="calculateRowGrn(${p.id})" onkeydown="handleGrnNav(event, this)">
+                </td>
+                <td class="py-2 px-3 text-center border-l border-slate-100">
+                    <span id="total_units_${p.id}" class="font-mono text-xs font-bold text-slate-300">-</span>
                 </td>
             `;
 
@@ -1261,13 +1341,13 @@ require_once __DIR__ . '/includes/header.php';
             toggleQuickAddDrawer();
 
             if (p.incoming_qty > 0) {
-                handleGrnQtyInput(p.id);
+                calculateRowGrn(p.id);
             }
 
-            // Focus new row qty input
+            // Focus new row box input
             setTimeout(() => {
-                const newQty = document.getElementById('qty_' + p.id);
-                if (newQty) newQty.focus();
+                const newBox = document.getElementById('box_' + p.id);
+                if (newBox) newBox.focus();
             }, 100);
 
             updateGrnTotals();
@@ -1292,15 +1372,18 @@ require_once __DIR__ . '/includes/header.php';
         const rows = document.querySelectorAll('#grnBulkTableBody tr.grn-item-row');
         rows.forEach(r => {
             const chk = r.querySelector('.grn-checkbox');
+            const boxInput = r.querySelector('.grn-box-field');
             const qtyField = r.querySelector('.grn-qty-field');
             if (chk && chk.checked) {
+                const pack = parseInt(boxInput ? boxInput.dataset.pack : 1) || 1;
+                const b = parseInt(boxInput ? boxInput.value : 0) || 0;
                 const q = parseInt(qtyField ? qtyField.value : 0) || 0;
-                if (q > 0) hasItem = true;
+                if ((b * pack) + q > 0) hasItem = true;
             }
         });
 
         if (!hasItem) {
-            alert('Please select at least one product with an incoming quantity greater than 0.');
+            alert('Please select at least one product with a Box or Pieces quantity greater than 0.');
             return false;
         }
 
