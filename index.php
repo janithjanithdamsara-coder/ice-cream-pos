@@ -101,11 +101,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             </div>
         </div>
 
-        <!-- TEST Live Deployment Indicator -->
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-amber-300 bg-amber-500/20 py-2.5 px-4 rounded-2xl text-center mb-5 border-2 border-dashed border-amber-400 shadow-lg tracking-wider">
-            TEST - LIVE DEPLOY CHECK
-        </h1>
-
         <!-- Login Card -->
         <div class="bg-white text-slate-800 rounded-3xl shadow-2xl shadow-black/40 border border-white/20 p-6 sm:p-8 backdrop-blur-md">
             

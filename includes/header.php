@@ -179,12 +179,17 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div>
                     <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Management & Audit</div>
                     <div class="space-y-1">
-                        <a href="reports.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'reports.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                        <a href="reports.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= ($currentPage === 'reports.php' && (empty($_GET['tab']) || $_GET['tab'] !== 'logs')) ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-clipboard-list w-5 text-sm"></i>
                             <span class="ml-2.5">Daily Stock Sheet</span>
                         </a>
 
                         <?php if (hasRole(['super_admin', 'admin'])): ?>
+                        <a href="reports.php?tab=logs" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= ($currentPage === 'reports.php' && ($_GET['tab'] ?? '') === 'logs') ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
+                            <i class="fa-solid fa-shield-halved w-5 text-sm text-cyan-400"></i>
+                            <span class="ml-2.5">Activity & Audit Logs</span>
+                        </a>
+
                         <a href="users.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'users.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
                             <i class="fa-solid fa-users w-5 text-sm"></i>
                             <span class="ml-2.5">User Accounts</span>
