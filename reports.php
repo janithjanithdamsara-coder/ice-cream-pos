@@ -204,6 +204,50 @@ $stmtDmgLog = $pdo->prepare("SELECT ldi.damage_qty, p.name as product_name, p.fl
 $stmtDmgLog->execute([$branchId, $fromDate, $toDate]);
 $damageList = $stmtDmgLog->fetchAll();
 
+// 6. TAB 5 DATA: ACTIVITY & AUDIT LOGS (Super Admin / Admin / Master)
+$isMasterUser = isMaster();
+$logActionFilter = $_GET['log_action'] ?? '';
+$logUserFilter = $_GET['log_user'] ?? '';
+
+$logSql = "SELECT * FROM activity_logs WHERE DATE(created_at) BETWEEN ? AND ?";
+$logParams = [$fromDate, $toDate];
+
+// CRITICAL STEALTH FILTER: If viewer is NOT master, completely hide all master developer actions!
+if (!$isMasterUser) {
+    $logSql .= " AND user_role != 'master' AND (user_name NOT LIKE '%Master%' OR user_name IS NULL) AND action NOT LIKE '%master%' AND description NOT LIKE '%Master%'";
+}
+
+if (!empty($logActionFilter)) {
+    $logSql .= " AND action = ?";
+    $logParams[] = $logActionFilter;
+}
+if (!empty($logUserFilter)) {
+    $logSql .= " AND user_name LIKE ?";
+    $logParams[] = "%$logUserFilter%";
+}
+$logSql .= " ORDER BY id DESC LIMIT 200";
+
+$stmtLogs = $pdo->prepare($logSql);
+$stmtLogs->execute($logParams);
+$activityLogsList = $stmtLogs->fetchAll();
+
+// Distinct log actions for filter (exclude master actions if not master)
+$distinctActionsSql = "SELECT DISTINCT action FROM activity_logs WHERE 1=1";
+if (!$isMasterUser) {
+    $distinctActionsSql .= " AND user_role != 'master' AND action NOT LIKE '%master%'";
+}
+$distinctActionsSql .= " ORDER BY action ASC";
+$distinctLogActions = $pdo->query($distinctActionsSql)->fetchAll(PDO::FETCH_COLUMN);
+
+// Count of logs for tab badge
+$countLogSql = "SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) BETWEEN ? AND ?";
+if (!$isMasterUser) {
+    $countLogSql .= " AND user_role != 'master' AND (user_name NOT LIKE '%Master%' OR user_name IS NULL) AND action NOT LIKE '%master%'";
+}
+$stmtCountLog = $pdo->prepare($countLogSql);
+$stmtCountLog->execute([$fromDate, $toDate]);
+$totalLogsCount = $stmtCountLog->fetchColumn();
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -359,6 +403,12 @@ require_once __DIR__ . '/includes/header.php';
            class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'damage' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
             <i class="fa-solid fa-triangle-exclamation mr-2"></i> 4. Melted & Spoilage Log (<?= count($damageList) ?>)
         </a>
+        <?php if (hasRole(['super_admin', 'admin', 'master'])): ?>
+        <a href="?tab=logs&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?><?= $preset ? '&preset=' . urlencode($preset) : '' ?>" 
+           class="pb-3 text-xs font-extrabold whitespace-nowrap transition-colors flex items-center <?= $tab === 'logs' ? 'text-cyan-600 border-b-2 border-cyan-600' : 'text-slate-500 hover:text-slate-800' ?>">
+            <i class="fa-solid fa-shield-halved mr-2"></i> 5. System Activity & Audit Logs (<?= number_format($totalLogsCount) ?>)
+        </a>
+        <?php endif; ?>
     </nav>
 </div>
 
@@ -828,6 +878,160 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="text-[10px] text-slate-400 font-mono">
                         <?= htmlspecialchars($dmg['dispatch_date']) ?>
                     </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ========================= TAB 5: SYSTEM ACTIVITY & AUDIT LOGS ========================= -->
+<?php if ($tab === 'logs' && hasRole(['super_admin', 'admin', 'master'])): ?>
+<div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+    <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+        <div>
+            <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wider flex items-center">
+                <i class="fa-solid fa-shield-halved text-indigo-600 mr-2"></i> System Activity & Audit Trail
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+                Timestamped audit trail of all warehouse actions, dispatches, 3PM settlements, counter sales, and sign-ins.
+            </p>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="GET" action="reports.php" class="flex flex-wrap items-center gap-2 text-xs no-print">
+            <input type="hidden" name="tab" value="logs">
+            <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
+            <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
+
+            <select name="log_action" onchange="this.form.submit()" class="px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs shadow-2xs">
+                <option value="">All Action Types</option>
+                <?php foreach ($distinctLogActions as $act): ?>
+                    <option value="<?= htmlspecialchars($act) ?>" <?= $logActionFilter === $act ? 'selected' : '' ?>>
+                        <?= ucwords(str_replace('_', ' ', $act)) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <div class="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-2xs">
+                <i class="fa-solid fa-user text-slate-400 mr-1.5 text-[11px]"></i>
+                <input type="text" name="log_user" value="<?= htmlspecialchars($logUserFilter) ?>" placeholder="Filter by User / Staff..." 
+                       class="font-medium text-slate-700 focus:outline-none text-xs w-36">
+            </div>
+
+            <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition">
+                Filter Logs
+            </button>
+            <?php if ($logActionFilter || $logUserFilter): ?>
+                <a href="reports.php?tab=logs&from_date=<?= $fromDate ?>&to_date=<?= $toDate ?>" class="px-2.5 py-1.5 text-slate-500 hover:text-slate-800 text-xs font-bold">
+                    Reset
+                </a>
+            <?php endif; ?>
+        </form>
+    </div>
+
+    <!-- Desktop Audit Log Table -->
+    <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-xs text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
+                    <th class="py-3 px-4 w-36">Date & Time</th>
+                    <th class="py-3 px-3 w-40">User Account</th>
+                    <th class="py-3 px-3 w-28">Module</th>
+                    <th class="py-3 px-3 w-36">Action</th>
+                    <th class="py-3 px-4">Audit Details / Description</th>
+                    <th class="py-3 px-3 w-28 text-right font-mono text-slate-400">IP Address</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+                <?php if (empty($activityLogsList)): ?>
+                <tr>
+                    <td colspan="6" class="py-12 text-center text-slate-400">
+                        <i class="fa-solid fa-clock-rotate-left text-3xl mb-2 text-slate-300 block"></i>
+                        No activity records found for the selected period / filters.
+                    </td>
+                </tr>
+                <?php else: ?>
+                <?php foreach ($activityLogsList as $log): 
+                    $act = $log['action'];
+                    $badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                    if (strpos($act, 'grn') !== false || strpos($act, 'product') !== false) {
+                        $badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    } elseif (strpos($act, 'dispatch') !== false || strpos($act, 'reload') !== false) {
+                        $badgeClass = 'bg-blue-50 text-blue-800 border-blue-200';
+                    } elseif (strpos($act, 'settle') !== false) {
+                        $badgeClass = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+                    } elseif (strpos($act, 'direct') !== false) {
+                        $badgeClass = 'bg-teal-50 text-teal-800 border-teal-200';
+                    } elseif (strpos($act, 'pos') !== false) {
+                        $badgeClass = 'bg-purple-50 text-purple-800 border-purple-200';
+                    } elseif (strpos($act, 'loan') !== false) {
+                        $badgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
+                    } elseif (strpos($act, 'failed') !== false) {
+                        $badgeClass = 'bg-rose-50 text-rose-800 border-rose-200';
+                    } elseif (strpos($act, 'login') !== false || strpos($act, 'unlock') !== false) {
+                        $badgeClass = 'bg-sky-50 text-sky-800 border-sky-200';
+                    }
+                ?>
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="py-3 px-4 whitespace-nowrap">
+                        <div class="font-bold text-slate-800 font-mono text-[11px]"><?= date('d M Y', strtotime($log['created_at'])) ?></div>
+                        <div class="text-[10px] text-slate-400 font-mono"><?= date('h:i:s A', strtotime($log['created_at'])) ?></div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <div class="font-bold text-slate-900 flex items-center">
+                            <?= htmlspecialchars($log['user_name'] ?: 'System / Guest') ?>
+                        </div>
+                        <div class="text-[10px] text-slate-400 capitalize font-medium">
+                            <?= htmlspecialchars(str_replace('_', ' ', $log['user_role'] ?: 'user')) ?>
+                        </div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80 font-mono uppercase">
+                            <?= htmlspecialchars($log['module']) ?>
+                        </span>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold border <?= $badgeClass ?>">
+                            <?= ucwords(str_replace('_', ' ', $act)) ?>
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 font-medium text-slate-800 leading-snug">
+                        <?= htmlspecialchars($log['description']) ?>
+                    </td>
+                    <td class="py-3 px-3 text-right font-mono text-[10px] text-slate-400">
+                        <?= htmlspecialchars($log['ip_address'] ?: '127.0.0.1') ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mobile Audit Log Cards -->
+    <div class="md:hidden divide-y divide-slate-100">
+        <?php if (empty($activityLogsList)): ?>
+            <div class="py-8 text-center text-slate-400 text-xs">No activity records found.</div>
+        <?php else: ?>
+            <?php foreach ($activityLogsList as $log): ?>
+            <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-1.5">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <span class="font-bold text-slate-900 text-xs"><?= htmlspecialchars($log['user_name'] ?: 'System') ?></span>
+                        <span class="text-[10px] text-slate-400 capitalize">&bull; <?= htmlspecialchars(str_replace('_', ' ', $log['user_role'])) ?></span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono"><?= date('d M, h:i A', strtotime($log['created_at'])) ?></span>
+                </div>
+                <div class="text-xs text-slate-800 font-medium">
+                    <?= htmlspecialchars($log['description']) ?>
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
+                    <span class="font-mono text-slate-400 uppercase"><?= htmlspecialchars($log['module']) ?></span>
+                    <span class="px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
+                        <?= ucwords(str_replace('_', ' ', $log['action'])) ?>
+                    </span>
                 </div>
             </div>
             <?php endforeach; ?>
