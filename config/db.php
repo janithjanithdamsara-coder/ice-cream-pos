@@ -329,6 +329,14 @@ function migrateSchema($pdo) {
         if (empty($colsLdiDmgPcs)) {
             $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `damage_pieces_qty` INT NOT NULL DEFAULT 0 AFTER `damage_box_qty`");
         }
+        $colsLdiDelBox = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'delivered_box_qty'")->fetchAll();
+        if (empty($colsLdiDelBox)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `delivered_box_qty` INT NOT NULL DEFAULT 0 AFTER `delivered_qty`");
+        }
+        $colsLdiDelPcs = $pdo->query("SHOW COLUMNS FROM `lorry_dispatch_items` LIKE 'delivered_pieces_qty'")->fetchAll();
+        if (empty($colsLdiDelPcs)) {
+            $pdo->exec("ALTER TABLE `lorry_dispatch_items` ADD COLUMN `delivered_pieces_qty` INT NOT NULL DEFAULT 0 AFTER `delivered_box_qty`");
+        }
 
         // 5.01 Ensure lorry_dispatch_reload_items table and columns exist
         $pdo->exec("CREATE TABLE IF NOT EXISTS `lorry_dispatch_reload_items` (
