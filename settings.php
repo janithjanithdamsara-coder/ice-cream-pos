@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             safeTableDelete($pdo, 'pos_sales');
             safeTableDelete($pdo, 'daily_cash_register');
             safeTableDelete($pdo, 'cash_transactions');
+            safeTableDelete($pdo, 'activity_logs');
 
             // Delete all products, categories, stock, and lorries
             safeTableDelete($pdo, 'branch_stock');
@@ -116,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             safeTableDelete($pdo, 'warehouse_loan_returns');
             safeTableDelete($pdo, 'warehouse_loan_items');
             safeTableDelete($pdo, 'warehouse_loans');
+            safeTableDelete($pdo, 'activity_logs');
 
             $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
 
@@ -251,6 +253,7 @@ require_once __DIR__ . '/includes/header.php';
                     <li>&bull; All Direct Store Issues: <strong>DELETED</strong></li>
                     <li>&bull; All Lorry Runs & 3PM Returns: <strong>DELETED</strong></li>
                     <li>&bull; All Lorries & Factory GRN: <strong>DELETED</strong></li>
+                    <li>&bull; Activity & Audit Logs: <strong>DELETED</strong></li>
                     <li class="text-emerald-700 font-bold">&bull; Admin Login: <strong>Preserved (`admin`)</strong></li>
                 </ul>
             </div>
@@ -282,6 +285,7 @@ require_once __DIR__ . '/includes/header.php';
                     <li>&bull; Direct Store Issues: <strong>Cleared</strong></li>
                     <li>&bull; Lorry Dispatches & Returns: <strong>Cleared</strong></li>
                     <li>&bull; Cold Room Stock counts: <strong>Reset to 0</strong></li>
+                    <li>&bull; Activity & Audit Logs: <strong>Cleared</strong></li>
                     <li>&bull; Product Catalog: <strong>Kept Intact</strong></li>
                 </ul>
             </div>

@@ -8,6 +8,24 @@ $user = currentUser();
 $branchId = $user['branch_id'];
 $today = date('Y-m-d');
 
+// Handle POST actions (e.g. Clearing logs)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf();
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'clear_logs' && hasRole(['super_admin', 'admin', 'master'])) {
+        try {
+            $pdo->exec("DELETE FROM activity_logs");
+            logActivity('clear_logs', 'system', 'Activity logs cleared by administrator');
+            setFlash('success', 'All system activity and audit logs cleared successfully.');
+        } catch (Exception $e) {
+            setFlash('danger', 'Error clearing activity logs: ' . $e->getMessage());
+        }
+        header("Location: reports.php?tab=logs");
+        exit;
+    }
+}
+
 $tab = $_GET['tab'] ?? 'movement';
 $preset = $_GET['preset'] ?? '';
 
@@ -930,6 +948,17 @@ require_once __DIR__ . '/includes/header.php';
                 </a>
             <?php endif; ?>
         </form>
+
+        <?php if (hasRole(['super_admin', 'admin', 'master']) && !empty($activityLogsList)): ?>
+        <form method="POST" action="reports.php?tab=logs" class="no-print" onsubmit="return confirmAction(event, this, { title: 'Clear All Activity Logs?', text: 'Are you sure you want to permanently erase all activity and audit trail logs? This action cannot be undone.', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Clear All Logs', danger: true });">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="clear_logs">
+            <button type="submit" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold rounded-xl text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Clear All Logs</span>
+            </button>
+        </form>
+        <?php endif; ?>
     </div>
 
     <!-- Desktop Audit Log Table -->
