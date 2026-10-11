@@ -282,11 +282,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <i class="fa-solid fa-crown text-xs"></i>
                         </a>
                     <?php endif; ?>
-                    <?php if (hasRole(['super_admin', 'admin'])): ?>
-                        <a href="users.php" title="Manage Users & Change Password" class="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg transition-colors">
-                            <i class="fa-solid fa-key text-xs"></i>
-                        </a>
-                    <?php endif; ?>
                     <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors">
                         <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                     </a>
