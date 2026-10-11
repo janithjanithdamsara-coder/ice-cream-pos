@@ -120,20 +120,7 @@ require_once __DIR__ . '/includes/header.php';
         <span class="text-[11px] text-slate-400 font-medium">Click any action to start</span>
     </div>
 
-    <?php if ($user['role'] === 'cashier'): ?>
-    <!-- Cashier View: Only Counter Bill -->
-    <a href="pos.php" class="group bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-700 hover:to-blue-800 p-6 rounded-3xl text-white shadow-xl shadow-cyan-600/20 transition-all flex items-center justify-between">
-        <div class="space-y-1">
-            <span class="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/20 text-cyan-100">Quick Counter</span>
-            <h3 class="text-xl font-black tracking-tight group-hover:underline">⚡ Counter Bill & Issue Slip</h3>
-            <p class="text-xs text-cyan-100 font-medium">Issue instant slips for walk-in ice cream pickups</p>
-        </div>
-        <div class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shrink-0 ml-3">
-            <i class="fa-solid fa-cash-register"></i>
-        </div>
-    </a>
-    <?php else: ?>
-    <!-- Admin / Super Admin / Master View: 4 Clear Actions -->
+    <!-- Daily 4 Operational Actions -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
         
         <!-- ACTION 1: + Factory Stock In (GRN) -->
@@ -185,7 +172,6 @@ require_once __DIR__ . '/includes/header.php';
         </a>
 
     </div>
-    <?php endif; ?>
 </div>
 
 <!-- 4 Key Quantity KPI Cards (Zero Money) -->

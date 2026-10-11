@@ -154,27 +154,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </div>
 
             <!-- Navigation Links Scroll Area -->
-            <!-- Navigation Links Scroll Area -->
             <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto sidebar-scroll">
                 
-                <?php if ($user['role'] === 'cashier'): ?>
-                <!-- Cashier Streamlined View -->
-                <div>
-                    <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Cashier Counter</div>
-                    <div class="space-y-1">
-                        <a href="dashboard.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'dashboard.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-gauge-high w-5 text-sm"></i>
-                            <span class="ml-2.5">Dashboard</span>
-                        </a>
-
-                        <a href="pos.php" class="flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all <?= $currentPage === 'pos.php' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-800/70' ?>">
-                            <i class="fa-solid fa-cash-register w-5 text-sm text-cyan-400"></i>
-                            <span class="ml-2.5">Counter Bill (POS)</span>
-                        </a>
-                    </div>
-                </div>
-                <?php else: ?>
-
                 <!-- Section 1: Main (ප්‍රධාන) -->
                 <div>
                     <div class="px-3 mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Main</div>
@@ -244,7 +225,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php endif; ?>
 
                 <!-- Master Developer Portal (Master Role Only) -->
                 <?php if ($user['role'] === 'master'): ?>

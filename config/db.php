@@ -85,7 +85,7 @@ function initDatabaseTables($pdo) {
         `name` VARCHAR(100) NOT NULL,
         `username` VARCHAR(50) NOT NULL UNIQUE,
         `password` VARCHAR(255) NOT NULL,
-        `role` ENUM('master', 'super_admin', 'admin', 'operator') NOT NULL DEFAULT 'operator',
+        `role` ENUM('master', 'super_admin', 'admin', 'operator', 'cashier') NOT NULL DEFAULT 'cashier',
         `phone` VARCHAR(50) NULL,
         `status` ENUM('active', 'inactive') DEFAULT 'active',
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -251,8 +251,8 @@ function initDatabaseTables($pdo) {
 
 function migrateSchema($pdo) {
     try {
-        // Ensure user role enum supports 'master'
-        $pdo->exec("ALTER TABLE `users` MODIFY COLUMN `role` ENUM('master', 'super_admin', 'admin', 'operator') NOT NULL DEFAULT 'operator'");
+        // Ensure user role enum supports 'master', 'super_admin', 'admin', 'operator', 'cashier'
+        $pdo->exec("ALTER TABLE `users` MODIFY COLUMN `role` ENUM('master', 'super_admin', 'admin', 'operator', 'cashier') NOT NULL DEFAULT 'cashier'");
 
         // 1. Ensure total_delivered_qty exists in lorry_dispatches
         $cols = $pdo->query("SHOW COLUMNS FROM `lorry_dispatches` LIKE 'total_delivered_qty'")->fetchAll();

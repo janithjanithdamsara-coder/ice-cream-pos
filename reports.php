@@ -2,7 +2,7 @@
 // reports.php - Pure Inventory & Distribution Audit Reports (Zero Money / Units Only)
 $pageTitle = "Stock Movement & Distribution Reports";
 require_once __DIR__ . '/config/auth.php';
-requireRole(['super_admin', 'admin']);
+requireRole(['super_admin', 'admin', 'operator', 'cashier']);
 
 $user = currentUser();
 $branchId = $user['branch_id'];
