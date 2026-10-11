@@ -101,6 +101,56 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         header("Location: users.php");
         exit;
     }
+
+    // Action 4: Delete User Account
+    if ($action === 'delete_user' && hasRole(['super_admin', 'master'])) {
+        $targetUserId = intval($_POST['target_user_id'] ?? 0);
+
+        if ($targetUserId <= 0) {
+            setFlash('danger', 'Invalid user selected for deletion.');
+        } elseif ($targetUserId === intval($user['id'])) {
+            setFlash('danger', 'You cannot delete your own logged-in account.');
+        } elseif ($targetUserId === 1) {
+            setFlash('danger', 'The primary Super Admin account cannot be deleted.');
+        } else {
+            $stmtTarget = $pdo->prepare("SELECT username, role, name FROM users WHERE id = ?");
+            $stmtTarget->execute([$targetUserId]);
+            $targetUser = $stmtTarget->fetch();
+
+            if (!$targetUser) {
+                setFlash('danger', 'User account not found.');
+            } elseif ($targetUser['role'] === 'master' && !isMaster()) {
+                setFlash('danger', 'Access denied: Master account cannot be deleted.');
+            } else {
+                try {
+                    $pdo->beginTransaction();
+
+                    // Disassociate foreign references gracefully so operational records remain intact
+                    $pdo->prepare("UPDATE store_dispatches SET user_id = NULL WHERE user_id = ?")->execute([$targetUserId]);
+                    $pdo->prepare("UPDATE stock_invoices SET created_by = NULL WHERE created_by = ?")->execute([$targetUserId]);
+                    $pdo->prepare("UPDATE lorry_dispatches SET created_by = NULL WHERE created_by = ?")->execute([$targetUserId]);
+                    $pdo->prepare("UPDATE lorry_dispatches SET settled_by = NULL WHERE settled_by = ?")->execute([$targetUserId]);
+                    $pdo->prepare("UPDATE warehouse_loans SET created_by = NULL WHERE created_by = ?")->execute([$targetUserId]);
+
+                    // Delete the user record
+                    $stmtDel = $pdo->prepare("DELETE FROM users WHERE id = ?");
+                    $stmtDel->execute([$targetUserId]);
+
+                    $pdo->commit();
+
+                    logActivity('delete_user', 'users', "User account [{$targetUser['username']}] ({$targetUser['name']}) was deleted by [{$user['username']}]", $user['id']);
+                    setFlash('success', "User account [{$targetUser['username']}] deleted successfully.");
+                } catch (Exception $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    setFlash('danger', "Error deleting user: " . $e->getMessage());
+                }
+            }
+        }
+        header("Location: users.php");
+        exit;
+    }
 }
 
 // Fetch all users with branch info (Hide Master from non-master accounts)
@@ -202,11 +252,24 @@ require_once __DIR__ . '/includes/header.php';
                             </span>
                         </td>
                         <td class="p-3 text-right">
-                            <?php if ($u['role'] !== 'master' || isMaster()): ?>
-                                <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2.5 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 rounded-lg text-xs font-bold transition flex items-center ml-auto cursor-pointer" title="Reset password for this user">
-                                    <i class="fa-solid fa-key text-amber-500 mr-1.5"></i> Reset Password
-                                </button>
-                            <?php endif; ?>
+                            <div class="flex items-center justify-end space-x-1.5">
+                                <?php if ($u['role'] !== 'master' || isMaster()): ?>
+                                    <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2.5 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 rounded-lg text-xs font-bold transition flex items-center cursor-pointer" title="Reset password for this user">
+                                        <i class="fa-solid fa-key text-amber-500 mr-1.5"></i> Reset
+                                    </button>
+                                <?php endif; ?>
+
+                                <?php if (hasRole(['super_admin', 'master']) && $u['id'] != $user['id'] && $u['id'] != 1 && ($u['role'] !== 'master' || isMaster())): ?>
+                                    <form method="POST" action="users.php" class="inline-block" onsubmit="return confirmAction(event, this, { title: 'Delete User Account?', text: 'Are you sure you want to delete user account <?= htmlspecialchars(addslashes($u['username'])) ?> (<?= htmlspecialchars(addslashes($u['name'])) ?>)? This action cannot be undone.', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete User', danger: true });">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="action" value="delete_user">
+                                        <input type="hidden" name="target_user_id" value="<?= $u['id'] ?>">
+                                        <button type="submit" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition flex items-center cursor-pointer" title="Delete this user account">
+                                            <i class="fa-solid fa-trash-can text-xs mr-1"></i> Delete
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -242,11 +305,24 @@ require_once __DIR__ . '/includes/header.php';
             </div>
             <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
                 <span class="truncate max-w-[150px]"><?= htmlspecialchars($u['branch_name'] ?? 'All Branches') ?></span>
-                <?php if ($u['role'] !== 'master' || isMaster()): ?>
-                    <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center">
-                        <i class="fa-solid fa-key text-amber-500 mr-1"></i> Reset Password
-                    </button>
-                <?php endif; ?>
+                <div class="flex items-center space-x-1.5">
+                    <?php if ($u['role'] !== 'master' || isMaster()): ?>
+                        <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center">
+                            <i class="fa-solid fa-key text-amber-500 mr-1"></i> Reset
+                        </button>
+                    <?php endif; ?>
+
+                    <?php if (hasRole(['super_admin', 'master']) && $u['id'] != $user['id'] && $u['id'] != 1 && ($u['role'] !== 'master' || isMaster())): ?>
+                        <form method="POST" action="users.php" class="inline-block" onsubmit="return confirmAction(event, this, { title: 'Delete User Account?', text: 'Are you sure you want to delete user <?= htmlspecialchars(addslashes($u['username'])) ?>?', confirmText: 'Yes, Delete', danger: true });">
+                            <?= csrfField() ?>
+                            <input type="hidden" name="action" value="delete_user">
+                            <input type="hidden" name="target_user_id" value="<?= $u['id'] ?>">
+                            <button type="submit" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[10px] font-bold transition flex items-center">
+                                <i class="fa-solid fa-trash-can mr-1"></i> Delete
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
         <?php endforeach; ?>
