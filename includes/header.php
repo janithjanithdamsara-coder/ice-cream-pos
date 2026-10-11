@@ -282,7 +282,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <i class="fa-solid fa-crown text-xs"></i>
                         </a>
                     <?php endif; ?>
-                    <a href="logout.php" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors">
+                    <a href="logout.php" onclick="return confirmLogout(event)" title="Sign Out" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer">
                         <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                     </a>
                 </div>

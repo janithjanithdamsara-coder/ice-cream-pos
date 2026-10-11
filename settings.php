@@ -325,11 +325,11 @@ require_once __DIR__ . '/includes/header.php';
                 </ul>
             </div>
 
-            <form method="POST" action="settings.php" onsubmit="return confirm('WARNING: Are you 100% sure you want to DELETE ALL ITEMS AND DATA? Everything will become 0!');">
+            <form method="POST" action="settings.php" onsubmit="return confirmAction(event, this, { title: 'WIPE ENTIRE SYSTEM?', text: 'WARNING: Are you 100% sure you want to DELETE ALL ITEMS AND DATA? All inventory, stock, dispatches, and records will be permanently erased!', confirmText: '<i class=\'fa-solid fa-triangle-exclamation mr-1.5\'></i> Yes, Delete Everything', danger: true });">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="wipe_everything">
                 <button type="submit" 
-                        class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-rose-300 transition-all flex items-center justify-center space-x-2">
+                        class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-rose-300 transition-all flex items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-trash-can text-sm"></i>
                     <span>Delete All Items & Data Now</span>
                 </button>
@@ -356,11 +356,11 @@ require_once __DIR__ . '/includes/header.php';
                 </ul>
             </div>
 
-            <form method="POST" action="settings.php" onsubmit="return confirm('Clear all dispatches and reset stock to 0?');">
+            <form method="POST" action="settings.php" onsubmit="return confirmAction(event, this, { title: 'Clear Dispatches & Reset Stock?', text: 'All dispatch history and store issues will be cleared, and cold room stock will be reset to 0 units. Products will remain intact.', confirmText: '<i class=\'fa-solid fa-broom mr-1.5\'></i> Yes, Clear Dispatches', danger: true });">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="clear_transactions">
                 <button type="submit" 
-                        class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                        class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-eraser"></i>
                     <span>Clear Dispatches & Stock (0)</span>
                 </button>
@@ -386,7 +386,7 @@ require_once __DIR__ . '/includes/header.php';
                 </ul>
             </div>
 
-            <form method="POST" action="settings.php" onsubmit="return confirm('Setup 10 catalog ice creams and 2 lorries with 0 stock units for fresh testing?');">
+            <form method="POST" action="settings.php" onsubmit="return confirmAction(event, this, { title: 'Setup Test Catalog Items?', text: 'Setup 10 catalog ice creams and 2 lorries with 0 stock units for fresh testing?', confirmText: '<i class=\'fa-solid fa-arrows-rotate mr-1.5\'></i> Yes, Setup Items', danger: false });">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="restore_demo">
                 <button type="submit" 

@@ -451,11 +451,11 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
-                                    <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                                    <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to permanently delete this product from inventory?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="action" value="delete_product">
                                         <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
-                                        <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors" title="Delete Product">
+                                        <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors cursor-pointer" title="Delete Product">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </button>
                                     </form>
@@ -554,11 +554,11 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
 
                         <div class="flex items-center space-x-1">
-                            <form method="POST" action="stock.php" onsubmit="return confirm('Delete this product permanently?');" class="inline">
+                            <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to permanently delete this product from inventory?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="delete_product">
                                 <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
-                                <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Delete Product">
+                                <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer" title="Delete Product">
                                     <i class="fa-solid fa-trash-can text-xs"></i>
                                 </button>
                             </form>

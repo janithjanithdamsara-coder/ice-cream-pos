@@ -571,11 +571,11 @@ require_once __DIR__ . '/includes/header.php';
                             </a>
 
                             <?php if (hasRole(['super_admin', 'admin'])): ?>
-                            <form method="POST" action="direct_issue.php" class="inline-block" onsubmit="return confirm('Cancel this issue note? The <?= $iss['total_qty'] ?> units will be returned back to Cold Room store.');">
+                            <form method="POST" action="direct_issue.php" class="inline-block" onsubmit="return confirmAction(event, this, { title: 'Cancel Store Issue?', text: 'Are you sure you want to cancel this issue note? The <?= $iss['total_qty'] ?> units will be returned back to the Cold Room warehouse store.', confirmText: '<i class=\'fa-solid fa-rotate-left mr-1.5\'></i> Yes, Cancel Issue', danger: true });">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="cancel_issue">
                                 <input type="hidden" name="issue_id" value="<?= $iss['id'] ?>">
-                                <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[11px] transition">
+                                <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[11px] transition cursor-pointer">
                                     <i class="fa-solid fa-rotate-left mr-1"></i> Cancel
                                 </button>
                             </form>
@@ -629,11 +629,11 @@ require_once __DIR__ . '/includes/header.php';
                                 <i class="fa-solid fa-eye mr-0.5"></i> View
                             </a>
                             <?php if (hasRole(['super_admin', 'admin'])): ?>
-                            <form method="POST" action="direct_issue.php" class="inline" onsubmit="return confirm('Cancel this issue note? Stock will be returned to Cold Room.');">
+                            <form method="POST" action="direct_issue.php" class="inline" onsubmit="return confirmAction(event, this, { title: 'Cancel Store Issue?', text: 'Are you sure you want to cancel this issue note? Stock will be returned to Cold Room.', confirmText: '<i class=\'fa-solid fa-rotate-left mr-1.5\'></i> Yes, Cancel Issue', danger: true });">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="cancel_issue">
                                 <input type="hidden" name="issue_id" value="<?= $iss['id'] ?>">
-                                <button type="submit" class="px-2 py-1 bg-rose-50 text-rose-600 font-bold rounded-lg text-[10px] hover:bg-rose-100 transition">
+                                <button type="submit" class="px-2 py-1 bg-rose-50 text-rose-600 font-bold rounded-lg text-[10px] hover:bg-rose-100 transition cursor-pointer">
                                     Cancel
                                 </button>
                             </form>

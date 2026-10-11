@@ -330,7 +330,7 @@
 
             <!-- Sign Out Option -->
             <div class="pt-2 border-t border-slate-800 text-center text-xs">
-                <a href="logout.php" class="text-slate-400 hover:text-rose-400 font-bold transition inline-flex items-center space-x-1.5">
+                <a href="logout.php" onclick="return confirmLogout(event)" class="text-slate-400 hover:text-rose-400 font-bold transition inline-flex items-center space-x-1.5 cursor-pointer">
                     <i class="fa-solid fa-arrow-right-from-bracket text-[11px]"></i>
                     <span>Sign Out / Switch User</span>
                 </a>
@@ -361,6 +361,93 @@
                 }
             });
         }
+
+        // ================= GLOBAL SWEETALERT CONFIRMATION HELPERS =================
+        window.confirmLogout = function(event) {
+            if (event) event.preventDefault();
+            if (typeof Swal === 'undefined') {
+                if (confirm('Are you sure you want to end your current session?')) {
+                    window.location.href = 'logout.php';
+                }
+                return false;
+            }
+            Swal.fire({
+                title: 'Sign Out of System?',
+                text: 'Are you sure you want to end your current working session?',
+                icon: 'warning',
+                iconColor: '#f43f5e',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-arrow-right-from-bracket mr-1.5"></i> Yes, Sign Out',
+                cancelButtonText: 'Stay Logged In',
+                reverseButtons: true,
+                focusCancel: true,
+                customClass: {
+                    popup: 'rounded-3xl p-6 shadow-2xl border border-slate-100 font-sans',
+                    title: 'text-lg font-black text-slate-800 tracking-tight',
+                    htmlContainer: 'text-xs text-slate-500 font-medium',
+                    confirmButton: 'px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 transition-all cursor-pointer',
+                    cancelButton: 'px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer mr-2'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = 'logout.php';
+                }
+            });
+            return false;
+        };
+
+        window.confirmAction = function(event, formOrUrl, options = {}) {
+            if (event) event.preventDefault();
+            const isDanger = options.danger !== false;
+            if (typeof Swal === 'undefined') {
+                if (confirm(options.text || options.title || 'Are you sure?')) {
+                    if (typeof formOrUrl === 'string') {
+                        window.location.href = formOrUrl;
+                    } else if (formOrUrl && formOrUrl.submit) {
+                        formOrUrl.submit();
+                    }
+                }
+                return false;
+            }
+            Swal.fire({
+                title: options.title || 'Are you sure?',
+                text: options.text || 'Do you want to proceed with this action?',
+                icon: options.icon || (isDanger ? 'warning' : 'question'),
+                iconColor: options.iconColor || (isDanger ? '#f43f5e' : '#6366f1'),
+                showCancelButton: true,
+                confirmButtonText: options.confirmText || (isDanger ? 'Yes, Proceed' : 'Yes, Continue'),
+                cancelButtonText: options.cancelText || 'Cancel',
+                reverseButtons: true,
+                focusCancel: isDanger,
+                customClass: {
+                    popup: 'rounded-3xl p-6 shadow-2xl border border-slate-100 font-sans',
+                    title: 'text-lg font-black text-slate-800 tracking-tight',
+                    htmlContainer: 'text-xs text-slate-500 font-medium',
+                    confirmButton: (isDanger ? 'px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200' : 'px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200') + ' font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer',
+                    cancelButton: 'px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer mr-2'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if (typeof formOrUrl === 'string') {
+                        window.location.href = formOrUrl;
+                    } else if (formOrUrl && formOrUrl.submit) {
+                        formOrUrl.submit();
+                    }
+                }
+            });
+            return false;
+        };
+
+        // Attach confirmation automatically to all logout links on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('a[href="logout.php"], a[href*="logout.php"]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    confirmLogout(e);
+                });
+            });
+        });
 
         // Floating Support Button Scroll-To-Show logic (Appears after 100px scroll)
         window.addEventListener('scroll', function() {

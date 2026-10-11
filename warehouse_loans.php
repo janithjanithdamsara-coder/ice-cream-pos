@@ -819,11 +819,11 @@ require_once __DIR__ . '/includes/header.php';
                                         </a>
 
                                         <?php if ($l['status'] === 'pending' && $returned === 0): ?>
-                                            <form method="POST" action="warehouse_loans.php" onsubmit="return confirm('Cancel this loan and return all <?= $issued ?> units back to Cold Room store?');" class="inline">
+                                            <form method="POST" action="warehouse_loans.php" onsubmit="return confirmAction(event, this, { title: 'Cancel Warehouse Loan?', text: 'Are you sure you want to cancel this loan and return all <?= $issued ?> units back to Cold Room store?', confirmText: '<i class=\'fa-solid fa-rotate-left mr-1.5\'></i> Yes, Cancel Loan', danger: true });" class="inline">
                                                 <?= csrfField() ?>
                                                 <input type="hidden" name="action" value="cancel_loan">
                                                 <input type="hidden" name="loan_id" value="<?= $l['id'] ?>">
-                                                <button type="submit" class="px-2 py-1 rounded-lg text-rose-500 hover:bg-rose-50 font-bold text-xs transition" title="Cancel Loan & Restore Stock">
+                                                <button type="submit" class="px-2 py-1 rounded-lg text-rose-500 hover:bg-rose-50 font-bold text-xs transition cursor-pointer" title="Cancel Loan & Restore Stock">
                                                     <i class="fa-solid fa-trash-can"></i>
                                                 </button>
                                             </form>

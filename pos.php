@@ -933,10 +933,42 @@ function removeFromCart(productId) {
 }
 
 function clearCart() {
-    cart = {};
-    clearExtra();
-    document.getElementById('billAmountInput').value = '';
-    renderCart();
+    if (Object.keys(cart).length === 0) return;
+    if (typeof Swal === 'undefined') {
+        if (confirm('Clear all items from this bill?')) {
+            cart = {};
+            clearExtra();
+            document.getElementById('billAmountInput').value = '';
+            renderCart();
+        }
+        return;
+    }
+    Swal.fire({
+        title: 'Clear Current Bill?',
+        text: 'Are you sure you want to remove all items from this order cart?',
+        icon: 'warning',
+        iconColor: '#f43f5e',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-trash-can mr-1.5"></i> Yes, Clear Cart',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true,
+        focusCancel: true,
+        customClass: {
+            popup: 'rounded-3xl p-6 shadow-2xl border border-slate-100 font-sans',
+            title: 'text-lg font-black text-slate-800 tracking-tight',
+            htmlContainer: 'text-xs text-slate-500 font-medium',
+            confirmButton: 'px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 transition-all cursor-pointer',
+            cancelButton: 'px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer mr-2'
+        },
+        buttonsStyling: false
+    }).then((result) => {
+        if (result.isConfirmed) {
+            cart = {};
+            clearExtra();
+            document.getElementById('billAmountInput').value = '';
+            renderCart();
+        }
+    });
 }
 
 function toggleExtraChargesSection() {

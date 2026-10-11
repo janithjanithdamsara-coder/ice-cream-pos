@@ -433,11 +433,11 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php if ($b['id'] == 1): ?>
                                     <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Primary Hub</span>
                                     <?php else: ?>
-                                    <form method="POST" action="master.php?tab=branches" class="inline" onsubmit="return confirm('Delete branch [<?= htmlspecialchars($b['name']) ?>]?');">
+                                    <form method="POST" action="master.php?tab=branches" class="inline" onsubmit="return confirmAction(event, this, { title: 'Delete Branch?', text: 'Are you sure you want to delete branch [<?= htmlspecialchars(addslashes($b['name'])) ?>]?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="action" value="delete_branch">
                                         <input type="hidden" name="branch_id" value="<?= $b['id'] ?>">
-                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1 font-bold text-[11px]">
+                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1 font-bold text-[11px] cursor-pointer">
                                             <i class="fa-solid fa-trash-can mr-1"></i> Delete
                                         </button>
                                     </form>
@@ -473,11 +473,11 @@ require_once __DIR__ . '/includes/header.php';
                                 <?php if ($b['id'] == 1): ?>
                                     <span class="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full whitespace-nowrap">Primary Hub</span>
                                 <?php else: ?>
-                                    <form method="POST" action="master.php?tab=branches" class="inline" onsubmit="return confirm('Delete branch [<?= htmlspecialchars($b['name']) ?>]?');">
+                                    <form method="POST" action="master.php?tab=branches" class="inline" onsubmit="return confirmAction(event, this, { title: 'Delete Branch?', text: 'Are you sure you want to delete branch [<?= htmlspecialchars(addslashes($b['name'])) ?>]?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="action" value="delete_branch">
                                         <input type="hidden" name="branch_id" value="<?= $b['id'] ?>">
-                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1.5 font-bold text-[11px] bg-rose-50 rounded-lg">
+                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1.5 font-bold text-[11px] bg-rose-50 rounded-lg cursor-pointer">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </button>
                                     </form>
@@ -544,10 +544,10 @@ require_once __DIR__ . '/includes/header.php';
                     </button>
                 </form>
 
-                <form method="POST" action="master.php?tab=logs" class="w-full sm:w-auto" onsubmit="return confirm('Purge logs older than 30 days?');">
+                <form method="POST" action="master.php?tab=logs" class="w-full sm:w-auto" onsubmit="return confirmAction(event, this, { title: 'Purge Old Audit Logs?', text: 'Are you sure you want to purge all system and activity logs older than 30 days?', confirmText: '<i class=\'fa-solid fa-broom mr-1.5\'></i> Yes, Purge Logs', danger: true });">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="clear_old_logs">
-                    <button type="submit" class="w-full sm:w-auto px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition flex items-center justify-center">
+                    <button type="submit" class="w-full sm:w-auto px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition flex items-center justify-center cursor-pointer">
                         <i class="fa-solid fa-broom mr-1"></i> Clean Old Logs
                     </button>
                 </form>
@@ -725,7 +725,7 @@ require_once __DIR__ . '/includes/header.php';
                                         <i class="fa-solid fa-lock mr-1.5 text-[10px]"></i> Current Account
                                     </span>
                                 <?php else: ?>
-                                    <form method="POST" action="master.php?tab=backup" class="inline" onsubmit="return confirm('Log in as <?= htmlspecialchars($u['name']) ?> (<?= htmlspecialchars($u['username']) ?>)? You will operate the system as this user.');">
+                                    <form method="POST" action="master.php?tab=backup" class="inline" onsubmit="return confirmAction(event, this, { title: 'Switch to User Account?', text: 'Log in as <?= htmlspecialchars(addslashes($u['name'])) ?> (<?= htmlspecialchars(addslashes($u['username'])) ?>)? You will operate the system under this user identity.', confirmText: '<i class=\'fa-solid fa-arrow-right-to-bracket mr-1.5\'></i> Yes, Switch Account', danger: false });">
                                         <?= csrfField() ?>
                                         <input type="hidden" name="action" value="impersonate_user">
                                         <input type="hidden" name="target_user_id" value="<?= $u['id'] ?>">
@@ -766,11 +766,11 @@ require_once __DIR__ . '/includes/header.php';
                 <div>&bull; Single Active Hub: <strong>Main Cold Room & Distribution Hub</strong></div>
             </div>
 
-            <form method="POST" action="master.php?tab=backup" onsubmit="return confirm('Run automated stock health check and synchronization?');">
+            <form method="POST" action="master.php?tab=backup" onsubmit="return confirmAction(event, this, { title: 'Run Stock Diagnostics?', text: 'Run automated database health check and stock synchronization?', confirmText: '<i class=\'fa-solid fa-arrows-rotate mr-1.5\'></i> Yes, Run Resync', danger: false });">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="resync_stock">
                 <button type="submit" 
-                        class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition flex items-center justify-center space-x-2">
+                        class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition flex items-center justify-center space-x-2 cursor-pointer">
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Run Stock Health Resync</span>
                 </button>
