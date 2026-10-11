@@ -33,6 +33,76 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         exit;
     }
 
+    // Action: Edit / Update Lorry Details
+    if ($action === 'update_lorry' && hasRole(['super_admin', 'admin', 'master'])) {
+        $lorryId = intval($_POST['lorry_id'] ?? 0);
+        $plateNo = strtoupper(trim($_POST['plate_no'] ?? ''));
+        $driver = trim($_POST['driver_name'] ?? '');
+        $phone = trim($_POST['contact_no'] ?? '');
+        $route = trim($_POST['route_name'] ?? '');
+
+        if ($lorryId <= 0 || empty($plateNo) || empty($driver)) {
+            setFlash('danger', 'Please provide both the Lorry Plate Number and Driver Name.');
+        } else {
+            // Check plate number uniqueness across other vehicles
+            $stmtCheck = $pdo->prepare("SELECT id FROM lorries WHERE plate_no = ? AND id != ?");
+            $stmtCheck->execute([$plateNo, $lorryId]);
+            if ($stmtCheck->fetchColumn()) {
+                setFlash('danger', "Another vehicle with plate number '{$plateNo}' already exists.");
+            } else {
+                try {
+                    $stmtUp = $pdo->prepare("UPDATE lorries SET plate_no = ?, driver_name = ?, contact_no = ?, route_name = ? WHERE id = ? AND branch_id = ?");
+                    $stmtUp->execute([$plateNo, $driver, $phone, $route, $lorryId, $branchId]);
+
+                    logActivity('update_lorry', 'lorry', "Updated details for lorry [{$plateNo}] (Driver: {$driver}, Route: {$route})", $user['id']);
+                    setFlash('success', "Lorry [{$plateNo}] details updated successfully.");
+                } catch (Exception $e) {
+                    setFlash('danger', "Error updating lorry: " . $e->getMessage());
+                }
+            }
+        }
+        header("Location: lorry.php");
+        exit;
+    }
+
+    // Action: Delete Lorry Vehicle
+    if ($action === 'delete_lorry' && hasRole(['super_admin', 'admin', 'master'])) {
+        $lorryId = intval($_POST['lorry_id'] ?? 0);
+
+        if ($lorryId <= 0) {
+            setFlash('danger', 'Invalid lorry selected for deletion.');
+        } else {
+            $stmtL = $pdo->prepare("SELECT * FROM lorries WHERE id = ? AND branch_id = ?");
+            $stmtL->execute([$lorryId, $branchId]);
+            $lorry = $stmtL->fetch();
+
+            if (!$lorry) {
+                setFlash('danger', 'Lorry record not found.');
+            } else {
+                // Check if currently on route
+                $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM lorry_dispatches WHERE lorry_id = ? AND status = 'dispatched'");
+                $stmtCheck->execute([$lorryId]);
+                $hasActive = ($stmtCheck->fetchColumn() > 0) || ($lorry['status'] === 'on_route');
+
+                if ($hasActive) {
+                    setFlash('danger', "Cannot delete lorry [{$lorry['plate_no']}] because it is currently on route with active dispatched stock. Please settle 3PM returns first.");
+                } else {
+                    try {
+                        $stmtDel = $pdo->prepare("DELETE FROM lorries WHERE id = ? AND branch_id = ?");
+                        $stmtDel->execute([$lorryId, $branchId]);
+
+                        logActivity('delete_lorry', 'lorry', "Lorry vehicle [{$lorry['plate_no']}] (Driver: {$lorry['driver_name']}) was deleted by {$user['username']}", $user['id']);
+                        setFlash('success', "Lorry [{$lorry['plate_no']}] deleted successfully.");
+                    } catch (Exception $e) {
+                        setFlash('danger', "Error deleting lorry: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+        header("Location: lorry.php");
+        exit;
+    }
+
     // Action 2: Morning Dispatch (Store -> Lorry)
     if ($action === 'create_dispatch') {
         $lorryId = intval($_POST['lorry_id'] ?? 0);
@@ -496,9 +566,9 @@ foreach ($lorries as $l) {
 }
 
 // Fetch Active & Recent Dispatches
-$stmt = $pdo->prepare("SELECT ld.*, l.plate_no, l.driver_name, u.name as creator_name, us.name as settler_name 
+$stmt = $pdo->prepare("SELECT ld.*, COALESCE(l.plate_no, 'Archived Lorry') as plate_no, COALESCE(l.driver_name, 'Unknown Driver') as driver_name, u.name as creator_name, us.name as settler_name 
     FROM lorry_dispatches ld 
-    JOIN lorries l ON ld.lorry_id = l.id 
+    LEFT JOIN lorries l ON ld.lorry_id = l.id 
     LEFT JOIN users u ON ld.created_by = u.id 
     LEFT JOIN users us ON ld.settled_by = us.id 
     WHERE ld.branch_id = ? 
@@ -517,9 +587,9 @@ $stmt->execute([$branchId]);
 $products = $stmt->fetchAll();
 
 // Fetch Active Dispatches currently On Route (available for Mid-Day Reload)
-$stmtOnRoute = $pdo->prepare("SELECT ld.*, l.plate_no, l.driver_name, l.route_name 
+$stmtOnRoute = $pdo->prepare("SELECT ld.*, COALESCE(l.plate_no, 'Archived Lorry') as plate_no, COALESCE(l.driver_name, 'Unknown Driver') as driver_name, COALESCE(l.route_name, '-') as route_name 
     FROM lorry_dispatches ld 
-    JOIN lorries l ON ld.lorry_id = l.id 
+    LEFT JOIN lorries l ON ld.lorry_id = l.id 
     WHERE ld.branch_id = ? AND ld.status = 'dispatched' 
     ORDER BY ld.id ASC");
 $stmtOnRoute->execute([$branchId]);
@@ -531,9 +601,9 @@ $viewDispatchItems = [];
 $viewDispatchReloads = [];
 if (isset($_GET['view_dispatch'])) {
     $vId = intval($_GET['view_dispatch']);
-    $stmt = $pdo->prepare("SELECT ld.*, l.plate_no, l.driver_name, l.route_name 
+    $stmt = $pdo->prepare("SELECT ld.*, COALESCE(l.plate_no, 'Archived Lorry') as plate_no, COALESCE(l.driver_name, 'Unknown Driver') as driver_name, COALESCE(l.route_name, '-') as route_name 
         FROM lorry_dispatches ld 
-        JOIN lorries l ON ld.lorry_id = l.id 
+        LEFT JOIN lorries l ON ld.lorry_id = l.id 
         WHERE ld.id = ? AND ld.branch_id = ?");
     $stmt->execute([$vId, $branchId]);
     $viewDispatch = $stmt->fetch();
@@ -571,9 +641,9 @@ $settleDispatchItems = [];
 $settleDispatchReloads = [];
 if (isset($_GET['action']) && $_GET['action'] === 'settle' && isset($_GET['dispatch_id'])) {
     $sId = intval($_GET['dispatch_id']);
-    $stmt = $pdo->prepare("SELECT ld.*, l.plate_no, l.driver_name, l.route_name 
+    $stmt = $pdo->prepare("SELECT ld.*, COALESCE(l.plate_no, 'Archived Lorry') as plate_no, COALESCE(l.driver_name, 'Unknown Driver') as driver_name, COALESCE(l.route_name, '-') as route_name 
         FROM lorry_dispatches ld 
-        JOIN lorries l ON ld.lorry_id = l.id 
+        LEFT JOIN lorries l ON ld.lorry_id = l.id 
         WHERE ld.id = ? AND ld.branch_id = ? AND ld.status = 'dispatched'");
     $stmt->execute([$sId, $branchId]);
     $settleDispatch = $stmt->fetch();
@@ -764,19 +834,44 @@ require_once __DIR__ . '/includes/header.php';
         ?>
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center justify-between mb-2 gap-2">
                         <span class="px-2.5 py-1 text-xs font-black rounded-lg font-mono tracking-wider <?= $isOnRoute ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700' ?>">
                             <i class="fa-solid fa-truck text-xs mr-1"></i> <?= htmlspecialchars($lorry['plate_no']) ?>
                         </span>
-                        <?php if ($isOnRoute): ?>
-                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse"></span> On Route
-                            </span>
-                        <?php else: ?>
-                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Available in Yard
-                            </span>
-                        <?php endif; ?>
+                        <div class="flex items-center space-x-1.5">
+                            <?php if ($isOnRoute): ?>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse"></span> On Route
+                                </span>
+                            <?php else: ?>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Available
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if (hasRole(['super_admin', 'admin', 'master'])): ?>
+                                <button type="button" 
+                                        onclick="openEditLorryModal(<?= $lorry['id'] ?>, '<?= htmlspecialchars(addslashes($lorry['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($lorry['driver_name'])) ?>', '<?= htmlspecialchars(addslashes($lorry['contact_no'] ?? '')) ?>', '<?= htmlspecialchars(addslashes($lorry['route_name'] ?? '')) ?>')" 
+                                        class="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-500 transition-colors cursor-pointer" 
+                                        title="Edit Lorry Details">
+                                    <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                                </button>
+
+                                <?php if (!$isOnRoute): ?>
+                                    <form method="POST" action="lorry.php" class="inline" 
+                                          onsubmit="return confirmAction(event, this, { title: 'Delete Lorry Vehicle?', text: 'Are you sure you want to delete vehicle <?= htmlspecialchars(addslashes($lorry['plate_no'])) ?> (Driver: <?= htmlspecialchars(addslashes($lorry['driver_name'])) ?>)? This will remove the vehicle from your active fleet.', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete Vehicle', danger: true });">
+                                        <?= csrfField() ?>
+                                        <input type="hidden" name="action" value="delete_lorry">
+                                        <input type="hidden" name="lorry_id" value="<?= $lorry['id'] ?>">
+                                        <button type="submit" 
+                                                class="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-500 transition-colors cursor-pointer" 
+                                                title="Delete Lorry Vehicle">
+                                            <i class="fa-solid fa-trash-can text-[11px]"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="text-xs text-slate-700 font-bold mb-1">
@@ -1805,7 +1900,7 @@ require_once __DIR__ . '/includes/header.php';
             <h3 class="font-bold text-sm text-slate-800 flex items-center">
                 <i class="fa-solid fa-truck text-cyan-600 mr-2"></i> Register New Lorry / Van
             </h3>
-            <button type="button" onclick="closeNewLorryModal()" class="text-slate-400 hover:text-slate-600">
+            <button type="button" onclick="closeNewLorryModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -1835,8 +1930,55 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div class="pt-3 flex justify-end space-x-2">
-                <button type="button" onclick="closeNewLorryModal()" class="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-xs">Save Lorry</button>
+                <button type="button" onclick="closeNewLorryModal()" class="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100 cursor-pointer">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-xs cursor-pointer">Save Lorry</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: Edit Lorry Details -->
+<div id="editLorryModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <h3 class="font-bold text-sm text-slate-800 flex items-center">
+                <i class="fa-solid fa-pen-to-square text-amber-500 mr-2"></i> Edit Lorry Vehicle Details
+            </h3>
+            <button type="button" onclick="closeEditLorryModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="lorry.php" class="space-y-3 text-xs">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="update_lorry">
+            <input type="hidden" name="lorry_id" id="editLorryId" value="">
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Plate Number (Ex: WP CAB-4521) *</label>
+                <input type="text" name="plate_no" id="editLorryPlate" required placeholder="e.g. WP CAB-4521" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold uppercase">
+            </div>
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Driver / Sales Rep *</label>
+                <input type="text" name="driver_name" id="editLorryDriver" required placeholder="e.g. Kamal Perera" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+            </div>
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Contact Phone</label>
+                <input type="text" name="contact_no" id="editLorryPhone" placeholder="e.g. 077-1234567" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Distribution Route</label>
+                <input type="text" name="route_name" id="editLorryRoute" placeholder="e.g. Route North Line" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+
+            <div class="pt-3 flex justify-end space-x-2">
+                <button type="button" onclick="closeEditLorryModal()" class="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100 cursor-pointer">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-xs cursor-pointer flex items-center">
+                    <i class="fa-solid fa-floppy-disk mr-1.5"></i> Update Details
+                </button>
             </div>
         </form>
     </div>
@@ -1854,6 +1996,18 @@ require_once __DIR__ . '/includes/header.php';
     function closeNewDispatchModal() { document.getElementById('newDispatchModal').classList.add('hidden'); }
     function openNewLorryModal() { document.getElementById('newLorryModal').classList.remove('hidden'); }
     function closeNewLorryModal() { document.getElementById('newLorryModal').classList.add('hidden'); }
+
+    function openEditLorryModal(id, plate, driver, phone, route) {
+        document.getElementById('editLorryId').value = id;
+        document.getElementById('editLorryPlate').value = plate;
+        document.getElementById('editLorryDriver').value = driver;
+        document.getElementById('editLorryPhone').value = phone || '';
+        document.getElementById('editLorryRoute').value = route || '';
+        document.getElementById('editLorryModal').classList.remove('hidden');
+    }
+    function closeEditLorryModal() {
+        document.getElementById('editLorryModal').classList.add('hidden');
+    }
 
     function dispatchThisLorry(lorryId) {
         const select = document.getElementById('dispatchLorrySelect');
