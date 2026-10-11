@@ -253,6 +253,7 @@ function migrateSchema($pdo) {
     try {
         // Ensure user role enum supports 'master', 'super_admin', 'admin', 'operator', 'cashier'
         $pdo->exec("ALTER TABLE `users` MODIFY COLUMN `role` ENUM('master', 'super_admin', 'admin', 'operator', 'cashier') NOT NULL DEFAULT 'cashier'");
+        $pdo->exec("UPDATE `users` SET `role` = 'cashier' WHERE `role` = '' OR `role` IS NULL OR `role` NOT IN ('master', 'super_admin', 'admin', 'operator', 'cashier')");
 
         // 1. Ensure total_delivered_qty exists in lorry_dispatches
         $cols = $pdo->query("SHOW COLUMNS FROM `lorry_dispatches` LIKE 'total_delivered_qty'")->fetchAll();
