@@ -133,77 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ACTION 3: RESTORE DEMO PRODUCTS & LORRIES
-    if ($action === 'restore_demo' && hasRole('super_admin')) {
-        try {
-            // Check categories
-            $stmt = $pdo->query("SELECT COUNT(*) FROM `categories`");
-            if ($stmt->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `categories` (`id`, `name`) VALUES
-                    (1, '1L Tubs & Family Packs'),
-                    (2, '500ml Tubs'),
-                    (3, 'Cones & Waffles'),
-                    (4, 'Cups & Single Servings'),
-                    (5, 'Ice Chocs & Sticks');");
-            }
 
-            // Insert products if 0 (Pure Inventory: code, name, flavor, size, alert_quantity - No prices)
-            $stmt = $pdo->query("SELECT COUNT(*) FROM `products`");
-            if ($stmt->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `products` (`id`, `category_id`, `code`, `name`, `flavor`, `size`, `alert_quantity`) VALUES
-                    (1, 1, 'VAN-1L', 'Vanilla 1L Tub', 'Vanilla', '1 Litre', 20),
-                    (2, 1, 'CHOC-1L', 'Chocolate 1L Tub', 'Chocolate', '1 Litre', 20),
-                    (3, 1, 'STR-1L', 'Strawberry 1L Tub', 'Strawberry', '1 Litre', 15),
-                    (4, 1, 'FN-1L', 'Fruit & Nut 1L Tub', 'Fruit & Nut', '1 Litre', 15),
-                    (5, 2, 'VAN-500M', 'Vanilla 500ml Tub', 'Vanilla', '500ml', 25),
-                    (6, 2, 'CHOC-500M', 'Chocolate 500ml Tub', 'Chocolate', '500ml', 25),
-                    (7, 3, 'CONE-CHOC', 'Choco Crunch Cone', 'Chocolate', '120ml', 50),
-                    (8, 3, 'CONE-VAN', 'Vanilla Cone with Nuts', 'Vanilla', '120ml', 50),
-                    (9, 4, 'CUP-VAN', 'Vanilla Cup', 'Vanilla', '80ml', 60),
-                    (10, 4, 'CUP-CHOC', 'Chocolate Cup', 'Chocolate', '80ml', 60);");
-
-                $pdo->exec("INSERT INTO `branch_stock` (`branch_id`, `product_id`, `quantity`, `box_qty`, `pieces_qty`) VALUES
-                    (1, 1, 0, 0, 0), (1, 2, 0, 0, 0), (1, 3, 0, 0, 0), (1, 4, 0, 0, 0), (1, 5, 0, 0, 0),
-                    (1, 6, 0, 0, 0), (1, 7, 0, 0, 0), (1, 8, 0, 0, 0), (1, 9, 0, 0, 0), (1, 10, 0, 0, 0)
-                    ON DUPLICATE KEY UPDATE `quantity` = 0, `box_qty` = 0, `pieces_qty` = 0;");
-            }
-
-            // Always ensure all stock is reset to 0 for fresh testing
-            $pdo->exec("UPDATE `branch_stock` SET `quantity` = 0, `box_qty` = 0, `pieces_qty` = 0");
-
-            // Clear past dispatches so system is 100% clean
-            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-            safeTableDelete($pdo, 'store_dispatch_items');
-            safeTableDelete($pdo, 'store_dispatches');
-            safeTableDelete($pdo, 'lorry_dispatch_items');
-            safeTableDelete($pdo, 'lorry_dispatches');
-            safeTableDelete($pdo, 'stock_invoice_items');
-            safeTableDelete($pdo, 'stock_invoices');
-            safeTableDelete($pdo, 'warehouse_loan_return_items');
-            safeTableDelete($pdo, 'warehouse_loan_returns');
-            safeTableDelete($pdo, 'warehouse_loan_items');
-            safeTableDelete($pdo, 'warehouse_loans');
-            safeTableDelete($pdo, 'pos_sale_items');
-            safeTableDelete($pdo, 'pos_sales');
-            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
-
-            // Insert lorries if 0
-            $stmt = $pdo->query("SELECT COUNT(*) FROM `lorries`");
-            if ($stmt->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `lorries` (`id`, `branch_id`, `plate_no`, `driver_name`, `contact_no`, `route_name`, `status`) VALUES
-                    (1, 1, 'WP CAB-4521', 'Kamal Perera', '077-1122334', 'Colombo North / Gampaha Route', 'available'),
-                    (2, 1, 'WP ND-8890', 'Sunil Shantha', '071-4455667', 'Colombo South / Moratuwa Route', 'available');");
-            } else {
-                $pdo->exec("UPDATE `lorries` SET `status` = 'available'");
-            }
-
-            setFlash('success', 'Setup Complete: 10 Ice Cream Products added, 2 Lorries ready, and all Stock Quantities set to ZERO (0 Units). Ready for fresh testing!');
-        } catch (Exception $e) {
-            setFlash('danger', 'Error setting up test data: ' . $e->getMessage());
-        }
-        header("Location: settings.php");
-        exit;
-    }
 }
 
 // Fetch Pure Inventory System Counts
@@ -296,12 +226,12 @@ require_once __DIR__ . '/includes/header.php';
         <div>
             <h3 class="text-lg font-black text-slate-900 tracking-tight">System Data Reset &bull; Clear All</h3>
             <p class="text-xs text-slate-500 mt-1">
-                Use the buttons below to delete existing demo items and dispatches so you can use the system fresh with your own products.
+                Use the controls below to safely clear operational transactions and reset stock, or perform a fresh system wipe.
             </p>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 pt-4 border-t border-slate-100">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto pt-4 border-t border-slate-100">
         
         <!-- CARD 1: DELETE ABSOLUTELY EVERYTHING -->
         <div class="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 flex flex-col justify-between shadow-xs">
@@ -367,35 +297,7 @@ require_once __DIR__ . '/includes/header.php';
             </form>
         </div>
 
-        <!-- CARD 3: Setup 10 Items + 2 Lorries (0 Qty) -->
-        <div class="p-5 rounded-2xl bg-cyan-50/60 border border-cyan-200 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="font-extrabold text-sm text-cyan-950 flex items-center">
-                        <i class="fa-solid fa-boxes-stacked text-cyan-600 mr-2"></i> 3. Setup Test Items (0 Qty)
-                    </span>
-                    <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-cyan-200 text-cyan-900">Zero Stock</span>
-                </div>
-                <p class="text-xs text-slate-600 mb-3 leading-relaxed">
-                    Sets up 10 core ice creams and 2 lorries with <strong>0 stock units</strong>, so you can test incoming GRN and dispatches from scratch.
-                </p>
-                <ul class="text-xs text-slate-700 space-y-1 mb-4 font-medium">
-                    <li>&bull; 10 Ice Cream Flavors & Packs</li>
-                    <li>&bull; 2 Available Lorries</li>
-                    <li>&bull; Cold Room Stock: <strong>0 Units</strong></li>
-                </ul>
-            </div>
-
-            <form method="POST" action="settings.php" onsubmit="return confirmAction(event, this, { title: 'Setup Test Catalog Items?', text: 'Setup 10 catalog ice creams and 2 lorries with 0 stock units for fresh testing?', confirmText: '<i class=\'fa-solid fa-arrows-rotate mr-1.5\'></i> Yes, Setup Items', danger: false });">
-                <?= csrfField() ?>
-                <input type="hidden" name="action" value="restore_demo">
-                <button type="submit" 
-                        class="w-full py-3 px-4 bg-cyan-700 hover:bg-cyan-800 active:bg-cyan-900 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                    <span>Setup 10 Items + 2 Lorries (0 Qty)</span>
-                </button>
-            </form>
-        </div>
+    </div>
 
     </div>
 </div>

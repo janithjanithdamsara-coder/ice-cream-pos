@@ -211,15 +211,28 @@ $availableProducts = $stmt->fetchAll();
 // Date range filters for Issue History
 $fromDate = $_GET['from_date'] ?? date('Y-m-01');
 $toDate = $_GET['to_date'] ?? $today;
+$activeTab = $_GET['tab'] ?? 'gdn'; // Default to GDN Store Issues
+
+$typeCondition = "";
+if ($activeTab === 'gdn') {
+    $typeCondition = " AND sd.issue_no LIKE 'ISU-%'";
+} elseif ($activeTab === 'pos') {
+    $typeCondition = " AND sd.issue_no LIKE 'POS-%'";
+}
 
 // Fetch Recent Store Dispatches
 $stmt = $pdo->prepare("SELECT sd.*, u.name as issued_by_name 
     FROM store_dispatches sd
     LEFT JOIN users u ON sd.user_id = u.id
-    WHERE sd.branch_id = ? AND sd.issue_date BETWEEN ? AND ?
+    WHERE sd.branch_id = ? AND sd.issue_date BETWEEN ? AND ? {$typeCondition}
     ORDER BY sd.id DESC");
 $stmt->execute([$branchId, $fromDate, $toDate]);
 $recentIssues = $stmt->fetchAll();
+
+// Tab badge counts
+$countGdn = $pdo->query("SELECT COUNT(*) FROM store_dispatches WHERE branch_id = $branchId AND issue_date BETWEEN '$fromDate' AND '$toDate' AND issue_no LIKE 'ISU-%'")->fetchColumn();
+$countPos = $pdo->query("SELECT COUNT(*) FROM store_dispatches WHERE branch_id = $branchId AND issue_date BETWEEN '$fromDate' AND '$toDate' AND issue_no LIKE 'POS-%'")->fetchColumn();
+$countAll = $countGdn + $countPos;
 
 // Top stats calculation
 $todayIssuedUnits = $pdo->query("SELECT COALESCE(SUM(total_qty), 0) FROM store_dispatches WHERE branch_id = $branchId AND issue_date = '$today'")->fetchColumn();
@@ -505,16 +518,40 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Date Filter Form -->
             <form method="GET" action="direct_issue.php" class="flex flex-wrap items-center gap-2 text-xs">
+                <input type="hidden" name="tab" value="<?= htmlspecialchars($activeTab) ?>">
                 <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
                     <span class="text-slate-400 font-medium">From:</span>
                     <input type="date" name="from_date" value="<?= htmlspecialchars($fromDate) ?>" class="bg-transparent font-bold font-mono text-slate-700 focus:outline-none">
                     <span class="text-slate-400 font-medium">To:</span>
                     <input type="date" name="to_date" value="<?= htmlspecialchars($toDate) ?>" class="bg-transparent font-bold font-mono text-slate-700 focus:outline-none">
                 </div>
-                <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition">
+                <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition cursor-pointer">
                     Filter
                 </button>
             </form>
+        </div>
+
+        <!-- Filter Tabs: GDN Notes vs POS Slips -->
+        <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+            <a href="direct_issue.php?tab=gdn&from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" 
+               class="px-3 py-1.5 rounded-xl font-bold transition-all flex items-center space-x-1.5 <?= $activeTab === 'gdn' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100' ?>">
+                <i class="fa-solid fa-file-invoice"></i>
+                <span>GDN Issue Notes (ISU)</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono <?= $activeTab === 'gdn' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-700' ?>"><?= $countGdn ?></span>
+            </a>
+
+            <a href="direct_issue.php?tab=pos&from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" 
+               class="px-3 py-1.5 rounded-xl font-bold transition-all flex items-center space-x-1.5 <?= $activeTab === 'pos' ? 'bg-cyan-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100' ?>">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>Counter POS Slips (POS)</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono <?= $activeTab === 'pos' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-700' ?>"><?= $countPos ?></span>
+            </a>
+
+            <a href="direct_issue.php?tab=all&from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" 
+               class="px-3 py-1.5 rounded-xl font-bold transition-all flex items-center space-x-1.5 <?= $activeTab === 'all' ? 'bg-slate-800 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100' ?>">
+                <span>All Outflow Notes</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono <?= $activeTab === 'all' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-700' ?>"><?= $countAll ?></span>
+            </a>
         </div>
 
         <!-- Issues Table -->
