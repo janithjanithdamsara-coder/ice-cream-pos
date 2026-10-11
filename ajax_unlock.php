@@ -19,6 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+if (!verifyCsrfToken()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Security token verification failed. Please refresh the page.']);
+    exit;
+}
+
 $password = trim($_POST['password'] ?? '');
 
 if (empty($password)) {
@@ -81,9 +87,10 @@ try {
     }
 
 } catch (Exception $e) {
+    error_log("ajax_unlock error: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'message' => 'Server error while verifying password: ' . $e->getMessage()
+        'message' => 'An unexpected server error occurred. Please try again.'
     ]);
     exit;
 }

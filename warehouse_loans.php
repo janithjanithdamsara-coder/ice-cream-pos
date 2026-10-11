@@ -3,7 +3,7 @@
 // Pure Inventory Tracking (Zero Money / Physical Units Only)
 $pageTitle = "Warehouse Borrow & Return";
 require_once __DIR__ . '/config/auth.php';
-requireLogin();
+requireRole(['super_admin', 'admin']);
 
 $user = currentUser();
 $branchId = $user['branch_id'];

@@ -2,7 +2,7 @@
 // stock.php - Pure Stock & Cold Room Warehouse Management (Zero Money)
 $pageTitle = "Stock & Warehouse";
 require_once __DIR__ . '/config/auth.php';
-requireLogin();
+requireRole(['super_admin', 'admin']);
 
 $user = currentUser();
 $branchId = $user['branch_id'];

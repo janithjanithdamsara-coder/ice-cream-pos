@@ -2,7 +2,7 @@
 // lorry.php - Pure Lorry Distribution & Evening 3:00 PM Returns (Zero Money / Units Only)
 $pageTitle = "Lorry Fleet & Dispatches";
 require_once __DIR__ . '/config/auth.php';
-requireLogin();
+requireRole(['super_admin', 'admin']);
 
 $user = currentUser();
 $branchId = $user['branch_id'];

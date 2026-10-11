@@ -4,12 +4,17 @@
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # 1. Force HTTPS on live server (exclude localhost/127.0.0.1)
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 </IfModule>
 
-# 1. Disable Directory Browsing
+# 2. Disable Directory Browsing
 Options -Indexes
 
-# 2. Block direct web access to sensitive files (.sql, .log, .env, .git, etc.)
+# 3. Block direct web access to sensitive files (.sql, .log, .env, .git, etc.)
 <FilesMatch "\.(sql|bak|log|tmp|env|yml|yaml|jsonl|git|md)$">
     <IfModule mod_authz_core.c>
         Require all denied
@@ -40,15 +45,16 @@ Options -Indexes
     </IfModule>
 </Files>
 
-# 3. Prevent direct HTTP access to internal include folders
+# 4. Prevent direct HTTP access to internal include folders
 <IfModule mod_rewrite.c>
     RewriteRule ^(config|includes)/.*$ - [F,L]
 </IfModule>
 
-# 4. Essential HTTP Security Headers
+# 5. Essential HTTP Security Headers
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set X-XSS-Protection "1; mode=block"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 </IfModule>

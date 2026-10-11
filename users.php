@@ -21,13 +21,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $phone = trim($_POST['phone'] ?? '');
 
         if (!empty($name) && !empty($username) && !empty($password)) {
-            try {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (branch_id, name, username, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$branchId, $name, $username, $hash, $role, $phone]);
-                setFlash('success', "User account [{$username}] created successfully with role [{$role}].");
-            } catch (Exception $e) {
-                setFlash('danger', "Error creating user: " . $e->getMessage());
+            if (strlen($password) < 6) {
+                setFlash('danger', 'Password must be at least 6 characters long.');
+            } else {
+                try {
+                    $hash = password_hash($password, PASSWORD_DEFAULT);
+                    $stmt = $pdo->prepare("INSERT INTO users (branch_id, name, username, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$branchId, $name, $username, $hash, $role, $phone]);
+                    setFlash('success', "User account [{$username}] created successfully with role [{$role}].");
+                } catch (Exception $e) {
+                    setFlash('danger', "Error creating user: " . $e->getMessage());
+                }
             }
         }
         header("Location: users.php");
@@ -44,8 +48,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             setFlash('danger', 'Please enter both your current password and new password.');
         } elseif ($newPass !== $confirmPass) {
             setFlash('danger', 'New password and confirmation password do not match.');
-        } elseif (strlen($newPass) < 4) {
-            setFlash('danger', 'New password must be at least 4 characters long.');
+        } elseif (strlen($newPass) < 6) {
+            setFlash('danger', 'New password must be at least 6 characters long.');
         } else {
             // Verify current password against database
             $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
@@ -74,8 +78,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         if ($targetUserId <= 0 || empty($newPass)) {
             setFlash('danger', 'Invalid user or password provided.');
-        } elseif (strlen($newPass) < 4) {
-            setFlash('danger', 'New password must be at least 4 characters long.');
+        } elseif (strlen($newPass) < 6) {
+            setFlash('danger', 'New password must be at least 6 characters long.');
         } else {
             $stmtTarget = $pdo->prepare("SELECT username, role FROM users WHERE id = ?");
             $stmtTarget->execute([$targetUserId]);
@@ -278,7 +282,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div>
                     <label class="block font-bold text-slate-700 mb-1">Password *</label>
                     <div class="relative">
-                        <input type="password" id="newUserPassword" name="password" required placeholder="••••••••" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition-all">
+                        <input type="password" id="newUserPassword" name="password" required minlength="6" placeholder="••••••••" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition-all">
                         <button type="button" onclick="togglePasswordVisibility('newUserPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
                             <i class="fa-solid fa-eye text-xs"></i>
                         </button>
@@ -353,7 +357,7 @@ require_once __DIR__ . '/includes/header.php';
             <div>
                 <label class="block font-bold text-slate-700 mb-1">New Password *</label>
                 <div class="relative">
-                    <input type="password" id="cmpNewPassword" name="new_password" required minlength="4" placeholder="Enter new strong password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <input type="password" id="cmpNewPassword" name="new_password" required minlength="6" placeholder="Enter new strong password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
                     <button type="button" onclick="togglePasswordVisibility('cmpNewPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
                         <i class="fa-solid fa-eye text-xs"></i>
                     </button>
@@ -363,7 +367,7 @@ require_once __DIR__ . '/includes/header.php';
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Confirm New Password *</label>
                 <div class="relative">
-                    <input type="password" id="cmpConfirmPassword" name="confirm_password" required minlength="4" placeholder="Re-type new password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <input type="password" id="cmpConfirmPassword" name="confirm_password" required minlength="6" placeholder="Re-type new password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
                     <button type="button" onclick="togglePasswordVisibility('cmpConfirmPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
                         <i class="fa-solid fa-eye text-xs"></i>
                     </button>
@@ -403,7 +407,7 @@ require_once __DIR__ . '/includes/header.php';
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Set New Password *</label>
                 <div class="relative">
-                    <input type="password" name="new_password" id="resetNewPasswordInput" required minlength="4" placeholder="e.g. Pass1234" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all">
+                    <input type="password" name="new_password" id="resetNewPasswordInput" required minlength="6" placeholder="e.g. Pass1234" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all">
                     <button type="button" onclick="togglePasswordVisibility('resetNewPasswordInput', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
                         <i class="fa-solid fa-eye text-xs"></i>
                     </button>

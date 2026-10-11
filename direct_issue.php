@@ -3,7 +3,7 @@
 // Pure Inventory Tracking (Zero Money / Units Only)
 $pageTitle = "Direct Store Issue (Out)";
 require_once __DIR__ . '/config/auth.php';
-requireLogin();
+requireRole(['super_admin', 'admin']);
 
 $user = currentUser();
 $branchId = $user['branch_id'];

@@ -66,6 +66,8 @@
 
     <!-- Global Scripts & Modern Toast System -->
     <script>
+        window.CSRF_TOKEN = '<?= function_exists("getCsrfToken") ? getCsrfToken() : "" ?>';
+
         // Toggle mobile slide-in sidebar
         function toggleSidebar() {
             const sidebar = document.getElementById('mainSidebar');
@@ -503,6 +505,7 @@
 
             try {
                 const formData = new FormData();
+                formData.append('csrf_token', window.CSRF_TOKEN || '');
                 formData.append('password', password);
 
                 const res = await fetch('ajax_unlock.php', {

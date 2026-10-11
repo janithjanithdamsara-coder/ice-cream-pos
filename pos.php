@@ -1172,6 +1172,13 @@ function renderCart() {
     let hasZeroTotal = false;
     let html = '';
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
     itemKeys.forEach(key => {
         const item = cart[key];
         totalUnits += item.qty;
@@ -1193,8 +1200,8 @@ function renderCart() {
             <!-- Item Title & Delete -->
             <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                    <div class="text-xs font-black text-slate-800 leading-tight truncate">${item.name}</div>
-                    <div class="text-[10px] text-slate-500">${item.flavor} &bull; ${item.size}</div>
+                    <div class="text-xs font-black text-slate-800 leading-tight truncate">${escapeHtml(item.name)}</div>
+                    <div class="text-[10px] text-slate-500">${escapeHtml(item.flavor)} &bull; ${escapeHtml(item.size)}</div>
                 </div>
                 <div class="flex items-center space-x-1 shrink-0">
                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" title="Available in Cold Room">
