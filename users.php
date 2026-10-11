@@ -127,15 +127,12 @@ require_once __DIR__ . '/includes/header.php';
         </p>
     </div>
 
-    <div class="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-        <button type="button" onclick="openChangeMyPasswordModal()" class="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-200 flex items-center justify-center text-center cursor-pointer">
+    <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+        <button type="button" onclick="openChangeMyPasswordModal()" class="flex-1 sm:flex-initial px-3 sm:px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-200 flex items-center justify-center text-center cursor-pointer">
             <i class="fa-solid fa-key mr-1.5"></i> <span>Change My Password</span>
         </button>
-        <a href="branches.php" class="px-3 sm:px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center text-center">
-            <i class="fa-solid fa-building-flag mr-1.5"></i> <span>Branches</span>
-        </a>
         <?php if (hasRole('super_admin')): ?>
-            <button type="button" onclick="openNewUserModal()" class="px-3 sm:px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 flex items-center justify-center text-center cursor-pointer">
+            <button type="button" onclick="openNewUserModal()" class="flex-1 sm:flex-initial px-3 sm:px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 flex items-center justify-center text-center cursor-pointer">
                 <i class="fa-solid fa-user-plus mr-1.5"></i> <span>+ New User</span>
             </button>
         <?php endif; ?>
@@ -280,7 +277,12 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
                 <div>
                     <label class="block font-bold text-slate-700 mb-1">Password *</label>
-                    <input type="password" name="password" required placeholder="••••••••" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div class="relative">
+                        <input type="password" id="newUserPassword" name="password" required placeholder="••••••••" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition-all">
+                        <button type="button" onclick="togglePasswordVisibility('newUserPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                            <i class="fa-solid fa-eye text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -340,17 +342,32 @@ require_once __DIR__ . '/includes/header.php';
 
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Current Password *</label>
-                <input type="password" name="current_password" required placeholder="Enter your existing password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div class="relative">
+                    <input type="password" id="cmpCurrentPassword" name="current_password" required placeholder="Enter your existing password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <button type="button" onclick="togglePasswordVisibility('cmpCurrentPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
             </div>
 
             <div>
                 <label class="block font-bold text-slate-700 mb-1">New Password *</label>
-                <input type="password" name="new_password" required minlength="4" placeholder="Enter new strong password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono">
+                <div class="relative">
+                    <input type="password" id="cmpNewPassword" name="new_password" required minlength="4" placeholder="Enter new strong password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <button type="button" onclick="togglePasswordVisibility('cmpNewPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
             </div>
 
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Confirm New Password *</label>
-                <input type="password" name="confirm_password" required minlength="4" placeholder="Re-type new password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono">
+                <div class="relative">
+                    <input type="password" id="cmpConfirmPassword" name="confirm_password" required minlength="4" placeholder="Re-type new password" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <button type="button" onclick="togglePasswordVisibility('cmpConfirmPassword', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="pt-2 flex justify-end space-x-2">
@@ -385,7 +402,12 @@ require_once __DIR__ . '/includes/header.php';
 
             <div>
                 <label class="block font-bold text-slate-700 mb-1">Set New Password *</label>
-                <input type="text" name="new_password" id="resetNewPasswordInput" required minlength="4" placeholder="e.g. Pass1234" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold">
+                <div class="relative">
+                    <input type="password" name="new_password" id="resetNewPasswordInput" required minlength="4" placeholder="e.g. Pass1234" class="w-full p-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all">
+                    <button type="button" onclick="togglePasswordVisibility('resetNewPasswordInput', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
                 <p class="text-[10px] text-slate-400 mt-1">Provide this password to the staff member so they can sign in.</p>
             </div>
 
@@ -398,10 +420,47 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <script>
-    function openNewUserModal() { document.getElementById('newUserModal').classList.remove('hidden'); }
+    function togglePasswordVisibility(inputId, btn) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const icon = btn ? btn.querySelector('i') : null;
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        } else {
+            input.type = 'password';
+            if (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    }
+
+    function resetPasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.type = 'password';
+        const btn = input.nextElementSibling;
+        const icon = btn ? btn.querySelector('i') : null;
+        if (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+
+    function openNewUserModal() { 
+        resetPasswordVisibility('newUserPassword');
+        document.getElementById('newUserModal').classList.remove('hidden'); 
+    }
     function closeNewUserModal() { document.getElementById('newUserModal').classList.add('hidden'); }
 
-    function openChangeMyPasswordModal() { document.getElementById('changeMyPasswordModal').classList.remove('hidden'); }
+    function openChangeMyPasswordModal() { 
+        ['cmpCurrentPassword', 'cmpNewPassword', 'cmpConfirmPassword'].forEach(resetPasswordVisibility);
+        document.getElementById('changeMyPasswordModal').classList.remove('hidden'); 
+    }
     function closeChangeMyPasswordModal() { document.getElementById('changeMyPasswordModal').classList.add('hidden'); }
 
     function openResetUserModal(userId, username, name) {
@@ -409,6 +468,7 @@ require_once __DIR__ . '/includes/header.php';
         document.getElementById('resetTargetUserName').innerText = name;
         document.getElementById('resetTargetUserUsername').innerText = '@' + username;
         document.getElementById('resetNewPasswordInput').value = '';
+        resetPasswordVisibility('resetNewPasswordInput');
         document.getElementById('resetUserModal').classList.remove('hidden');
     }
     function closeResetUserModal() { document.getElementById('resetUserModal').classList.add('hidden'); }

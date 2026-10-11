@@ -806,8 +806,13 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">New Password</label>
-                    <input type="password" name="new_password" required placeholder="Enter new password..."
-                           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <div class="relative">
+                        <input type="password" id="masterNewPassInput" name="new_password" required placeholder="Enter new password..."
+                               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 pr-10 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button type="button" onclick="const p=document.getElementById('masterNewPassInput');const i=this.querySelector('i');if(p.type==='password'){p.type='text';i.className='fa-solid fa-eye-slash text-xs';}else{p.type='password';i.className='fa-solid fa-eye text-xs';}" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                            <i class="fa-solid fa-eye text-xs"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="pt-2">
