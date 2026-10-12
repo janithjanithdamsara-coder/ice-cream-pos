@@ -204,7 +204,7 @@ $stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, COALESCE(p
     FROM products p
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ?
     WHERE p.status = 'active'
-    ORDER BY p.name ASC");
+    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.code ASC, p.name ASC");
 $stmt->execute([$branchId]);
 $availableProducts = $stmt->fetchAll();
 

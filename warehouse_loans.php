@@ -347,7 +347,7 @@ $stmtProd = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quan
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
     WHERE p.status = 'active'
-    ORDER BY p.code ASC, p.name ASC");
+    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.code ASC, p.name ASC");
 $stmtProd->execute([$branchId]);
 $products = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
 

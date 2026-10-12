@@ -192,7 +192,7 @@ $stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, p.unit, p.
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ?
     WHERE p.status = 'active'
-    ORDER BY p.name ASC");
+    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.name ASC");
 $stmt->execute([$branchId]);
 $products = $stmt->fetchAll();
 
@@ -689,6 +689,10 @@ body.pos-sidebar-collapsed .print-full-width {
                     <button type="button" onclick="setCategoryFilter('all', this)" 
                             class="cat-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-2xs transition cursor-pointer">
                         All
+                    </button>
+                    <button type="button" onclick="toggleInStockOnly(this)" id="inStockOnlyBtn"
+                            class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold whitespace-nowrap bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition cursor-pointer flex items-center shrink-0">
+                        <i class="fa-solid fa-box-open mr-1 text-emerald-600"></i> In-Stock Only
                     </button>
                     <?php foreach ($categories as $cat): ?>
                     <button type="button" onclick="setCategoryFilter('<?= $cat['id'] ?>', this)" 
@@ -1657,6 +1661,20 @@ function clearPosSearch() {
     }
 }
 
+let inStockOnly = false;
+
+function toggleInStockOnly(btn) {
+    inStockOnly = !inStockOnly;
+    if (inStockOnly) {
+        btn.classList.remove('bg-emerald-50', 'text-emerald-800');
+        btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-600', 'shadow-xs');
+    } else {
+        btn.classList.add('bg-emerald-50', 'text-emerald-800');
+        btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-600', 'shadow-xs');
+    }
+    filterProducts();
+}
+
 function filterProducts() {
     const input = document.getElementById('posSearchInput');
     const query = input ? (input.value || '') : '';
@@ -1676,12 +1694,14 @@ function filterProducts() {
         const code = card.getAttribute('data-code') || '';
         const flavor = card.getAttribute('data-flavor') || '';
         const cat = card.getAttribute('data-cat');
+        const stock = parseInt(card.getAttribute('data-stock') || '0', 10);
 
         const fullText = (name + ' ' + code + ' ' + flavor).toLowerCase();
         const matchesQuery = smartMatch(fullText, query);
         const matchesCategory = activeCategory === 'all' || cat === activeCategory;
+        const matchesStock = !inStockOnly || stock > 0;
 
-        if (matchesQuery && matchesCategory) {
+        if (matchesQuery && matchesCategory && matchesStock) {
             card.style.display = 'flex';
         } else {
             card.style.display = 'none';
