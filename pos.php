@@ -449,26 +449,140 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 <?php endif; ?>
 
+<!-- ========================= SCOPED POS VIEWPORT & SCROLL STYLES ========================= -->
+<style>
+@media (min-width: 1024px) {
+    /* Prevent page body scroll on POS screen so only product catalog and slip items scroll independently */
+    html, body {
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+    .print-full-width {
+        height: 100vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    main {
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding: 0.75rem 1.25rem 0.5rem 1.25rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .pos-screen-wrapper {
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        padding-bottom: 0 !important;
+    }
+    .pos-main-grid {
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
+        display: grid !important;
+        grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+        gap: 1.25rem !important;
+        overflow: hidden !important;
+    }
+    .pos-catalog-column {
+        grid-column: span 7 / span 7 !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+    @media (min-width: 1280px) {
+        .pos-catalog-column {
+            grid-column: span 8 / span 8 !important;
+        }
+        .pos-cart-column {
+            grid-column: span 4 / span 4 !important;
+        }
+    }
+    .pos-cart-column {
+        grid-column: span 5 / span 5 !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+    .pos-products-scroll {
+        flex: 1 1 0% !important;
+        overflow-y: auto !important;
+        min-height: 0 !important;
+        padding-right: 0.35rem;
+    }
+    .pos-cart-card {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+    .pos-cart-items-scroll {
+        flex: 1 1 0% !important;
+        overflow-y: auto !important;
+        min-height: 0 !important;
+    }
+}
+
+/* Sleek custom scrollbars for POS */
+.pos-products-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.pos-products-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+.pos-products-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
+}
+.pos-products-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.pos-cart-items-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+.pos-cart-items-scroll::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 8px;
+}
+.pos-cart-items-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
+}
+.pos-cart-items-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+</style>
+
 <!-- ========================= SCREEN INTERFACE ========================= -->
-<div class="no-print pb-8">
+<div class="pos-screen-wrapper no-print pb-8">
 
     <!-- Top Sub-Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-200">
+    <div class="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 mb-2.5 border-b border-slate-200">
         <div>
-            <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center">
-                <span class="w-10 h-10 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mr-3 shadow-inner">
-                    <i class="fa-solid fa-cash-register text-lg"></i>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center">
+                <span class="w-9 h-9 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mr-2.5 shadow-inner">
+                    <i class="fa-solid fa-cash-register text-base sm:text-lg"></i>
                 </span>
                 Counter Stock Issue POS
             </h1>
-            <p class="text-xs text-slate-500 mt-1">
+            <p class="text-[11px] text-slate-500 mt-0.5">
                 Touchscreen counter for walk-in stock pickups &bull; <strong>Boxes (පෙට්ටි) &amp; Pieces (කෑලි) with Optional Bill Totals</strong>
             </p>
         </div>
 
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-2 shrink-0">
             <button type="button" onclick="toggleRecentDrawer()" 
-                    class="px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shadow-xs transition flex items-center">
+                    class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shadow-xs transition flex items-center cursor-pointer">
                 <i class="fa-solid fa-clock-rotate-left mr-1.5 text-cyan-600"></i> Today's Slips (<?= count($recentList) ?>)
             </button>
         </div>
@@ -476,9 +590,9 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Active Slip Print Banner (If just checked out) -->
     <?php if ($printDispatch): ?>
-    <div class="mb-5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in zoom-in-95">
+    <div class="shrink-0 mb-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-3 sm:p-3.5 text-white shadow-md flex flex-col sm:flex-row items-center justify-between gap-2.5 animate-in fade-in zoom-in-95">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shrink-0">
+            <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg shrink-0">
                 <i class="fa-solid fa-check"></i>
             </div>
             <div>
@@ -495,20 +609,20 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         </div>
         <div class="flex items-center space-x-2 shrink-0">
-            <button type="button" onclick="showReceiptModal()" class="px-3 py-2 bg-emerald-700/80 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow transition">
+            <button type="button" onclick="showReceiptModal()" class="px-3 py-1.5 bg-emerald-700/80 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer">
                 <i class="fa-solid fa-eye mr-1"></i> Preview Slip
             </button>
-            <button type="button" onclick="window.print()" class="px-4 py-2 bg-white text-emerald-800 text-xs font-black rounded-xl shadow-md hover:bg-emerald-50 transition">
+            <button type="button" onclick="window.print()" class="px-3.5 py-1.5 bg-white text-emerald-800 text-xs font-black rounded-xl shadow-md hover:bg-emerald-50 transition cursor-pointer">
                 <i class="fa-solid fa-print mr-1"></i> Print Slip
             </button>
-            <a href="pos.php" class="px-3 py-2 bg-emerald-700/60 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
+            <a href="pos.php" class="px-3 py-1.5 bg-emerald-700/60 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">
                 <i class="fa-solid fa-xmark mr-1"></i> Dismiss
             </a>
         </div>
     </div>
     <?php endif; ?>
 
-    <!-- Floating Mobile Cart Bar (Sticky above bottom nav) -->
+    <!-- Floating Mobile Cart Bar (Sticky above bottom nav on mobile screens) -->
     <div id="mobileCartFloatingBar" onclick="scrollToCart()" class="hidden lg:hidden fixed bottom-[76px] inset-x-3 z-30 bg-slate-900/95 text-white p-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center justify-between backdrop-blur-md transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-2">
         <div class="flex items-center space-x-2.5">
             <div class="w-8 h-8 rounded-xl bg-cyan-500 text-white flex items-center justify-center font-bold text-xs shadow-md">
@@ -526,126 +640,128 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Main Two-Column Layout (Products Grid + Cart) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+    <div class="pos-main-grid grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
         
         <!-- LEFT COLUMN: Product Catalog & Search (Col 7 / 8) -->
-        <div class="lg:col-span-7 xl:col-span-8 space-y-4">
+        <div class="pos-catalog-column lg:col-span-7 xl:col-span-8 flex flex-col min-h-0 h-full overflow-hidden space-y-2.5">
             
-            <!-- Sticky Search & Filter Bar -->
-            <div class="sticky top-20 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center gap-3">
+            <!-- Pinned Search & Filter Bar (Never scrolls on desktop) -->
+            <div class="shrink-0 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-2.5">
                 <div class="relative flex-1 w-full">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input type="text" id="posSearchInput" oninput="filterProducts()" 
                            placeholder="Search ice cream flavor, name, or code..." 
-                           class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition">
+                           class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition">
                 </div>
 
                 <!-- Category Pills -->
                 <div class="flex items-center space-x-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                     <button type="button" onclick="setCategoryFilter('all', this)" 
-                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-xs transition">
+                            class="cat-filter-btn px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-xs transition cursor-pointer">
                         All
                     </button>
                     <?php foreach ($categories as $cat): ?>
                     <button type="button" onclick="setCategoryFilter('<?= $cat['id'] ?>', this)" 
-                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                            class="cat-filter-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer">
                         <?= htmlspecialchars($cat['name']) ?>
                     </button>
                     <?php endforeach; ?>
                 </div>
             </div>
 
-            <!-- Product Cards Grid -->
-            <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                <?php if (empty($products)): ?>
-                <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
-                    <i class="fa-solid fa-boxes-stacked text-3xl text-slate-300 mb-2 block"></i>
-                    No ice cream products available in the catalog.<br>
-                    <a href="stock.php" class="text-cyan-600 font-bold hover:underline text-xs mt-2 inline-block">Go to Stock & Warehouse to add products</a>
-                </div>
-                <?php else: ?>
-                <?php foreach ($products as $p): 
-                    $pStock = intval($p['stock'] ?? 0);
-                    $inStock = $pStock > 0;
-                    $packSize = max(1, intval($p['pack_size'] ?? 24));
-                    $boxCount = floor($pStock / $packSize);
-                    $pcsCount = $pStock % $packSize;
-                ?>
-                <div class="product-card group relative bg-white rounded-2xl border p-3.5 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none <?= $inStock ? 'border-slate-200 hover:border-cyan-400 hover:shadow-md active:scale-95' : 'border-slate-200/60 opacity-60 bg-slate-50/50 cursor-not-allowed' ?>"
-                     data-id="<?= $p['id'] ?>"
-                     data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>"
-                     data-code="<?= htmlspecialchars(strtolower($p['code'])) ?>"
-                     data-flavor="<?= htmlspecialchars(strtolower($p['flavor'] ?? '')) ?>"
-                     data-cat="<?= $p['category_id'] ?>"
-                     data-stock="<?= $pStock ?>"
-                     data-pack="<?= $packSize ?>"
-                     data-price="<?= $p['selling_price'] ?>"
-                     onclick="handleCardClick(<?= $p['id'] ?>, <?= $inStock ? 'true' : 'false' ?>)">
-                    
-                    <div>
-                        <!-- Header with Flavor & Code -->
-                        <div class="flex items-center justify-between mb-2 gap-1 flex-wrap">
-                            <span class="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                                <?= htmlspecialchars($p['code']) ?>
-                            </span>
-                            <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full <?= $inStock ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 'bg-rose-50 text-rose-600 border border-rose-200/50' ?>">
-                                <?php if ($inStock): ?>
-                                    <?php if ($boxCount > 0 && $pcsCount > 0): ?>
-                                        📦 <?= $boxCount ?> Bx + 🍦 <?= $pcsCount ?> Pcs
-                                    <?php elseif ($boxCount > 0): ?>
-                                        📦 <?= $boxCount ?> Boxes (<?= number_format($pStock) ?>)
-                                    <?php else: ?>
-                                        🍦 <?= $pcsCount ?> Loose Pcs
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    Out of Stock
-                                <?php endif; ?>
-                            </span>
-                        </div>
-
-                        <!-- Product Title & Info -->
-                        <h4 class="text-xs sm:text-sm font-extrabold text-slate-800 group-hover:text-cyan-600 transition leading-snug">
-                            <?= htmlspecialchars($p['name']) ?>
-                        </h4>
-                        <div class="text-[11px] text-slate-500 mt-1 flex items-center space-x-1">
-                            <span class="font-medium text-slate-600"><?= htmlspecialchars($p['flavor'] ?: 'Standard') ?></span>
-                            <span>&bull;</span>
-                            <span><?= htmlspecialchars($p['size'] ?: 'Standard') ?></span>
-                        </div>
+            <!-- Product Cards Scroll Container (ONLY this scrolls on catalog side) -->
+            <div class="pos-products-scroll flex-1 min-h-0 overflow-y-auto pr-1">
+                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 pb-6">
+                    <?php if (empty($products)): ?>
+                    <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+                        <i class="fa-solid fa-boxes-stacked text-3xl text-slate-300 mb-2 block"></i>
+                        No ice cream products available in the catalog.<br>
+                        <a href="stock.php" class="text-cyan-600 font-bold hover:underline text-xs mt-2 inline-block">Go to Stock & Warehouse to add products</a>
                     </div>
+                    <?php else: ?>
+                    <?php foreach ($products as $p): 
+                        $pStock = intval($p['stock'] ?? 0);
+                        $inStock = $pStock > 0;
+                        $packSize = max(1, intval($p['pack_size'] ?? 24));
+                        $boxCount = floor($pStock / $packSize);
+                        $pcsCount = $pStock % $packSize;
+                    ?>
+                    <div class="product-card group relative bg-white rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none <?= $inStock ? 'border-slate-200 hover:border-cyan-400 hover:shadow-md active:scale-95' : 'border-slate-200/60 opacity-60 bg-slate-50/50 cursor-not-allowed' ?>"
+                         data-id="<?= $p['id'] ?>"
+                         data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>"
+                         data-code="<?= htmlspecialchars(strtolower($p['code'])) ?>"
+                         data-flavor="<?= htmlspecialchars(strtolower($p['flavor'] ?? '')) ?>"
+                         data-cat="<?= $p['category_id'] ?>"
+                         data-stock="<?= $pStock ?>"
+                         data-pack="<?= $packSize ?>"
+                         data-price="<?= $p['selling_price'] ?>"
+                         onclick="handleCardClick(<?= $p['id'] ?>, <?= $inStock ? 'true' : 'false' ?>)">
+                        
+                        <div>
+                            <!-- Header with Flavor & Code -->
+                            <div class="flex items-center justify-between mb-1.5 gap-1 flex-wrap">
+                                <span class="text-[9px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    <?= htmlspecialchars($p['code']) ?>
+                                </span>
+                                <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full <?= $inStock ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 'bg-rose-50 text-rose-600 border border-rose-200/50' ?>">
+                                    <?php if ($inStock): ?>
+                                        <?php if ($boxCount > 0 && $pcsCount > 0): ?>
+                                            📦 <?= $boxCount ?> Bx + 🍦 <?= $pcsCount ?> Pcs
+                                        <?php elseif ($boxCount > 0): ?>
+                                            📦 <?= $boxCount ?> Bx (<?= number_format($pStock) ?>)
+                                        <?php else: ?>
+                                            🍦 <?= $pcsCount ?> Pcs
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        Out of Stock
+                                    <?php endif; ?>
+                                </span>
+                            </div>
 
-                    <!-- Pack Size & Selling Price Badge -->
-                    <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <div class="flex items-center space-x-1.5 flex-wrap">
-                            <span class="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center" title="Default Box Size">
-                                <i class="fa-solid fa-box mr-1 text-[9px]"></i> <?= $packSize ?>/box
+                            <!-- Product Title & Info -->
+                            <h4 class="text-xs sm:text-[13px] font-extrabold text-slate-800 group-hover:text-cyan-600 transition leading-snug">
+                                <?= htmlspecialchars($p['name']) ?>
+                            </h4>
+                            <div class="text-[10px] text-slate-500 mt-0.5 flex items-center space-x-1">
+                                <span class="font-medium text-slate-600"><?= htmlspecialchars($p['flavor'] ?: 'Standard') ?></span>
+                                <span>&bull;</span>
+                                <span><?= htmlspecialchars($p['size'] ?: 'Standard') ?></span>
+                            </div>
+                        </div>
+
+                        <!-- Pack Size & Selling Price Badge -->
+                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <div class="flex items-center space-x-1.5 flex-wrap">
+                                <span class="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center" title="Default Box Size">
+                                    <i class="fa-solid fa-box mr-1 text-[8px]"></i> <?= $packSize ?>/bx
+                                </span>
+                                <?php if ($p['selling_price'] > 0): ?>
+                                <span class="text-[10px] font-semibold text-slate-600">
+                                    Rs. <?= number_format($p['selling_price'], 0) ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($inStock): ?>
+                            <span class="w-6 h-6 rounded-lg bg-cyan-50 group-hover:bg-cyan-600 group-hover:text-white text-cyan-600 flex items-center justify-center text-xs font-bold transition shadow-xs">
+                                <i class="fa-solid fa-plus text-[10px]"></i>
                             </span>
-                            <?php if ($p['selling_price'] > 0): ?>
-                            <span class="text-[10px] font-semibold text-slate-600">
-                                Rs. <?= number_format($p['selling_price'], 0) ?>
-                            </span>
+                            <?php else: ?>
+                            <span class="text-[9px] font-bold text-rose-500">Empty</span>
                             <?php endif; ?>
                         </div>
-                        <?php if ($inStock): ?>
-                        <span class="w-7 h-7 rounded-xl bg-cyan-50 group-hover:bg-cyan-600 group-hover:text-white text-cyan-600 flex items-center justify-center text-xs font-bold transition shadow-xs">
-                            <i class="fa-solid fa-plus"></i>
-                        </span>
-                        <?php else: ?>
-                        <span class="text-[10px] font-bold text-rose-500">Empty</span>
-                        <?php endif; ?>
                     </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
             </div>
         </div>
 
-        <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Col 5 / 4) -->
-        <div id="posCartContainer" class="lg:col-span-5 xl:col-span-4 sticky top-20 z-10">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col overflow-hidden lg:max-h-[calc(100vh-6rem)]">
+        <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Col 5 / 4) (100% FIXED ON DESKTOP) -->
+        <div id="posCartContainer" class="pos-cart-column lg:col-span-5 xl:col-span-4 flex flex-col min-h-0 h-full overflow-hidden">
+            <div class="pos-cart-card bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col h-full min-h-0 overflow-hidden">
                 
                 <!-- Cart Header (Fixed at top of slip) -->
-                <div class="p-3.5 sm:p-4 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div class="p-3 sm:p-3.5 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between shrink-0">
                     <div class="flex items-center space-x-2.5">
                         <div class="w-8 h-8 rounded-xl bg-cyan-500 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-900/40">
                             <i class="fa-solid fa-file-invoice"></i>
@@ -656,13 +772,13 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                     </div>
 
-                    <button type="button" onclick="clearCart()" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition" title="Clear Cart">
+                    <button type="button" onclick="clearCart()" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition cursor-pointer" title="Clear Cart">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
 
                 <!-- Recipient Info Input (Compact shrink-0) -->
-                <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-100 shrink-0">
+                <div class="px-3.5 py-2 bg-slate-50 border-b border-slate-100 shrink-0">
                     <div class="relative">
                         <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                         <input type="text" id="recipientInput" value="Counter Walk-in Pickup" 
@@ -671,13 +787,13 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <!-- Cart Items Scroll List (flex-1 overflow-y-auto - scrolls smoothly inside!) -->
-                <div id="cartItemsList" class="p-3 overflow-y-auto flex-1 min-h-[130px] max-h-[40vh] lg:max-h-none space-y-2.5 scrollbar-thin">
+                <!-- Cart Items Scroll List (pos-cart-items-scroll - scrolls smoothly inside!) -->
+                <div id="cartItemsList" class="pos-cart-items-scroll p-3 overflow-y-auto flex-1 min-h-[120px] space-y-2">
                     <!-- Populated dynamically via JavaScript -->
                 </div>
 
                 <!-- Empty Cart State -->
-                <div id="cartEmptyState" class="py-8 px-4 text-center text-slate-400 my-auto">
+                <div id="cartEmptyState" class="py-8 px-4 text-center text-slate-400 my-auto flex-1 flex flex-col items-center justify-center">
                     <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-300 flex items-center justify-center mx-auto mb-2 text-lg">
                         <i class="fa-solid fa-basket-shopping"></i>
                     </div>
@@ -697,7 +813,7 @@ require_once __DIR__ . '/includes/header.php';
                         </span>
                     </button>
 
-                    <div id="extraChargesContent" class="hidden px-3.5 pb-3 pt-1 space-y-2 border-t border-slate-200/60">
+                    <div id="extraChargesContent" class="hidden px-3.5 pb-2.5 pt-1 space-y-2 border-t border-slate-200/60">
                         <!-- Extra Amount (Rigifoam Box, Delivery, Packing) -->
                         <div class="grid grid-cols-12 gap-2 items-center">
                             <div class="col-span-7">
@@ -714,13 +830,13 @@ require_once __DIR__ . '/includes/header.php';
                         <!-- Quick buttons for common Rigifoam Ice Box charges -->
                         <div class="flex items-center space-x-1.5">
                             <span class="text-[10px] text-slate-400 font-bold">Quick:</span>
-                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Small)', 250)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
+                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Small)', 250)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition cursor-pointer">
                                 + Rs.250 Box
                             </button>
-                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Large)', 350)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition">
+                            <button type="button" onclick="setQuickExtra('Rigifoam Box (Large)', 350)" class="px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:border-cyan-400 text-[10px] font-bold text-slate-600 transition cursor-pointer">
                                 + Rs.350 Box
                             </button>
-                            <button type="button" onclick="clearExtra()" class="px-1.5 py-0.5 rounded-lg text-[10px] text-rose-500 hover:text-rose-700 transition" title="Clear Extra">
+                            <button type="button" onclick="clearExtra()" class="px-1.5 py-0.5 rounded-lg text-[10px] text-rose-500 hover:text-rose-700 transition cursor-pointer" title="Clear Extra">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
@@ -731,7 +847,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                     Total Bill Value (Rs.)
                                 </label>
-                                <button type="button" onclick="autoCalculateBillTotal()" class="text-[10px] font-bold text-cyan-600 hover:text-cyan-800 hover:underline">
+                                <button type="button" onclick="autoCalculateBillTotal()" class="text-[10px] font-bold text-cyan-600 hover:text-cyan-800 hover:underline cursor-pointer">
                                     <i class="fa-solid fa-calculator mr-0.5"></i> Calc from Prices
                                 </button>
                             </div>
@@ -744,8 +860,8 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <!-- Cart Footer Summary (ALWAYS pinned at the bottom of the card!) -->
-                <div class="p-3.5 sm:p-4 bg-white border-t border-slate-100 shrink-0 space-y-2.5">
+                <!-- Cart Footer Summary (ALWAYS PINNED AND FIXED AT BOTTOM) -->
+                <div class="p-3 sm:p-3.5 bg-white border-t border-slate-100 shrink-0 space-y-2">
                     <div class="space-y-1">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Units to Deduct:</span>
@@ -758,7 +874,7 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
 
                     <!-- Over-Stock Alert Banner -->
-                    <div id="cartStockWarning" class="p-2.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs font-bold hidden flex items-start space-x-2 animate-in fade-in">
+                    <div id="cartStockWarning" class="p-2 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs font-bold hidden flex items-start space-x-2 animate-in fade-in">
                         <i class="fa-solid fa-triangle-exclamation text-rose-600 mt-0.5 text-xs shrink-0"></i>
                         <div class="leading-tight flex-1">
                             <div class="font-black text-rose-900 text-[11px]">තොග සීමාව ඉක්මවූ අයිතම ඇත!</div>
