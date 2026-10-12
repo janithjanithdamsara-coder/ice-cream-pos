@@ -467,7 +467,7 @@ require_once __DIR__ . '/includes/header.php';
         flex: 1 1 0% !important;
         min-height: 0 !important;
         overflow: hidden !important;
-        padding: 0.75rem 1.25rem 0.5rem 1.25rem !important;
+        padding: 0.75rem 1rem 0.5rem 1rem !important;
         display: flex !important;
         flex-direction: column !important;
     }
@@ -479,36 +479,28 @@ require_once __DIR__ . '/includes/header.php';
         overflow: hidden !important;
         padding-bottom: 0 !important;
     }
-    .pos-main-grid {
+    .pos-main-container {
         flex: 1 1 0% !important;
         min-height: 0 !important;
-        display: grid !important;
-        grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+        display: flex !important;
+        flex-direction: row !important;
         gap: 1.25rem !important;
         overflow: hidden !important;
     }
     .pos-catalog-column {
-        grid-column: span 7 / span 7 !important;
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
         height: 100% !important;
         display: flex !important;
         flex-direction: column !important;
-        min-height: 0 !important;
         overflow: hidden !important;
     }
-    @media (min-width: 1280px) {
-        .pos-catalog-column {
-            grid-column: span 8 / span 8 !important;
-        }
-        .pos-cart-column {
-            grid-column: span 4 / span 4 !important;
-        }
-    }
     .pos-cart-column {
-        grid-column: span 5 / span 5 !important;
+        width: 380px !important;
+        flex-shrink: 0 !important;
         height: 100% !important;
         display: flex !important;
         flex-direction: column !important;
-        min-height: 0 !important;
         overflow: hidden !important;
     }
     .pos-products-scroll {
@@ -528,6 +520,12 @@ require_once __DIR__ . '/includes/header.php';
         flex: 1 1 0% !important;
         overflow-y: auto !important;
         min-height: 0 !important;
+    }
+}
+
+@media (min-width: 1440px) {
+    .pos-cart-column {
+        width: 410px !important;
     }
 }
 
@@ -639,11 +637,11 @@ require_once __DIR__ . '/includes/header.php';
         </button>
     </div>
 
-    <!-- Main Two-Column Layout (Products Grid + Cart) -->
-    <div class="pos-main-grid grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
+    <!-- Main Two-Column Layout (Products Grid + Cart) Pure Flexbox Side-by-Side -->
+    <div class="pos-main-container flex flex-col lg:flex-row gap-4 items-stretch h-full min-h-0 overflow-hidden">
         
-        <!-- LEFT COLUMN: Product Catalog & Search (Col 7 / 8) -->
-        <div class="pos-catalog-column lg:col-span-7 xl:col-span-8 flex flex-col min-h-0 h-full overflow-hidden space-y-2.5">
+        <!-- LEFT COLUMN: Product Catalog & Search (Flexible width, fills all remaining space) -->
+        <div class="pos-catalog-column flex-1 min-w-0 flex flex-col h-full overflow-hidden space-y-2">
             
             <!-- Pinned Search & Filter Bar (Separate Distinct Rows) -->
             <div class="shrink-0 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs space-y-2">
@@ -676,7 +674,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Product Cards Scroll Container (ONLY this scrolls on catalog side) -->
             <div class="pos-products-scroll flex-1 min-h-0 overflow-y-auto pr-1">
-                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 pb-6">
+                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 pb-6">
                     <?php if (empty($products)): ?>
                     <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                         <i class="fa-solid fa-boxes-stacked text-3xl text-slate-300 mb-2 block"></i>
@@ -761,8 +759,8 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         </div>
 
-        <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Col 5 / 4) (100% FIXED ON DESKTOP) -->
-        <div id="posCartContainer" class="pos-cart-column lg:col-span-5 xl:col-span-4 flex flex-col min-h-0 h-full overflow-hidden">
+        <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Pinned Fixed-Width Slip) -->
+        <div id="posCartContainer" class="pos-cart-column w-full lg:w-[380px] xl:w-[410px] shrink-0 flex flex-col h-full min-h-0 overflow-hidden">
             <div class="pos-cart-card bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col h-full min-h-0 overflow-hidden">
                 
                 <!-- Cart Header (Fixed at top of slip) -->
