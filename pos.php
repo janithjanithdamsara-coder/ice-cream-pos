@@ -451,6 +451,32 @@ require_once __DIR__ . '/includes/header.php';
 
 <!-- ========================= SCOPED POS VIEWPORT & SCROLL STYLES ========================= -->
 <style>
+/* Always hide website footer and floating button on POS screen for maximum vertical space */
+footer, #floatingSupportBtn {
+    display: none !important;
+}
+
+/* Compact global top navbar on POS */
+header.no-print {
+    height: 48px !important;
+}
+header.no-print > div {
+    height: 48px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Smooth transition for Collapsible Cashier Mode */
+aside#mainSidebar, .print-full-width {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+body.pos-sidebar-collapsed aside#mainSidebar {
+    transform: translateX(-100%) !important;
+}
+body.pos-sidebar-collapsed .print-full-width {
+    padding-left: 0 !important;
+}
+
 @media (min-width: 1024px) {
     /* Prevent page body scroll on POS screen so only product catalog and slip items scroll independently */
     html, body {
@@ -467,7 +493,7 @@ require_once __DIR__ . '/includes/header.php';
         flex: 1 1 0% !important;
         min-height: 0 !important;
         overflow: hidden !important;
-        padding: 0.75rem 1rem 0.5rem 1rem !important;
+        padding: 0.35rem 0.75rem 0.25rem 0.75rem !important;
         display: flex !important;
         flex-direction: column !important;
     }
@@ -484,7 +510,7 @@ require_once __DIR__ . '/includes/header.php';
         min-height: 0 !important;
         display: flex !important;
         flex-direction: row !important;
-        gap: 1.25rem !important;
+        gap: 0.85rem !important;
         overflow: hidden !important;
     }
     .pos-catalog-column {
@@ -496,7 +522,7 @@ require_once __DIR__ . '/includes/header.php';
         overflow: hidden !important;
     }
     .pos-cart-column {
-        width: 380px !important;
+        width: 410px !important;
         flex-shrink: 0 !important;
         height: 100% !important;
         display: flex !important;
@@ -525,7 +551,7 @@ require_once __DIR__ . '/includes/header.php';
 
 @media (min-width: 1440px) {
     .pos-cart-column {
-        width: 410px !important;
+        width: 440px !important;
     }
 }
 
@@ -564,23 +590,24 @@ require_once __DIR__ . '/includes/header.php';
 <!-- ========================= SCREEN INTERFACE ========================= -->
 <div class="pos-screen-wrapper no-print pb-8">
 
-    <!-- Top Sub-Header -->
-    <div class="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 mb-2.5 border-b border-slate-200">
-        <div>
-            <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center">
-                <span class="w-9 h-9 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mr-2.5 shadow-inner">
-                    <i class="fa-solid fa-cash-register text-base sm:text-lg"></i>
-                </span>
-                Counter Stock Issue POS
-            </h1>
-            <p class="text-[11px] text-slate-500 mt-0.5">
-                Touchscreen counter for walk-in stock pickups &bull; <strong>Boxes (පෙට්ටි) &amp; Pieces (කෑලි) with Optional Bill Totals</strong>
-            </p>
+    <!-- Top Sub-Header (Ultra-Compact Single Row) -->
+    <div class="shrink-0 flex items-center justify-between py-1 px-1 mb-1.5 border-b border-slate-200">
+        <div class="flex items-center space-x-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/10 text-cyan-600 flex items-center justify-center text-xs shadow-2xs">
+                <i class="fa-solid fa-cash-register"></i>
+            </span>
+            <h1 class="text-xs sm:text-sm font-black text-slate-800 tracking-tight">Counter Stock Issue POS</h1>
+            <span class="hidden md:inline text-[10px] text-slate-400 font-medium">&bull; Boxes (පෙට්ටි) &amp; Pieces (කෑලි)</span>
         </div>
 
-        <div class="flex items-center space-x-2 shrink-0">
+        <div class="flex items-center space-x-1.5 shrink-0">
+            <button type="button" onclick="toggleCashierSidebar()" id="cashierModeBtn"
+                    class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-cyan-50 hover:text-cyan-700 text-slate-700 text-xs font-bold transition flex items-center cursor-pointer border border-slate-200 shadow-2xs" title="Toggle Fullscreen Cashier Workspace">
+                <i id="cashierModeIcon" class="fa-solid fa-expand mr-1.5 text-cyan-600"></i>
+                <span id="cashierModeText" class="hidden sm:inline">Maximize</span>
+            </button>
             <button type="button" onclick="toggleRecentDrawer()" 
-                    class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shadow-xs transition flex items-center cursor-pointer">
+                    class="px-2.5 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shadow-2xs transition flex items-center cursor-pointer">
                 <i class="fa-solid fa-clock-rotate-left mr-1.5 text-cyan-600"></i> Today's Slips (<?= count($recentList) ?>)
             </button>
         </div>
@@ -643,29 +670,29 @@ require_once __DIR__ . '/includes/header.php';
         <!-- LEFT COLUMN: Product Catalog & Search (Flexible width, fills all remaining space) -->
         <div class="pos-catalog-column flex-1 min-w-0 flex flex-col h-full overflow-hidden space-y-2">
             
-            <!-- Pinned Search & Filter Bar (Separate Distinct Rows) -->
-            <div class="shrink-0 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+            <!-- Pinned Search & Filter Bar (Compact Distinct Rows) -->
+            <div class="shrink-0 bg-white/95 backdrop-blur-md p-2 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
                 <!-- Row 1: Full-Width Search Input with Clear Button -->
                 <div class="relative w-full">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input type="text" id="posSearchInput" oninput="filterProducts()" 
                            placeholder="Search ice cream flavor, name, or code..." 
-                           class="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white transition">
+                           class="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:bg-white transition">
                     <button type="button" id="clearSearchBtn" onclick="clearPosSearch()" 
-                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-xs transition cursor-pointer" title="Clear Search">
+                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 text-xs transition cursor-pointer" title="Clear Search">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
                 <!-- Row 2: Category Filter Pills with Smooth Horizontal Scroll -->
-                <div class="flex items-center space-x-1.5 overflow-x-auto w-full pb-0.5 scrollbar-thin">
+                <div class="flex items-center space-x-1 overflow-x-auto w-full pb-0.5 scrollbar-thin">
                     <button type="button" onclick="setCategoryFilter('all', this)" 
-                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-xs transition cursor-pointer">
+                            class="cat-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-2xs transition cursor-pointer">
                         All
                     </button>
                     <?php foreach ($categories as $cat): ?>
                     <button type="button" onclick="setCategoryFilter('<?= $cat['id'] ?>', this)" 
-                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer">
+                            class="cat-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer">
                         <?= htmlspecialchars($cat['name']) ?>
                     </button>
                     <?php endforeach; ?>
@@ -674,7 +701,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Product Cards Scroll Container (ONLY this scrolls on catalog side) -->
             <div class="pos-products-scroll flex-1 min-h-0 overflow-y-auto pr-1">
-                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 pb-6">
+                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-2 pb-4">
                     <?php if (empty($products)): ?>
                     <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                         <i class="fa-solid fa-boxes-stacked text-3xl text-slate-300 mb-2 block"></i>
@@ -760,18 +787,17 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Pinned Fixed-Width Slip) -->
-        <div id="posCartContainer" class="pos-cart-column w-full lg:w-[380px] xl:w-[410px] shrink-0 flex flex-col h-full min-h-0 overflow-hidden">
+        <div id="posCartContainer" class="pos-cart-column w-full lg:w-[410px] xl:w-[440px] shrink-0 flex flex-col h-full min-h-0 overflow-hidden">
             <div class="pos-cart-card bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col h-full min-h-0 overflow-hidden">
                 
-                <!-- Cart Header (Fixed at top of slip) -->
-                <div class="p-3 sm:p-3.5 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between shrink-0">
-                    <div class="flex items-center space-x-2.5">
-                        <div class="w-8 h-8 rounded-xl bg-cyan-500 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-900/40">
+                <!-- Cart Header (Fixed at top of slip - Compact) -->
+                <div class="px-3.5 py-2 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 rounded-lg bg-cyan-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
                             <i class="fa-solid fa-file-invoice"></i>
                         </div>
                         <div>
-                            <h3 class="text-xs sm:text-sm font-extrabold tracking-tight">Counter Issue Slip</h3>
-                            <p class="text-[10px] text-slate-400 font-medium">Boxes &amp; Loose Pieces &bull; Stock Outflow</p>
+                            <h3 class="text-xs font-black tracking-tight">Counter Issue Slip</h3>
                         </div>
                     </div>
 
@@ -781,17 +807,17 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <!-- Recipient Info Input (Compact shrink-0) -->
-                <div class="px-3.5 py-2 bg-slate-50 border-b border-slate-100 shrink-0">
+                <div class="px-3 py-1.5 bg-slate-50 border-b border-slate-100 shrink-0">
                     <div class="relative">
-                        <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <i class="fa-solid fa-user absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                         <input type="text" id="recipientInput" value="Counter Walk-in Pickup" 
                                placeholder="Recipient / Customer name..."
-                               class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                               class="w-full pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-500">
                     </div>
                 </div>
 
                 <!-- Cart Items Scroll List (pos-cart-items-scroll - scrolls smoothly inside!) -->
-                <div id="cartItemsList" class="pos-cart-items-scroll p-3 overflow-y-auto flex-1 min-h-[120px] space-y-2">
+                <div id="cartItemsList" class="pos-cart-items-scroll p-2.5 overflow-y-auto flex-1 min-h-[100px] space-y-1.5">
                     <!-- Populated dynamically via JavaScript -->
                 </div>
 
@@ -863,24 +889,24 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <!-- Cart Footer Summary (ALWAYS PINNED AND FIXED AT BOTTOM) -->
-                <div class="p-3 sm:p-3.5 bg-white border-t border-slate-100 shrink-0 space-y-2">
-                    <div class="space-y-1">
+                <!-- Cart Footer Summary (ALWAYS PINNED AND FIXED AT BOTTOM - Compact) -->
+                <div class="p-2.5 sm:p-3 bg-white border-t border-slate-100 shrink-0 space-y-1.5">
+                    <div class="space-y-0.5">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Units to Deduct:</span>
-                            <span id="cartTotalUnits" class="text-xl font-black font-mono text-cyan-700">0 Units</span>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Units to Deduct:</span>
+                            <span id="cartTotalUnits" class="text-lg font-black font-mono text-cyan-700">0 Units</span>
                         </div>
-                        <div id="cartEstimatedAmountRow" class="text-xs text-slate-700 font-bold hidden flex items-center justify-between border-t border-dashed border-slate-200 pt-1">
-                            <span class="text-slate-500">Estimated Total Bill:</span>
-                            <span id="cartEstimatedAmount" class="font-black font-mono text-emerald-700 text-sm">Rs. 0.00</span>
+                        <div id="cartEstimatedAmountRow" class="text-xs text-slate-700 font-bold hidden flex items-center justify-between border-t border-dashed border-slate-200 pt-0.5">
+                            <span class="text-slate-500 text-[11px]">Estimated Bill:</span>
+                            <span id="cartEstimatedAmount" class="font-black font-mono text-emerald-700 text-xs">Rs. 0.00</span>
                         </div>
                     </div>
 
                     <!-- Over-Stock Alert Banner -->
-                    <div id="cartStockWarning" class="p-2 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs font-bold hidden flex items-start space-x-2 animate-in fade-in">
+                    <div id="cartStockWarning" class="p-1.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 text-xs font-bold hidden flex items-start space-x-1.5">
                         <i class="fa-solid fa-triangle-exclamation text-rose-600 mt-0.5 text-xs shrink-0"></i>
                         <div class="leading-tight flex-1">
-                            <div class="font-black text-rose-900 text-[11px]">තොග සීමාව ඉක්මවූ අයිතම ඇත!</div>
+                            <div class="font-black text-rose-900 text-[10px]">තොග සීමාව ඉක්මවූ අයිතම ඇත!</div>
                             <div id="cartStockWarningDetail" class="text-[9px] text-rose-700 font-medium">
                                 Cold Room හි පවතින තොගයට වඩා වැඩි ප්‍රමාණයක් නිකුත් කල නොහැක.
                             </div>
@@ -898,8 +924,8 @@ require_once __DIR__ . '/includes/header.php';
                         <input type="hidden" name="cart_data" id="formCartData" value="[]">
 
                         <button type="button" onclick="submitPosCheckout()" id="checkoutBtn" disabled
-                                class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/30 active:scale-98 transition flex items-center justify-center space-x-2 cursor-pointer">
-                            <i class="fa-solid fa-receipt text-sm"></i>
+                                class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/30 active:scale-98 transition flex items-center justify-center space-x-2 cursor-pointer">
+                            <i class="fa-solid fa-receipt text-xs"></i>
                             <span>Issue Stock &amp; Print Slip</span>
                         </button>
                     </form>
@@ -1439,81 +1465,74 @@ function renderCart() {
         }
 
         html += `
-        <div class="p-3 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/40' : (isZeroQty ? 'border-amber-300 border-dashed bg-amber-50/40' : 'border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-cyan-300')} transition space-y-2">
-            <!-- Item Title & Delete -->
-            <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
+        <div class="p-2 sm:p-2.5 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/50' : (isZeroQty ? 'border-amber-300 border-dashed bg-amber-50/50' : 'border-slate-200/90 bg-slate-50/40 hover:bg-white hover:border-cyan-300')} transition space-y-1.5 shadow-2xs">
+            <!-- Line 1: Item Name, Flavor, Price & Delete -->
+            <div class="flex items-center justify-between gap-1.5">
+                <div class="min-w-0 flex-1">
                     <div class="text-xs font-black text-slate-800 leading-tight truncate">${escapeHtml(item.name)}</div>
-                    <div class="text-[10px] text-slate-500">${escapeHtml(item.flavor)} &bull; ${escapeHtml(item.size)}</div>
+                    <div class="text-[9px] text-slate-400 truncate flex items-center space-x-1.5">
+                        <span>${escapeHtml(item.flavor)}</span>
+                        <span>&bull;</span>
+                        <span class="text-slate-500 font-semibold">Store: ${item.stock} (${maxBoxes} Bx)</span>
+                    </div>
                 </div>
                 <div class="flex items-center space-x-1 shrink-0">
-                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" title="Available in Cold Room">
-                        Store: ${item.stock} (${maxBoxes} Bx + ${remPieces} Pcs)
+                    <span id="line_price_${item.id}" class="text-[11px] font-mono font-bold text-emerald-700 ${item.price > 0 ? '' : 'hidden'}">
+                        Rs. ${(item.qty * item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
-                    <button type="button" onclick="removeFromCart(${item.id})" class="text-slate-400 hover:text-rose-500 text-xs p-1 transition cursor-pointer" title="Remove from bill">
+                    <button type="button" onclick="removeFromCart(${item.id})" class="text-slate-300 hover:text-rose-500 text-xs p-1 transition cursor-pointer" title="Remove from bill">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
             </div>
 
-            <!-- Dual Inputs Grid: Boxes & Loose Pieces -->
-            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
-                <!-- Boxes Input -->
-                <div class="bg-amber-50/80 p-2 rounded-xl border border-amber-200/80 space-y-1">
-                    <div class="text-[10px] font-bold text-amber-900 flex items-center justify-between">
-                        <span>📦 Boxes (${item.packSize}/bx)</span>
-                    </div>
-                    <div class="flex items-center space-x-1">
-                        <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100 cursor-pointer">-</button>
+            <!-- Line 2: Dual Compact Steppers (Boxes & Loose Pieces in one sleek strip) -->
+            <div class="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-200/60">
+                <!-- Boxes Stepper -->
+                <div class="bg-amber-50/90 px-1.5 py-1 rounded-xl border border-amber-200 flex items-center justify-between space-x-1">
+                    <span class="text-[9px] font-black text-amber-900 shrink-0">📦 Bx (${item.packSize})</span>
+                    <div class="flex items-center space-x-0.5">
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-5 h-5 rounded-md bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-[10px] font-black hover:bg-amber-100 cursor-pointer">-</button>
                         <input type="number" min="0" value="${item.boxQty}" 
                                id="cart_box_${item.id}"
                                oninput="handleItemBoxInput(${item.id}, this)"
                                onblur="handleItemBlur(${item.id})"
-                               class="w-full text-center py-0.5 bg-white border border-amber-300 rounded-lg text-xs font-black font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                        <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100 cursor-pointer">+</button>
+                               class="w-10 text-center py-0 bg-transparent text-xs font-black font-mono text-amber-900 focus:outline-none">
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-5 h-5 rounded-md bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-[10px] font-black hover:bg-amber-100 cursor-pointer">+</button>
                     </div>
                 </div>
 
-                <!-- Loose Pieces Input -->
-                <div class="bg-cyan-50/80 p-2 rounded-xl border border-cyan-200/80 space-y-1">
-                    <div class="text-[10px] font-bold text-cyan-900 flex items-center justify-between">
-                        <span>🍦 Loose Pieces</span>
-                    </div>
-                    <div class="flex items-center space-x-1">
-                        <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100 cursor-pointer">-</button>
+                <!-- Loose Pieces Stepper -->
+                <div class="bg-cyan-50/90 px-1.5 py-1 rounded-xl border border-cyan-200 flex items-center justify-between space-x-1">
+                    <span class="text-[9px] font-black text-cyan-900 shrink-0">🍦 Pcs</span>
+                    <div class="flex items-center space-x-0.5">
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-5 h-5 rounded-md bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-[10px] font-black hover:bg-cyan-100 cursor-pointer">-</button>
                         <input type="number" min="0" value="${item.pcsQty}" 
                                id="cart_pcs_${item.id}"
                                oninput="handleItemPcsInput(${item.id}, this)"
                                onblur="handleItemBlur(${item.id})"
-                               class="w-full text-center py-0.5 bg-white border border-cyan-300 rounded-lg text-xs font-black font-mono text-cyan-900 focus:outline-none focus:ring-1 focus:ring-cyan-500">
-                        <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100 cursor-pointer">+</button>
+                               class="w-10 text-center py-0 bg-transparent text-xs font-black font-mono text-cyan-900 focus:outline-none">
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-5 h-5 rounded-md bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-[10px] font-black hover:bg-cyan-100 cursor-pointer">+</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Calculation Detail Badge -->
-            <div class="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
-                <div>
-                    <span class="font-bold text-slate-500">Line Units:</span>
-                    <span id="line_units_${item.id}" class="font-black font-mono ${isOverStock ? 'text-rose-600' : (isZeroQty ? 'text-amber-600' : 'text-slate-900')}">
-                        ${item.qty} Units
-                        ${item.boxQty > 0 && item.pcsQty > 0 ? `
-                            <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>
-                        ` : ''}
-                    </span>
-                </div>
-                ${item.price > 0 ? `
-                    <div id="line_price_${item.id}" class="font-mono font-bold text-emerald-700 text-xs">
-                        Rs. ${(item.qty * item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </div>
-                ` : ''}
+            <!-- Line 3: Compact Units Calculation -->
+            <div class="flex items-center justify-between pt-0.5 text-[10px]">
+                <span class="text-slate-400 font-medium">To deduct:</span>
+                <span id="line_units_${item.id}" class="font-black font-mono ${isOverStock ? 'text-rose-600' : (isZeroQty ? 'text-amber-600' : 'text-slate-800')}">
+                    ${item.qty} Units
+                    ${item.boxQty > 0 && item.pcsQty > 0 ? `
+                        <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize}+${item.pcsQty})</span>
+                    ` : ''}
+                </span>
             </div>
 
             <!-- Zero Quantity Warning Badge with Instant Remove -->
             ${isZeroQty ? `
-            <div class="p-1.5 bg-amber-100/90 border border-amber-300 rounded-xl text-[10px] text-amber-900 font-bold flex items-center justify-between animate-in fade-in">
-                <span>⚠️ 0 Units - කරුණාකර ප්‍රමාණයක් ඇතුලත් කරන්න</span>
-                <button type="button" onclick="removeFromCart(${item.id})" class="text-amber-800 hover:text-rose-600 text-[10px] font-black underline cursor-pointer">
+            <div class="p-1 bg-amber-100/90 border border-amber-300 rounded-lg text-[9px] text-amber-900 font-bold flex items-center justify-between animate-in fade-in">
+                <span>⚠️ 0 Units - අගයක් ඇතුලත් කරන්න</span>
+                <button type="button" onclick="removeFromCart(${item.id})" class="text-amber-800 hover:text-rose-600 font-black underline cursor-pointer">
                     Remove
                 </button>
             </div>
@@ -1521,9 +1540,9 @@ function renderCart() {
 
             <!-- Overstock Alert Row with One-Click Fix -->
             ${isOverStock ? `
-            <div class="p-1.5 bg-rose-100/80 border border-rose-300 rounded-xl text-[10px] text-rose-800 font-bold flex items-center justify-between animate-in fade-in">
-                <span>⚠️ Cold Room හි ඇත්තේ ${item.stock}ක් පමණි!</span>
-                <button type="button" onclick="adjustItemToMaxStock(${item.id})" class="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[9px] shadow-xs cursor-pointer">
+            <div class="p-1 bg-rose-100/80 border border-rose-300 rounded-lg text-[9px] text-rose-800 font-bold flex items-center justify-between animate-in fade-in">
+                <span>⚠️ තොගයේ ඇත්තේ ${item.stock}ක් පමණි!</span>
+                <button type="button" onclick="adjustItemToMaxStock(${item.id})" class="px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-black text-[9px] cursor-pointer">
                     ${item.stock}ට හදන්න
                 </button>
             </div>
@@ -1689,6 +1708,34 @@ function toggleRecentDrawer() {
     const drawer = document.getElementById('recentDrawer');
     drawer.classList.toggle('hidden');
 }
+
+function toggleCashierSidebar() {
+    document.body.classList.toggle('pos-sidebar-collapsed');
+    const isCollapsed = document.body.classList.contains('pos-sidebar-collapsed');
+    const icon = document.getElementById('cashierModeIcon');
+    const text = document.getElementById('cashierModeText');
+    if (icon) {
+        icon.className = isCollapsed ? 'fa-solid fa-compress mr-1.5 text-cyan-600' : 'fa-solid fa-expand mr-1.5 text-cyan-600';
+    }
+    if (text) {
+        text.innerText = isCollapsed ? 'Standard' : 'Maximize';
+    }
+    try {
+        localStorage.setItem('pos_sidebar_collapsed', isCollapsed ? '1' : '0');
+    } catch(e) {}
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        if (localStorage.getItem('pos_sidebar_collapsed') === '1') {
+            document.body.classList.add('pos-sidebar-collapsed');
+            const icon = document.getElementById('cashierModeIcon');
+            const text = document.getElementById('cashierModeText');
+            if (icon) icon.className = 'fa-solid fa-compress mr-1.5 text-cyan-600';
+            if (text) text.innerText = 'Standard';
+        }
+    } catch(e) {}
+});
 </script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
