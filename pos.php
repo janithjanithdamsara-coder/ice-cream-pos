@@ -645,24 +645,29 @@ require_once __DIR__ . '/includes/header.php';
         <!-- LEFT COLUMN: Product Catalog & Search (Col 7 / 8) -->
         <div class="pos-catalog-column lg:col-span-7 xl:col-span-8 flex flex-col min-h-0 h-full overflow-hidden space-y-2.5">
             
-            <!-- Pinned Search & Filter Bar (Never scrolls on desktop) -->
-            <div class="shrink-0 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center gap-2.5">
-                <div class="relative flex-1 w-full">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <!-- Pinned Search & Filter Bar (Separate Distinct Rows) -->
+            <div class="shrink-0 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                <!-- Row 1: Full-Width Search Input with Clear Button -->
+                <div class="relative w-full">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                     <input type="text" id="posSearchInput" oninput="filterProducts()" 
                            placeholder="Search ice cream flavor, name, or code..." 
-                           class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition">
+                           class="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white transition">
+                    <button type="button" id="clearSearchBtn" onclick="clearPosSearch()" 
+                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-xs transition cursor-pointer" title="Clear Search">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
 
-                <!-- Category Pills -->
-                <div class="flex items-center space-x-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+                <!-- Row 2: Category Filter Pills with Smooth Horizontal Scroll -->
+                <div class="flex items-center space-x-1.5 overflow-x-auto w-full pb-0.5 scrollbar-thin">
                     <button type="button" onclick="setCategoryFilter('all', this)" 
-                            class="cat-filter-btn px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-xs transition cursor-pointer">
+                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap bg-slate-900 text-white shadow-xs transition cursor-pointer">
                         All
                     </button>
                     <?php foreach ($categories as $cat): ?>
                     <button type="button" onclick="setCategoryFilter('<?= $cat['id'] ?>', this)" 
-                            class="cat-filter-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer">
+                            class="cat-filter-btn px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer">
                         <?= htmlspecialchars($cat['name']) ?>
                     </button>
                     <?php endforeach; ?>
@@ -1020,12 +1025,8 @@ function updateItemBoxQty(productId, delta) {
         return;
     }
 
-    if (newBoxQty === 0 && item.pcsQty === 0) {
-        delete cart[productId];
-    } else {
-        item.boxQty = newBoxQty;
-        item.qty = (item.boxQty * item.packSize) + item.pcsQty;
-    }
+    item.boxQty = newBoxQty;
+    item.qty = (item.boxQty * item.packSize) + item.pcsQty;
 
     renderCart();
 }
@@ -1042,12 +1043,8 @@ function updateItemPcsQty(productId, delta) {
         return;
     }
 
-    if (item.boxQty === 0 && newPcsQty === 0) {
-        delete cart[productId];
-    } else {
-        item.pcsQty = newPcsQty;
-        item.qty = (item.boxQty * item.packSize) + item.pcsQty;
-    }
+    item.pcsQty = newPcsQty;
+    item.qty = (item.boxQty * item.packSize) + item.pcsQty;
 
     renderCart();
 }
@@ -1059,7 +1056,8 @@ function updateItemLineDisplay(productId) {
     const lineUnitsElem = document.getElementById(`line_units_${productId}`);
     if (lineUnitsElem) {
         const isOver = item.qty > item.stock;
-        lineUnitsElem.className = `font-black font-mono ${isOver ? 'text-rose-600' : 'text-slate-900'}`;
+        const isZero = item.qty <= 0;
+        lineUnitsElem.className = `font-black font-mono ${isOver ? 'text-rose-600' : (isZero ? 'text-amber-600' : 'text-slate-900')}`;
         let formula = (item.boxQty > 0 && item.pcsQty > 0) 
             ? ` <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>` 
             : '';
@@ -1113,12 +1111,6 @@ function handleItemBlur(productId) {
     item.boxQty = Math.max(0, boxVal);
     item.pcsQty = Math.max(0, pcsVal);
     item.qty = (item.boxQty * item.packSize) + item.pcsQty;
-
-    if (item.boxQty === 0 && item.pcsQty === 0) {
-        delete cart[productId];
-        renderCart();
-        return;
-    }
 
     if (boxInput && boxInput.value === '') boxInput.value = item.boxQty;
     if (pcsInput && pcsInput.value === '') pcsInput.value = item.pcsQty;
@@ -1280,7 +1272,7 @@ function updateCartLiveStats() {
     let totalUnits = 0;
     let totalBoxes = 0;
     let hasOverStock = false;
-    let hasZeroTotal = false;
+    let hasZeroItem = false;
 
     itemKeys.forEach(key => {
         const item = cart[key];
@@ -1290,26 +1282,32 @@ function updateCartLiveStats() {
             hasOverStock = true;
         }
         if (item.qty <= 0) {
-            hasZeroTotal = true;
+            hasZeroItem = true;
         }
     });
 
     totalUnitsBadge.innerText = totalUnits.toLocaleString() + ' Units';
+    const mobileBarTotalUnits = document.getElementById('mobileBarTotalUnits');
+    if (mobileBarTotalUnits) mobileBarTotalUnits.innerText = totalUnits.toLocaleString() + ' Units';
 
     if (hasOverStock) {
         if (stockWarning) stockWarning.classList.remove('hidden');
         checkoutBtn.disabled = true;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
         checkoutBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-sm mr-1.5"></i> තොග සීමාව ඉක්මවා ඇත (Cannot Issue)';
-    } else if (hasZeroTotal || totalUnits <= 0) {
+    } else if (hasZeroItem || totalUnits <= 0) {
         if (stockWarning) stockWarning.classList.add('hidden');
         checkoutBtn.disabled = true;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-slate-300 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center space-x-2";
-        checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5"></i> Enter valid quantities';
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-slate-200/90 backdrop-blur-xs cursor-not-allowed text-slate-400 text-xs font-black uppercase tracking-wider border border-slate-300/40 shadow-none transition flex items-center justify-center space-x-2";
+        if (hasZeroItem && totalUnits > 0) {
+            checkoutBtn.innerHTML = '<i class="fa-solid fa-hand text-sm mr-1.5 text-amber-500"></i> Enter quantities (0 Units in cart)';
+        } else {
+            checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5 text-slate-400"></i> Enter valid quantities';
+        }
     } else {
         if (stockWarning) stockWarning.classList.add('hidden');
         checkoutBtn.disabled = false;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-cyan-600/20 active:scale-98 transition flex items-center justify-center space-x-2";
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/30 active:scale-98 transition flex items-center justify-center space-x-2 cursor-pointer";
         let btnText = `Issue Stock & Print Slip (${totalUnits.toLocaleString()} Units)`;
         if (totalBoxes > 0) {
             btnText = `Issue Stock (${totalBoxes} Bx / ${totalUnits.toLocaleString()} Units)`;
@@ -1334,19 +1332,24 @@ function submitPosCheckout() {
             cart[id].pcsQty = isNaN(pVal) ? 0 : Math.max(0, pVal);
         }
         cart[id].qty = (cart[id].boxQty * cart[id].packSize) + cart[id].pcsQty;
-        if (cart[id].qty <= 0) {
-            delete cart[id];
-        }
     });
 
-    const validItems = Object.values(cart).filter(it => it.qty > 0);
-    if (validItems.length === 0) {
-        showToast("Cart is empty or all item quantities are 0. Please enter valid quantities.", 'warning', 'Invalid Quantities');
+    const itemKeys = Object.keys(cart);
+    if (itemKeys.length === 0) {
+        showToast("Your cart is empty. Please tap an ice cream to add to slip.", 'warning', 'Cart Empty');
         renderCart();
         return;
     }
 
-    const totalUnits = validItems.reduce((sum, it) => sum + it.qty, 0);
+    // Check if any item in cart has 0 units
+    const zeroItem = Object.values(cart).find(it => it.qty <= 0);
+    if (zeroItem) {
+        showToast(`'${zeroItem.name}' හි ප්‍රමාණය 0 කි. කරුණාකර ප්‍රමාණයක් ඇතුලත් කරන්න හෝ Remove කරන්න.`, 'warning', '0 Units In Cart');
+        renderCart();
+        return;
+    }
+
+    const totalUnits = Object.values(cart).reduce((sum, it) => sum + it.qty, 0);
     if (totalUnits <= 0) {
         showToast("Total units to issue must be greater than 0.", 'warning', 'Zero Quantity');
         renderCart();
@@ -1354,7 +1357,7 @@ function submitPosCheckout() {
     }
 
     // Strict frontend verification against stock limits
-    const overStockItem = validItems.find(it => it.qty > it.stock);
+    const overStockItem = Object.values(cart).find(it => it.qty > it.stock);
     if (overStockItem) {
         showToast(`'${overStockItem.name}' Cold Room හි ඇත්තේ ${overStockItem.stock}ක් පමණි. Cart එකේ ${overStockItem.qty}ක් ඇතුලත් කර ඇත. කරුණාකර සකසන්න.`, 'error', 'තොගය ප්‍රමාණවත් නොවේ');
         return;
@@ -1365,7 +1368,7 @@ function submitPosCheckout() {
     const extraAmount = parseFloat(document.getElementById('extraAmountInput').value) || 0;
     const billAmount = parseFloat(document.getElementById('billAmountInput').value) || 0;
 
-    const cartArray = validItems.map(it => ({
+    const cartArray = Object.values(cart).map(it => ({
         id: it.id,
         unit_type: (it.boxQty > 0 && it.pcsQty > 0) ? 'mixed' : (it.boxQty > 0 ? 'box' : 'pcs'),
         box_qty: it.boxQty,
@@ -1428,16 +1431,17 @@ function renderCart() {
         const maxBoxes = Math.floor(item.stock / item.packSize);
         const remPieces = item.stock % item.packSize;
         const isOverStock = item.qty > item.stock;
+        const isZeroQty = item.qty <= 0;
 
         if (isOverStock) {
             hasOverStock = true;
         }
-        if (item.qty <= 0) {
+        if (isZeroQty) {
             hasZeroTotal = true;
         }
 
         html += `
-        <div class="p-3 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/40' : 'border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-cyan-300'} transition space-y-2.5">
+        <div class="p-3 rounded-2xl border ${isOverStock ? 'border-rose-400 bg-rose-50/40' : (isZeroQty ? 'border-amber-300 border-dashed bg-amber-50/40' : 'border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-cyan-300')} transition space-y-2">
             <!-- Item Title & Delete -->
             <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
@@ -1448,7 +1452,7 @@ function renderCart() {
                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" title="Available in Cold Room">
                         Store: ${item.stock} (${maxBoxes} Bx + ${remPieces} Pcs)
                     </span>
-                    <button type="button" onclick="removeFromCart(${item.id})" class="text-slate-400 hover:text-rose-500 text-xs p-1 transition" title="Remove">
+                    <button type="button" onclick="removeFromCart(${item.id})" class="text-slate-400 hover:text-rose-500 text-xs p-1 transition cursor-pointer" title="Remove from bill">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -1462,13 +1466,13 @@ function renderCart() {
                         <span>📦 Boxes (${item.packSize}/bx)</span>
                     </div>
                     <div class="flex items-center space-x-1">
-                        <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">-</button>
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100 cursor-pointer">-</button>
                         <input type="number" min="0" value="${item.boxQty}" 
                                id="cart_box_${item.id}"
                                oninput="handleItemBoxInput(${item.id}, this)"
                                onblur="handleItemBlur(${item.id})"
                                class="w-full text-center py-0.5 bg-white border border-amber-300 rounded-lg text-xs font-black font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                        <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">+</button>
+                        <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100 cursor-pointer">+</button>
                     </div>
                 </div>
 
@@ -1478,13 +1482,13 @@ function renderCart() {
                         <span>🍦 Loose Pieces</span>
                     </div>
                     <div class="flex items-center space-x-1">
-                        <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">-</button>
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100 cursor-pointer">-</button>
                         <input type="number" min="0" value="${item.pcsQty}" 
                                id="cart_pcs_${item.id}"
                                oninput="handleItemPcsInput(${item.id}, this)"
                                onblur="handleItemBlur(${item.id})"
                                class="w-full text-center py-0.5 bg-white border border-cyan-300 rounded-lg text-xs font-black font-mono text-cyan-900 focus:outline-none focus:ring-1 focus:ring-cyan-500">
-                        <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">+</button>
+                        <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100 cursor-pointer">+</button>
                     </div>
                 </div>
             </div>
@@ -1493,7 +1497,7 @@ function renderCart() {
             <div class="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
                 <div>
                     <span class="font-bold text-slate-500">Line Units:</span>
-                    <span id="line_units_${item.id}" class="font-black font-mono ${isOverStock ? 'text-rose-600' : 'text-slate-900'}">
+                    <span id="line_units_${item.id}" class="font-black font-mono ${isOverStock ? 'text-rose-600' : (isZeroQty ? 'text-amber-600' : 'text-slate-900')}">
                         ${item.qty} Units
                         ${item.boxQty > 0 && item.pcsQty > 0 ? `
                             <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>
@@ -1507,11 +1511,21 @@ function renderCart() {
                 ` : ''}
             </div>
 
+            <!-- Zero Quantity Warning Badge with Instant Remove -->
+            ${isZeroQty ? `
+            <div class="p-1.5 bg-amber-100/90 border border-amber-300 rounded-xl text-[10px] text-amber-900 font-bold flex items-center justify-between animate-in fade-in">
+                <span>⚠️ 0 Units - කරුණාකර ප්‍රමාණයක් ඇතුලත් කරන්න</span>
+                <button type="button" onclick="removeFromCart(${item.id})" class="text-amber-800 hover:text-rose-600 text-[10px] font-black underline cursor-pointer">
+                    Remove
+                </button>
+            </div>
+            ` : ''}
+
             <!-- Overstock Alert Row with One-Click Fix -->
             ${isOverStock ? `
             <div class="p-1.5 bg-rose-100/80 border border-rose-300 rounded-xl text-[10px] text-rose-800 font-bold flex items-center justify-between animate-in fade-in">
                 <span>⚠️ Cold Room හි ඇත්තේ ${item.stock}ක් පමණි!</span>
-                <button type="button" onclick="adjustItemToMaxStock(${item.id})" class="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[9px] shadow-xs">
+                <button type="button" onclick="adjustItemToMaxStock(${item.id})" class="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[9px] shadow-xs cursor-pointer">
                     ${item.stock}ට හදන්න
                 </button>
             </div>
@@ -1527,17 +1541,21 @@ function renderCart() {
     if (hasOverStock) {
         if (stockWarning) stockWarning.classList.remove('hidden');
         checkoutBtn.disabled = true;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-rose-500 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2";
         checkoutBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-sm mr-1.5"></i> තොග සීමාව ඉක්මවා ඇත (Cannot Issue)';
     } else if (hasZeroTotal || totalUnits <= 0) {
         if (stockWarning) stockWarning.classList.add('hidden');
         checkoutBtn.disabled = true;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-slate-300 cursor-not-allowed text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center space-x-2";
-        checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5"></i> Enter valid quantities';
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-slate-200/90 backdrop-blur-xs cursor-not-allowed text-slate-400 text-xs font-black uppercase tracking-wider border border-slate-300/40 shadow-none transition flex items-center justify-center space-x-2";
+        if (hasZeroTotal && totalUnits > 0) {
+            checkoutBtn.innerHTML = '<i class="fa-solid fa-hand text-sm mr-1.5 text-amber-500"></i> Enter quantities (0 Units in cart)';
+        } else {
+            checkoutBtn.innerHTML = '<i class="fa-solid fa-receipt text-sm mr-1.5 text-slate-400"></i> Enter valid quantities';
+        }
     } else {
         if (stockWarning) stockWarning.classList.add('hidden');
         checkoutBtn.disabled = false;
-        checkoutBtn.className = "w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-cyan-600/20 active:scale-98 transition flex items-center justify-center space-x-2";
+        checkoutBtn.className = "w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md shadow-cyan-600/30 active:scale-98 transition flex items-center justify-center space-x-2 cursor-pointer";
 
         let btnText = `Issue Stock & Print Slip (${totalUnits.toLocaleString()} Units)`;
         if (totalBoxes > 0) {
@@ -1613,8 +1631,27 @@ function smartMatch(targetText, query) {
     });
 }
 
+function clearPosSearch() {
+    const input = document.getElementById('posSearchInput');
+    if (input) {
+        input.value = '';
+        filterProducts();
+        input.focus();
+    }
+}
+
 function filterProducts() {
-    const query = document.getElementById('posSearchInput').value || '';
+    const input = document.getElementById('posSearchInput');
+    const query = input ? (input.value || '') : '';
+    const clearBtn = document.getElementById('clearSearchBtn');
+    if (clearBtn) {
+        if (query.trim().length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+
     const cards = document.querySelectorAll('.product-card');
 
     cards.forEach(card => {
