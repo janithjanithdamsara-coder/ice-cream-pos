@@ -43,6 +43,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 extend: {
                     fontFamily: {
                         sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    fontSize: {
+                        '2xs': ['0.6875rem', { lineHeight: '1rem' }],   // ~11px
+                        'xs': ['0.8125rem', { lineHeight: '1.25rem' }],  // ~13px
+                        'sm': ['0.9375rem', { lineHeight: '1.375rem' }], // ~15px
+                        'base': ['1.0625rem', { lineHeight: '1.625rem' }], // ~17px
+                        'lg': ['1.1875rem', { lineHeight: '1.75rem' }],   // ~19px
+                        'xl': ['1.3125rem', { lineHeight: '1.875rem' }],  // ~21px
                     }
                 }
             }
@@ -51,7 +59,36 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <!-- SweetAlert2 CDN (Deferred) -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        @media (min-width: 640px) {
+            html {
+                font-size: 16.5px;
+            }
+        }
+        @media (min-width: 1024px) {
+            html {
+                font-size: 16.75px;
+            }
+        }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* Global clarity boost for micro-classes across entire system */
+        .text-\[9px\] { font-size: 11px !important; }
+        .text-\[10px\] { font-size: 12px !important; }
+        .text-\[11px\] { font-size: 12.75px !important; }
+
+        /* Ensure input fields and select elements are crisp and legible */
+        input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+            font-size: 0.875rem;
+        }
         @media print {
             @page { 
                 margin: 8mm; 

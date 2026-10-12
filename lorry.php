@@ -13,9 +13,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     requireCsrf();
     $action = $_POST['action'] ?? '';
 
-    // Action 1: Add New Lorry
+    // Action 1: Add New Lorry (Super Admin & Master Only)
     if ($action === 'create_lorry') {
-        $plateNo = trim($_POST['plate_no'] ?? '');
+        if (!hasRole(['super_admin', 'master'])) {
+            setFlash('danger', 'Unauthorized action: Only Super Admins can register new lorries.');
+            header("Location: lorry.php");
+            exit;
+        }
+        $plateNo = strtoupper(trim($_POST['plate_no'] ?? ''));
         $driver = trim($_POST['driver_name'] ?? '');
         $phone = trim($_POST['contact_no'] ?? '');
         $route = trim($_POST['route_name'] ?? '');
@@ -24,6 +29,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             try {
                 $stmt = $pdo->prepare("INSERT INTO lorries (branch_id, plate_no, driver_name, contact_no, route_name) VALUES (?, ?, ?, ?, ?)");
                 $stmt->execute([$branchId, $plateNo, $driver, $phone, $route]);
+                logActivity('create_lorry', 'lorry', "Registered new vehicle [{$plateNo}] (Driver: {$driver})", $user['id']);
                 setFlash('success', "Lorry [{$plateNo}] registered successfully.");
             } catch (Exception $e) {
                 setFlash('danger', "Error: " . $e->getMessage());
@@ -33,8 +39,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         exit;
     }
 
-    // Action: Edit / Update Lorry Details
-    if ($action === 'update_lorry' && hasRole(['super_admin', 'admin', 'master'])) {
+    // Action: Edit / Update Lorry Details (Super Admin & Master Only)
+    if ($action === 'update_lorry') {
+        if (!hasRole(['super_admin', 'master'])) {
+            setFlash('danger', 'Unauthorized action: Only Super Admins can edit lorry details.');
+            header("Location: lorry.php");
+            exit;
+        }
         $lorryId = intval($_POST['lorry_id'] ?? 0);
         $plateNo = strtoupper(trim($_POST['plate_no'] ?? ''));
         $driver = trim($_POST['driver_name'] ?? '');
@@ -65,8 +76,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         exit;
     }
 
-    // Action: Delete Lorry Vehicle
-    if ($action === 'delete_lorry' && hasRole(['super_admin', 'admin', 'master'])) {
+    // Action: Delete Lorry Vehicle (Super Admin & Master Only)
+    if ($action === 'delete_lorry') {
+        if (!hasRole(['super_admin', 'master'])) {
+            setFlash('danger', 'Unauthorized action: Only Super Admins can delete lorries.');
+            header("Location: lorry.php");
+            exit;
+        }
         $lorryId = intval($_POST['lorry_id'] ?? 0);
 
         if ($lorryId <= 0) {
@@ -809,52 +825,54 @@ require_once __DIR__ . '/includes/header.php';
         </p>
     </div>
     <div class="flex flex-wrap gap-2">
-        <button type="button" onclick="openNewDispatchModal()" class="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-200 transition-all flex items-center">
+        <button type="button" onclick="openNewDispatchModal()" class="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-200 transition-all flex items-center cursor-pointer">
             <i class="fa-solid fa-dolly mr-2"></i> Morning Load Stock (Store &rarr; Lorry)
         </button>
-        <button type="button" onclick="openReloadModalPrompt()" class="px-3.5 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-200 transition-all flex items-center">
+        <button type="button" onclick="openReloadModalPrompt()" class="px-3.5 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-200 transition-all flex items-center cursor-pointer">
             <i class="fa-solid fa-truck-ramp-box mr-2"></i> + Mid-Day Reload (Extra Stock)
         </button>
-        <button type="button" onclick="openNewLorryModal()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center border border-slate-200/60">
-            <i class="fa-solid fa-plus mr-1.5"></i> + New Lorry
+        <?php if (hasRole(['super_admin', 'master'])): ?>
+        <button type="button" onclick="openNewLorryModal()" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center border border-slate-200/60 cursor-pointer">
+            <i class="fa-solid fa-plus mr-1.5 text-cyan-600"></i> + New Lorry
         </button>
+        <?php endif; ?>
     </div>
 </div>
 
 <!-- Lorry Fleet Cards -->
 <div class="mb-6">
     <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
-        <span>Branch Lorry Fleet (<?= count($lorries) ?> Vehicles)</span>
-        <span class="text-[11px] text-slate-500">Pure Unit / Quantity Tracking</span>
+        <span class="flex items-center"><i class="fa-solid fa-truck text-cyan-600 mr-2 text-sm"></i> Branch Lorry Fleet (<?= count($lorries) ?> Vehicles)</span>
+        <span class="text-xs text-slate-500 font-medium">Pure Unit / Quantity Tracking</span>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <?php foreach ($lorries as $lorry): 
             $isOnRoute = ($lorry['status'] === 'on_route' || !empty($lorry['active_dispatch_id']));
         ?>
-            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center justify-between mb-2 gap-2">
-                        <span class="px-2.5 py-1 text-xs font-black rounded-lg font-mono tracking-wider <?= $isOnRoute ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700' ?>">
-                            <i class="fa-solid fa-truck text-xs mr-1"></i> <?= htmlspecialchars($lorry['plate_no']) ?>
+                    <div class="flex items-center justify-between mb-3 gap-2">
+                        <span class="px-3 py-1.5 text-sm sm:text-base font-black rounded-xl font-mono tracking-wider shadow-xs <?= $isOnRoute ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-800 border border-slate-200' ?>">
+                            <i class="fa-solid fa-truck text-xs mr-1 text-cyan-600"></i> <?= htmlspecialchars($lorry['plate_no']) ?>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             <?php if ($isOnRoute): ?>
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse"></span> On Route
+                                <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center">
+                                    <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> On Route
                                 </span>
                             <?php else: ?>
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Available
+                                <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center">
+                                    <i class="fa-solid fa-check text-[11px] mr-1 text-emerald-600"></i> Available
                                 </span>
                             <?php endif; ?>
 
-                            <?php if (hasRole(['super_admin', 'admin', 'master'])): ?>
+                            <?php if (hasRole(['super_admin', 'master'])): ?>
                                 <button type="button" 
                                         onclick="openEditLorryModal(<?= $lorry['id'] ?>, '<?= htmlspecialchars(addslashes($lorry['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($lorry['driver_name'])) ?>', '<?= htmlspecialchars(addslashes($lorry['contact_no'] ?? '')) ?>', '<?= htmlspecialchars(addslashes($lorry['route_name'] ?? '')) ?>')" 
-                                        class="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-500 transition-colors cursor-pointer" 
+                                        class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-500 transition-colors cursor-pointer" 
                                         title="Edit Lorry Details">
-                                    <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                                    <i class="fa-solid fa-pen-to-square text-xs"></i>
                                 </button>
 
                                 <?php if (!$isOnRoute): ?>
@@ -864,9 +882,9 @@ require_once __DIR__ . '/includes/header.php';
                                         <input type="hidden" name="action" value="delete_lorry">
                                         <input type="hidden" name="lorry_id" value="<?= $lorry['id'] ?>">
                                         <button type="submit" 
-                                                class="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-500 transition-colors cursor-pointer" 
+                                                class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-500 transition-colors cursor-pointer" 
                                                 title="Delete Lorry Vehicle">
-                                            <i class="fa-solid fa-trash-can text-[11px]"></i>
+                                            <i class="fa-solid fa-trash-can text-xs"></i>
                                         </button>
                                     </form>
                                 <?php endif; ?>
@@ -874,23 +892,26 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                     </div>
 
-                    <div class="text-xs text-slate-700 font-bold mb-1">
-                        <i class="fa-solid fa-id-badge text-slate-400 mr-1"></i> <?= htmlspecialchars($lorry['driver_name']) ?>
+                    <div class="text-sm text-slate-800 font-extrabold mb-1 flex items-center">
+                        <i class="fa-solid fa-id-badge text-slate-400 mr-2 text-sm"></i> <?= htmlspecialchars($lorry['driver_name']) ?>
                     </div>
-                    <div class="text-[11px] text-slate-500">
-                        <i class="fa-solid fa-route text-slate-400 mr-1"></i> <?= htmlspecialchars($lorry['route_name'] ?: 'Distribution Route') ?>
+                    <div class="text-xs text-slate-600 font-medium flex items-center">
+                        <i class="fa-solid fa-route text-slate-400 mr-2 text-xs"></i> <?= htmlspecialchars($lorry['route_name'] ?: 'Distribution Route') ?>
                     </div>
                 </div>
 
                 <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1">
-                    <span class="text-[10px] text-slate-400"><?= htmlspecialchars($lorry['contact_no'] ?: 'No Phone') ?></span>
+                    <span class="text-xs text-slate-500 font-mono font-medium flex items-center">
+                        <i class="fa-solid fa-phone text-slate-400 mr-1.5 text-[11px]"></i>
+                        <?= htmlspecialchars($lorry['contact_no'] ?: 'No Phone') ?>
+                    </span>
                     <?php if ($isOnRoute): ?>
                         <?php if ($lorry['active_dispatch_id']): ?>
                             <div class="flex items-center space-x-1.5">
-                                <button type="button" onclick="openReloadModal(<?= $lorry['active_dispatch_id'] ?>, '<?= htmlspecialchars(addslashes($lorry['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($lorry['driver_name'])) ?>')" class="px-2.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition-colors flex items-center cursor-pointer" title="Load extra stock while on route">
+                                <button type="button" onclick="openReloadModal(<?= $lorry['active_dispatch_id'] ?>, '<?= htmlspecialchars(addslashes($lorry['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($lorry['driver_name'])) ?>')" class="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition-colors flex items-center cursor-pointer" title="Load extra stock while on route">
                                     <i class="fa-solid fa-truck-ramp-box mr-1"></i> + Reload
                                 </button>
-                                <a href="lorry.php?action=settle&dispatch_id=<?= $lorry['active_dispatch_id'] ?>" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center">
+                                <a href="lorry.php?action=settle&dispatch_id=<?= $lorry['active_dispatch_id'] ?>" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center">
                                     <i class="fa-solid fa-clock-rotate-left mr-1"></i> 3PM Return
                                 </a>
                             </div>
@@ -900,8 +921,8 @@ require_once __DIR__ . '/includes/header.php';
                             </span>
                         <?php endif; ?>
                     <?php else: ?>
-                        <button type="button" onclick="dispatchThisLorry(<?= $lorry['id'] ?>)" class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors flex items-center cursor-pointer">
-                            <i class="fa-solid fa-dolly mr-1"></i> Load Stock
+                        <button type="button" onclick="dispatchThisLorry(<?= $lorry['id'] ?>)" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors flex items-center cursor-pointer">
+                            <i class="fa-solid fa-dolly mr-1.5"></i> Load Stock
                         </button>
                     <?php endif; ?>
                 </div>
@@ -914,17 +935,19 @@ require_once __DIR__ . '/includes/header.php';
 <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
     <div class="p-4 border-b border-slate-100 flex items-center justify-between">
         <div>
-            <h3 class="font-bold text-slate-800 text-sm">Dispatches & 3:00 PM Returns Ledger</h3>
-            <p class="text-[11px] text-slate-500">Units Loaded, Returns to Cold Room, Melted/Damaged, and Delivered Units</p>
+            <h3 class="font-extrabold text-slate-800 text-sm sm:text-base flex items-center">
+                <i class="fa-solid fa-clipboard-list text-cyan-600 mr-2"></i> Dispatches & 3:00 PM Returns Ledger
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">Units Loaded, Returns to Cold Room, Melted/Damaged, and Delivered Units</p>
         </div>
-        <span class="text-xs text-slate-400"><?= count($dispatches) ?> records</span>
+        <span class="text-xs text-slate-500 font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200"><?= count($dispatches) ?> records</span>
     </div>
 
     <!-- Desktop Table View -->
     <div class="hidden lg:block overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
             <thead>
-                <tr class="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
+                <tr class="bg-slate-50 text-slate-600 font-extrabold uppercase tracking-wider border-b border-slate-200 text-xs">
                     <th class="py-3 px-4">Dispatch No</th>
                     <th class="py-3 px-4">Lorry & Driver</th>
                     <th class="py-3 px-4">Date & Time</th>
@@ -938,40 +961,40 @@ require_once __DIR__ . '/includes/header.php';
             </thead>
             <tbody class="divide-y divide-slate-100 text-slate-700">
                 <?php if (empty($dispatches)): ?>
-                    <tr><td colspan="9" class="py-8 text-center text-slate-400">No dispatches recorded yet. Use the "Morning Load Stock" button to load vans.</td></tr>
+                    <tr><td colspan="9" class="py-8 text-center text-slate-400 font-medium">No dispatches recorded yet. Use the "Morning Load Stock" button to load vans.</td></tr>
                 <?php else: ?>
                     <?php foreach ($dispatches as $d): ?>
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-3 px-4 font-mono font-bold text-cyan-700">
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-3 px-4 font-mono font-black text-cyan-700 text-sm">
                                 <?= htmlspecialchars($d['dispatch_no']) ?>
                             </td>
                             <td class="py-3 px-4">
-                                <div class="font-bold text-slate-800 font-mono"><?= htmlspecialchars($d['plate_no']) ?></div>
-                                <div class="text-[10px] text-slate-400"><?= htmlspecialchars($d['driver_name']) ?></div>
+                                <div class="font-black text-slate-900 font-mono text-sm"><?= htmlspecialchars($d['plate_no']) ?></div>
+                                <div class="text-xs text-slate-500 font-medium"><?= htmlspecialchars($d['driver_name']) ?></div>
                             </td>
                             <td class="py-3 px-4 text-slate-600">
-                                <div><?= date('d M Y', strtotime($d['dispatch_date'])) ?></div>
-                                <div class="text-[10px] text-slate-400 font-mono">Out: <?= substr($d['dispatch_time'], 0, 5) ?> <?= $d['settlement_time'] ? '| In: ' . substr($d['settlement_time'], 0, 5) : '' ?></div>
+                                <div class="font-semibold text-slate-800"><?= date('d M Y', strtotime($d['dispatch_date'])) ?></div>
+                                <div class="text-xs text-slate-400 font-mono">Out: <?= substr($d['dispatch_time'], 0, 5) ?> <?= $d['settlement_time'] ? '| In: ' . substr($d['settlement_time'], 0, 5) : '' ?></div>
                             </td>
-                            <td class="py-3 px-4 text-center font-black font-mono text-amber-700 text-sm">
+                            <td class="py-3 px-4 text-center font-black font-mono text-amber-700 text-sm sm:text-base">
                                 <?= number_format($d['total_loaded_qty']) ?>
                             </td>
-                            <td class="py-3 px-4 text-center font-black font-mono text-purple-700 text-sm">
+                            <td class="py-3 px-4 text-center font-black font-mono text-purple-700 text-sm sm:text-base">
                                 <?= $d['status'] === 'settled' ? number_format($d['total_return_store_qty']) : '-' ?>
                             </td>
-                            <td class="py-3 px-4 text-center font-black font-mono text-rose-600 text-sm">
+                            <td class="py-3 px-4 text-center font-black font-mono text-rose-600 text-sm sm:text-base">
                                 <?= $d['status'] === 'settled' ? number_format($d['total_damage_qty']) : '-' ?>
                             </td>
-                            <td class="py-3 px-4 text-center font-black font-mono text-emerald-700 text-sm">
+                            <td class="py-3 px-4 text-center font-black font-mono text-emerald-700 text-sm sm:text-base">
                                 <?= $d['status'] === 'settled' ? number_format($d['total_delivered_qty']) : '-' ?>
                             </td>
                             <td class="py-3 px-4 text-center">
                                 <?php if ($d['status'] === 'dispatched'): ?>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">
+                                    <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                         On Route
                                     </span>
                                 <?php else: ?>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
+                                    <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                                         Settled
                                     </span>
                                 <?php endif; ?>
@@ -979,15 +1002,15 @@ require_once __DIR__ . '/includes/header.php';
                             <td class="py-3 px-4 text-center">
                                 <?php if ($d['status'] === 'dispatched'): ?>
                                     <div class="flex items-center justify-center space-x-1.5">
-                                        <button type="button" onclick="openReloadModal(<?= $d['id'] ?>, '<?= htmlspecialchars(addslashes($d['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($d['driver_name'])) ?>', <?= $d['total_loaded_qty'] ?>)" class="px-2.5 py-1 text-[11px] rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-xs flex items-center cursor-pointer" title="Load more stock mid-day">
+                                        <button type="button" onclick="openReloadModal(<?= $d['id'] ?>, '<?= htmlspecialchars(addslashes($d['plate_no'])) ?>', '<?= htmlspecialchars(addslashes($d['driver_name'])) ?>', <?= $d['total_loaded_qty'] ?>)" class="px-3 py-1.5 text-xs rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-xs flex items-center cursor-pointer" title="Load more stock mid-day">
                                             <i class="fa-solid fa-plus mr-1"></i> Reload
                                         </button>
-                                        <a href="lorry.php?action=settle&dispatch_id=<?= $d['id'] ?>" class="px-2.5 py-1 text-[11px] rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-xs">
+                                        <a href="lorry.php?action=settle&dispatch_id=<?= $d['id'] ?>" class="px-3 py-1.5 text-xs rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-xs">
                                             3PM Return
                                         </a>
                                     </div>
                                 <?php else: ?>
-                                    <a href="lorry.php?view_dispatch=<?= $d['id'] ?>" class="px-3 py-1 text-[11px] rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">
+                                    <a href="lorry.php?view_dispatch=<?= $d['id'] ?>" class="px-3.5 py-1.5 text-xs rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-200">
                                         View Sheet
                                     </a>
                                 <?php endif; ?>
@@ -1005,19 +1028,19 @@ require_once __DIR__ . '/includes/header.php';
             <div class="py-8 text-center text-slate-400 text-xs">No dispatches recorded yet. Tap "Load Stock" above to dispatch a lorry.</div>
         <?php else: ?>
             <?php foreach ($dispatches as $d): ?>
-            <div class="p-3.5 hover:bg-slate-50 transition-colors space-y-2.5">
+            <div class="p-4 hover:bg-slate-50 transition-colors space-y-3">
                 <div class="flex items-center justify-between">
                     <div>
-                        <span class="font-mono font-bold text-cyan-700 text-xs"><?= htmlspecialchars($d['dispatch_no']) ?></span>
-                        <div class="text-[10px] text-slate-400 mt-0.5"><?= date('d M Y', strtotime($d['dispatch_date'])) ?> &bull; Out: <?= substr($d['dispatch_time'], 0, 5) ?></div>
+                        <span class="font-mono font-black text-cyan-700 text-sm"><?= htmlspecialchars($d['dispatch_no']) ?></span>
+                        <div class="text-xs text-slate-400 mt-0.5"><?= date('d M Y', strtotime($d['dispatch_date'])) ?> &bull; Out: <?= substr($d['dispatch_time'], 0, 5) ?></div>
                     </div>
                     <div>
                         <?php if ($d['status'] === 'dispatched'): ?>
-                            <span class="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse"></span> On Route
+                            <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span> On Route
                             </span>
                         <?php else: ?>
-                            <span class="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                                 <i class="fa-solid fa-check mr-1"></i> Settled
                             </span>
                         <?php endif; ?>
@@ -1025,31 +1048,31 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <div class="flex items-center justify-between text-xs">
-                    <div class="flex items-center space-x-1.5 font-bold text-slate-800">
+                    <div class="flex items-center space-x-2 font-bold text-slate-800">
                         <i class="fa-solid fa-truck text-slate-400 text-xs"></i>
-                        <span class="font-mono"><?= htmlspecialchars($d['plate_no']) ?></span>
+                        <span class="font-mono text-sm font-black"><?= htmlspecialchars($d['plate_no']) ?></span>
                         <span class="text-slate-400 font-normal">&bull;</span>
-                        <span class="font-normal text-slate-600"><?= htmlspecialchars($d['driver_name']) ?></span>
+                        <span class="font-medium text-slate-600 text-xs"><?= htmlspecialchars($d['driver_name']) ?></span>
                     </div>
                 </div>
 
                 <!-- 4 Metrics Chips -->
-                <div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold pt-1">
-                    <div class="bg-amber-50 border border-amber-200 p-1.5 rounded-xl">
-                        <div class="text-slate-400 text-[9px] uppercase">Loaded</div>
-                        <div class="text-amber-800 font-mono font-black text-xs"><?= number_format($d['total_loaded_qty']) ?></div>
+                <div class="grid grid-cols-4 gap-2 text-center text-xs font-bold pt-1">
+                    <div class="bg-amber-50 border border-amber-200 p-2 rounded-xl">
+                        <div class="text-slate-500 text-[10px] uppercase font-bold">Loaded</div>
+                        <div class="text-amber-800 font-mono font-black text-sm"><?= number_format($d['total_loaded_qty']) ?></div>
                     </div>
-                    <div class="bg-purple-50 border border-purple-200 p-1.5 rounded-xl">
-                        <div class="text-slate-400 text-[9px] uppercase">Returned</div>
-                        <div class="text-purple-800 font-mono font-black text-xs"><?= $d['status'] === 'settled' ? number_format($d['total_return_store_qty']) : '-' ?></div>
+                    <div class="bg-purple-50 border border-purple-200 p-2 rounded-xl">
+                        <div class="text-slate-500 text-[10px] uppercase font-bold">Returned</div>
+                        <div class="text-purple-800 font-mono font-black text-sm"><?= $d['status'] === 'settled' ? number_format($d['total_return_store_qty']) : '-' ?></div>
                     </div>
-                    <div class="bg-rose-50 border border-rose-200 p-1.5 rounded-xl">
-                        <div class="text-slate-400 text-[9px] uppercase">Damaged</div>
-                        <div class="text-rose-700 font-mono font-black text-xs"><?= $d['status'] === 'settled' ? number_format($d['total_damage_qty']) : '-' ?></div>
+                    <div class="bg-rose-50 border border-rose-200 p-2 rounded-xl">
+                        <div class="text-slate-500 text-[10px] uppercase font-bold">Damaged</div>
+                        <div class="text-rose-700 font-mono font-black text-sm"><?= $d['status'] === 'settled' ? number_format($d['total_damage_qty']) : '-' ?></div>
                     </div>
-                    <div class="bg-emerald-50 border border-emerald-200 p-1.5 rounded-xl">
-                        <div class="text-slate-400 text-[9px] uppercase">Delivered</div>
-                        <div class="text-emerald-800 font-mono font-black text-xs"><?= $d['status'] === 'settled' ? number_format($d['total_delivered_qty']) : '-' ?></div>
+                    <div class="bg-emerald-50 border border-emerald-200 p-2 rounded-xl">
+                        <div class="text-slate-500 text-[10px] uppercase font-bold">Delivered</div>
+                        <div class="text-emerald-800 font-mono font-black text-sm"><?= $d['status'] === 'settled' ? number_format($d['total_delivered_qty']) : '-' ?></div>
                     </div>
                 </div>
 
@@ -1065,7 +1088,7 @@ require_once __DIR__ . '/includes/header.php';
                             </a>
                         </div>
                     <?php else: ?>
-                        <a href="lorry.php?view_dispatch=<?= $d['id'] ?>" class="w-full block text-center py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs">
+                        <a href="lorry.php?view_dispatch=<?= $d['id'] ?>" class="w-full block text-center py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200">
                             <i class="fa-solid fa-receipt mr-1.5"></i> View Return Sheet
                         </a>
                     <?php endif; ?>
@@ -1893,6 +1916,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 <?php endif; ?>
 
+<?php if (hasRole(['super_admin', 'master'])): ?>
 <!-- MODAL: Add New Lorry -->
 <div id="newLorryModal" class="no-print fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-slate-200">
@@ -1983,6 +2007,7 @@ require_once __DIR__ . '/includes/header.php';
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
     function openNewDispatchModal() { 
@@ -1994,19 +2019,28 @@ require_once __DIR__ . '/includes/header.php';
         }, 100);
     }
     function closeNewDispatchModal() { document.getElementById('newDispatchModal').classList.add('hidden'); }
-    function openNewLorryModal() { document.getElementById('newLorryModal').classList.remove('hidden'); }
-    function closeNewLorryModal() { document.getElementById('newLorryModal').classList.add('hidden'); }
+    function openNewLorryModal() { 
+        const m = document.getElementById('newLorryModal');
+        if (m) m.classList.remove('hidden'); 
+    }
+    function closeNewLorryModal() { 
+        const m = document.getElementById('newLorryModal');
+        if (m) m.classList.add('hidden'); 
+    }
 
     function openEditLorryModal(id, plate, driver, phone, route) {
+        const m = document.getElementById('editLorryModal');
+        if (!m) return;
         document.getElementById('editLorryId').value = id;
         document.getElementById('editLorryPlate').value = plate;
         document.getElementById('editLorryDriver').value = driver;
         document.getElementById('editLorryPhone').value = phone || '';
         document.getElementById('editLorryRoute').value = route || '';
-        document.getElementById('editLorryModal').classList.remove('hidden');
+        m.classList.remove('hidden');
     }
     function closeEditLorryModal() {
-        document.getElementById('editLorryModal').classList.add('hidden');
+        const m = document.getElementById('editLorryModal');
+        if (m) m.classList.add('hidden');
     }
 
     function dispatchThisLorry(lorryId) {

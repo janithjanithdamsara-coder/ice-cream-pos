@@ -87,7 +87,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     <!-- Google Font with display=swap -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        @media (min-width: 640px) {
+            html {
+                font-size: 16.5px;
+            }
+        }
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .text-\[9px\] { font-size: 11px !important; }
+        .text-\[10px\] { font-size: 12px !important; }
+        .text-\[11px\] { font-size: 12.75px !important; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 min-h-screen flex items-center justify-center p-4 sm:p-6 antialiased relative overflow-hidden text-slate-100">
