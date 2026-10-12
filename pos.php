@@ -124,6 +124,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
+
+    // Action 2: Cancel / Void POS Slip (Restores stock to Cold Room)
+    if ($action === 'cancel_pos_slip') {
+        $slipId = intval($_POST['slip_id'] ?? 0);
+        try {
+            $pdo->beginTransaction();
+
+            $stmtCheck = $pdo->prepare("SELECT issue_no, total_qty FROM store_dispatches WHERE id = ? AND branch_id = ?");
+            $stmtCheck->execute([$slipId, $branchId]);
+            $slip = $stmtCheck->fetch();
+
+            if (!$slip) {
+                throw new Exception("Slip record not found or does not belong to your branch.");
+            }
+
+            // Fetch slip items
+            $stmt = $pdo->prepare("SELECT product_id, quantity FROM store_dispatch_items WHERE dispatch_id = ?");
+            $stmt->execute([$slipId]);
+            $items = $stmt->fetchAll();
+
+            // Return stock units to warehouse
+            $stmtReturn = $pdo->prepare("INSERT INTO branch_stock (branch_id, product_id, quantity) 
+                VALUES (?, ?, ?) 
+                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)");
+
+            foreach ($items as $item) {
+                $qty = intval($item['quantity']);
+                if ($qty > 0) {
+                    $stmtReturn->execute([$branchId, $item['product_id'], $qty]);
+                }
+            }
+
+            // Delete slip records
+            $pdo->prepare("DELETE FROM store_dispatch_items WHERE dispatch_id = ?")->execute([$slipId]);
+            $pdo->prepare("DELETE FROM store_dispatches WHERE id = ?")->execute([$slipId]);
+
+            $pdo->commit();
+            logActivity('cancel_pos_slip', 'pos', "Cancelled POS Slip #{$slip['issue_no']} and restored {$slip['total_qty']} units back to Cold Room store");
+            setFlash('success', "Slip #{$slip['issue_no']} cancelled successfully! {$slip['total_qty']} units returned back to Cold Room store.");
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            setFlash('danger', "Failed to cancel slip: " . $e->getMessage());
+        }
+        header("Location: pos.php");
+        exit;
+    }
 }
 
 // Fetch Active Products with live stock (Defensive column checks)
@@ -769,11 +817,19 @@ require_once __DIR__ . '/includes/header.php';
                         <div class="text-[10px] font-bold text-amber-700">Bill: Rs. <?= number_format($sl['bill_amount'], 2) ?></div>
                     <?php endif; ?>
                 </div>
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-1.5">
                     <span class="px-2 py-1 rounded bg-cyan-100 text-cyan-800 font-mono text-xs font-bold"><?= number_format($sl['total_qty']) ?> Units</span>
-                    <a href="pos.php?print_id=<?= $sl['id'] ?>" class="p-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs transition" title="Print">
+                    <a href="pos.php?print_id=<?= $sl['id'] ?>" class="p-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs transition" title="Print Slip">
                         <i class="fa-solid fa-print"></i>
                     </a>
+                    <form method="POST" action="pos.php" class="inline" onsubmit="return confirmAction(event, this, { title: 'Cancel POS Slip?', text: 'Are you sure you want to cancel Slip #<?= htmlspecialchars($sl['issue_no']) ?>? All <?= number_format($sl['total_qty']) ?> units will be restored back to Cold Room store stock immediately.', confirmText: 'Yes, Cancel Slip', danger: true });">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="cancel_pos_slip">
+                        <input type="hidden" name="slip_id" value="<?= $sl['id'] ?>">
+                        <button type="submit" class="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs transition cursor-pointer" title="Cancel Slip & Return Stock">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -880,19 +936,37 @@ function updateItemPcsQty(productId, delta) {
     renderCart();
 }
 
+function updateItemLineDisplay(productId) {
+    const item = cart[productId];
+    if (!item) return;
+
+    const lineUnitsElem = document.getElementById(`line_units_${productId}`);
+    if (lineUnitsElem) {
+        const isOver = item.qty > item.stock;
+        lineUnitsElem.className = `font-black font-mono ${isOver ? 'text-rose-600' : 'text-slate-900'}`;
+        let formula = (item.boxQty > 0 && item.pcsQty > 0) 
+            ? ` <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>` 
+            : '';
+        lineUnitsElem.innerHTML = `${item.qty} Units${formula}`;
+    }
+
+    const linePriceElem = document.getElementById(`line_price_${productId}`);
+    if (linePriceElem && item.price > 0) {
+        linePriceElem.innerText = `Rs. ${(item.qty * item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    }
+}
+
 function handleItemBoxInput(productId, inputElem) {
     const item = cart[productId];
     if (!item) return;
 
-    let rawVal = inputElem.value;
-    if (rawVal === '') return;
-
-    let val = parseInt(rawVal, 10);
-    if (isNaN(val) || val < 0) val = 0;
+    let rawVal = inputElem.value.trim();
+    let val = (rawVal === '' || isNaN(parseInt(rawVal, 10))) ? 0 : Math.max(0, parseInt(rawVal, 10));
 
     item.boxQty = val;
     item.qty = (item.boxQty * item.packSize) + item.pcsQty;
 
+    updateItemLineDisplay(productId);
     updateCartLiveStats();
 }
 
@@ -900,15 +974,40 @@ function handleItemPcsInput(productId, inputElem) {
     const item = cart[productId];
     if (!item) return;
 
-    let rawVal = inputElem.value;
-    if (rawVal === '') return;
-
-    let val = parseInt(rawVal, 10);
-    if (isNaN(val) || val < 0) val = 0;
+    let rawVal = inputElem.value.trim();
+    let val = (rawVal === '' || isNaN(parseInt(rawVal, 10))) ? 0 : Math.max(0, parseInt(rawVal, 10));
 
     item.pcsQty = val;
     item.qty = (item.boxQty * item.packSize) + item.pcsQty;
 
+    updateItemLineDisplay(productId);
+    updateCartLiveStats();
+}
+
+function handleItemBlur(productId) {
+    const item = cart[productId];
+    if (!item) return;
+
+    const boxInput = document.getElementById(`cart_box_${productId}`);
+    const pcsInput = document.getElementById(`cart_pcs_${productId}`);
+
+    const boxVal = boxInput ? (parseInt(boxInput.value, 10) || 0) : item.boxQty;
+    const pcsVal = pcsInput ? (parseInt(pcsInput.value, 10) || 0) : item.pcsQty;
+
+    item.boxQty = Math.max(0, boxVal);
+    item.pcsQty = Math.max(0, pcsVal);
+    item.qty = (item.boxQty * item.packSize) + item.pcsQty;
+
+    if (item.boxQty === 0 && item.pcsQty === 0) {
+        delete cart[productId];
+        renderCart();
+        return;
+    }
+
+    if (boxInput && boxInput.value === '') boxInput.value = item.boxQty;
+    if (pcsInput && pcsInput.value === '') pcsInput.value = item.pcsQty;
+
+    updateItemLineDisplay(productId);
     updateCartLiveStats();
 }
 
@@ -1106,14 +1205,40 @@ function updateCartLiveStats() {
 }
 
 function submitPosCheckout() {
-    const itemKeys = Object.keys(cart);
-    if (itemKeys.length === 0) {
-        showToast("Your cart is empty. Please tap an ice cream to add to slip.", 'warning', 'Cart Empty');
+    // 1. Synchronize from DOM input fields before processing
+    Object.keys(cart).forEach(id => {
+        const boxInput = document.getElementById(`cart_box_${id}`);
+        const pcsInput = document.getElementById(`cart_pcs_${id}`);
+        if (boxInput) {
+            const bVal = parseInt(boxInput.value, 10);
+            cart[id].boxQty = isNaN(bVal) ? 0 : Math.max(0, bVal);
+        }
+        if (pcsInput) {
+            const pVal = parseInt(pcsInput.value, 10);
+            cart[id].pcsQty = isNaN(pVal) ? 0 : Math.max(0, pVal);
+        }
+        cart[id].qty = (cart[id].boxQty * cart[id].packSize) + cart[id].pcsQty;
+        if (cart[id].qty <= 0) {
+            delete cart[id];
+        }
+    });
+
+    const validItems = Object.values(cart).filter(it => it.qty > 0);
+    if (validItems.length === 0) {
+        showToast("Cart is empty or all item quantities are 0. Please enter valid quantities.", 'warning', 'Invalid Quantities');
+        renderCart();
+        return;
+    }
+
+    const totalUnits = validItems.reduce((sum, it) => sum + it.qty, 0);
+    if (totalUnits <= 0) {
+        showToast("Total units to issue must be greater than 0.", 'warning', 'Zero Quantity');
+        renderCart();
         return;
     }
 
     // Strict frontend verification against stock limits
-    const overStockItem = Object.values(cart).find(it => it.qty > it.stock);
+    const overStockItem = validItems.find(it => it.qty > it.stock);
     if (overStockItem) {
         showToast(`'${overStockItem.name}' Cold Room හි ඇත්තේ ${overStockItem.stock}ක් පමණි. Cart එකේ ${overStockItem.qty}ක් ඇතුලත් කර ඇත. කරුණාකර සකසන්න.`, 'error', 'තොගය ප්‍රමාණවත් නොවේ');
         return;
@@ -1124,7 +1249,7 @@ function submitPosCheckout() {
     const extraAmount = parseFloat(document.getElementById('extraAmountInput').value) || 0;
     const billAmount = parseFloat(document.getElementById('billAmountInput').value) || 0;
 
-    const cartArray = Object.values(cart).map(it => ({
+    const cartArray = validItems.map(it => ({
         id: it.id,
         unit_type: (it.boxQty > 0 && it.pcsQty > 0) ? 'mixed' : (it.boxQty > 0 ? 'box' : 'pcs'),
         box_qty: it.boxQty,
@@ -1223,7 +1348,9 @@ function renderCart() {
                     <div class="flex items-center space-x-1">
                         <button type="button" onclick="updateItemBoxQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">-</button>
                         <input type="number" min="0" value="${item.boxQty}" 
+                               id="cart_box_${item.id}"
                                oninput="handleItemBoxInput(${item.id}, this)"
+                               onblur="handleItemBlur(${item.id})"
                                class="w-full text-center py-0.5 bg-white border border-amber-300 rounded-lg text-xs font-black font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500">
                         <button type="button" onclick="updateItemBoxQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-amber-300 text-amber-800 flex items-center justify-center text-xs font-black hover:bg-amber-100">+</button>
                     </div>
@@ -1237,7 +1364,9 @@ function renderCart() {
                     <div class="flex items-center space-x-1">
                         <button type="button" onclick="updateItemPcsQty(${item.id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">-</button>
                         <input type="number" min="0" value="${item.pcsQty}" 
+                               id="cart_pcs_${item.id}"
                                oninput="handleItemPcsInput(${item.id}, this)"
+                               onblur="handleItemBlur(${item.id})"
                                class="w-full text-center py-0.5 bg-white border border-cyan-300 rounded-lg text-xs font-black font-mono text-cyan-900 focus:outline-none focus:ring-1 focus:ring-cyan-500">
                         <button type="button" onclick="updateItemPcsQty(${item.id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-cyan-300 text-cyan-800 flex items-center justify-center text-xs font-black hover:bg-cyan-100">+</button>
                     </div>
@@ -1248,15 +1377,15 @@ function renderCart() {
             <div class="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
                 <div>
                     <span class="font-bold text-slate-500">Line Units:</span>
-                    <span class="font-black font-mono ${isOverStock ? 'text-rose-600' : 'text-slate-900'}">
+                    <span id="line_units_${item.id}" class="font-black font-mono ${isOverStock ? 'text-rose-600' : 'text-slate-900'}">
                         ${item.qty} Units
+                        ${item.boxQty > 0 && item.pcsQty > 0 ? `
+                            <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>
+                        ` : ''}
                     </span>
-                    ${item.boxQty > 0 && item.pcsQty > 0 ? `
-                        <span class="text-[9px] text-slate-400">(${item.boxQty}&times;${item.packSize} + ${item.pcsQty})</span>
-                    ` : ''}
                 </div>
                 ${item.price > 0 ? `
-                    <div class="font-mono font-bold text-emerald-700 text-xs">
+                    <div id="line_price_${item.id}" class="font-mono font-bold text-emerald-700 text-xs">
                         Rs. ${(item.qty * item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </div>
                 ` : ''}
