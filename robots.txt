@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /index.php
+Disallow: /config/
+Disallow: /includes/
+Disallow: /ajax_*.php
+Disallow: /scratch/
+
+Sitemap: https://dhaneshadistributors.site/sitemap.xml

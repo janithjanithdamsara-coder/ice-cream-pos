@@ -66,12 +66,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | Dhanesha Distributors - Ice Cream Logistics</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <meta name="description" content="Sign in to Dhanesha Distributors - Official portal for ice cream cold room warehousing, van sales distribution, inventory and POS operations.">
+    <link rel="canonical" href="https://dhaneshadistributors.site/">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" href="favicon.svg">
+    <meta name="theme-color" content="#030712">
+
+    <!-- Preconnect to external CDNs for lightning-fast handshake -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+    <!-- Tailwind CSS CDN (Deferred so it never blocks FCP) -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <!-- Non-blocking Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <!-- Google Font with display=swap -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
     </style>
@@ -94,7 +108,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 ml-2 animate-pulse"></span>
             </h1>
             <p class="text-cyan-200/90 text-xs sm:text-sm font-semibold mt-1 tracking-wide">
-                Ice Cream Distribution & Cold Room Warehouse
+                Ice Cream Distribution &amp; Cold Room Warehouse
             </p>
             <div class="text-[11px] text-slate-400 font-medium mt-0.5">
                 තොග බෙදාහැරීම් සහ ගබඩා කළමනාකරණ පද්ධතිය
@@ -125,12 +139,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             <form method="POST" action="index.php" class="space-y-4">
                 <!-- Username Input -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Username</label>
+                    <label for="usernameInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Username</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
                             <i class="fa-solid fa-user"></i>
                         </span>
-                        <input type="text" name="username" id="usernameInput" required autofocus
+                        <input type="text" name="username" id="usernameInput" required autofocus autocomplete="username"
                                class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:bg-white transition-all text-slate-800 font-semibold"
                                placeholder="e.g. admin">
                     </div>
@@ -138,15 +152,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
                 <!-- Password Input with Show/Hide Toggle -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Password</label>
+                    <label for="passwordInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Password</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
                             <i class="fa-solid fa-key"></i>
                         </span>
-                        <input type="password" name="password" id="passwordInput" required 
+                        <input type="password" name="password" id="passwordInput" required autocomplete="current-password"
                                class="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:bg-white transition-all text-slate-800 font-semibold"
                                placeholder="••••••••">
-                        <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer">
+                        <button type="button" onclick="togglePasswordVisibility()" aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer">
                             <i class="fa-solid fa-eye" id="eyeIcon"></i>
                         </button>
                     </div>
