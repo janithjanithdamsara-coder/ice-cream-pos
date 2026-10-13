@@ -406,6 +406,11 @@
         .animate-lock-shake {
             animation: lockShake 0.35s ease-in-out;
         }
+
+        /* SweetAlert2 Confirmation Modals & Overlays: Always render above all UI layers, including Auto-Lock */
+        .swal2-container {
+            z-index: 100000 !important;
+        }
     </style>
 
     <div id="autoLockScreenModal" class="fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-xl hidden flex items-center justify-center p-4 select-none no-print">
@@ -599,6 +604,7 @@
             if (event) event.preventDefault();
             if (typeof Swal === 'undefined') {
                 if (confirm('Are you sure you want to end your current session?')) {
+                    sessionStorage.removeItem('screen_locked');
                     window.location.href = 'logout.php';
                 }
                 return false;
@@ -614,6 +620,7 @@
                 reverseButtons: true,
                 focusCancel: true,
                 customClass: {
+                    container: 'z-[100000]',
                     popup: 'rounded-3xl p-6 shadow-2xl border border-slate-100 font-sans',
                     title: 'text-lg font-black text-slate-800 tracking-tight',
                     htmlContainer: 'text-xs text-slate-500 font-medium',
@@ -623,6 +630,7 @@
                 buttonsStyling: false
             }).then((result) => {
                 if (result.isConfirmed) {
+                    sessionStorage.removeItem('screen_locked');
                     window.location.href = 'logout.php';
                 }
             });
@@ -653,6 +661,7 @@
                 reverseButtons: true,
                 focusCancel: isDanger,
                 customClass: {
+                    container: 'z-[100000]',
                     popup: 'rounded-3xl p-6 shadow-2xl border border-slate-100 font-sans',
                     title: 'text-lg font-black text-slate-800 tracking-tight',
                     htmlContainer: 'text-xs text-slate-500 font-medium',
