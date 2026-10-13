@@ -378,7 +378,7 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Summary Metrics -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <!-- Metric 1: Today Issued -->
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
             <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
@@ -557,7 +557,7 @@ require_once __DIR__ . '/includes/header.php';
         <!-- Issues Table -->
         <!-- Desktop Table View -->
         <div class="hidden md:block overflow-x-auto">
-            <table class="w-full text-xs text-left border-collapse">
+            <table class="w-full text-xs text-left border-collapse min-w-[760px]">
                 <thead>
                     <tr class="bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200">
                         <th class="py-3 px-4">Issue No</th>

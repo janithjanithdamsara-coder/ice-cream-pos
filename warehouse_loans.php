@@ -567,7 +567,7 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- KPI Summary Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <!-- Card 1: Active Pending Loans -->
         <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden">
             <div class="flex items-center justify-between">
@@ -697,7 +697,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         <?php else: ?>
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs border-collapse">
+                <table class="w-full text-left text-xs border-collapse min-w-[850px]">
                     <thead class="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100">
                         <tr>
                             <th class="py-3 px-4">Loan Voucher #</th>

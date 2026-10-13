@@ -468,12 +468,14 @@ header.no-print > div {
 
 /* Smooth transition for Collapsible Cashier Mode */
 aside#mainSidebar, .print-full-width {
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-body.pos-sidebar-collapsed aside#mainSidebar {
+body.pos-sidebar-collapsed aside#mainSidebar,
+body.sidebar-collapsed aside#mainSidebar {
     transform: translateX(-100%) !important;
 }
-body.pos-sidebar-collapsed .print-full-width {
+body.pos-sidebar-collapsed .print-full-width,
+body.sidebar-collapsed .print-full-width {
     padding-left: 0 !important;
 }
 
@@ -705,7 +707,7 @@ body.pos-sidebar-collapsed .print-full-width {
 
             <!-- Product Cards Scroll Container (ONLY this scrolls on catalog side) -->
             <div class="pos-products-scroll flex-1 min-h-0 overflow-y-auto pr-1">
-                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-2 pb-4">
+                <div id="productsGrid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 pb-4">
                     <?php if (empty($products)): ?>
                     <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                         <i class="fa-solid fa-boxes-stacked text-3xl text-slate-300 mb-2 block"></i>
@@ -791,7 +793,7 @@ body.pos-sidebar-collapsed .print-full-width {
         </div>
 
         <!-- RIGHT COLUMN: Counter Issue Cart & Checkout (Pinned Fixed-Width Slip) -->
-        <div id="posCartContainer" class="pos-cart-column w-full lg:w-[410px] xl:w-[440px] shrink-0 flex flex-col h-full min-h-0 overflow-hidden">
+        <div id="posCartContainer" class="pos-cart-column w-full lg:w-[330px] xl:w-[380px] 2xl:w-[420px] shrink-0 flex flex-col h-full min-h-0 overflow-hidden">
             <div class="pos-cart-card bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col h-full min-h-0 overflow-hidden">
                 
                 <!-- Cart Header (Fixed at top of slip - Compact) -->

@@ -59,26 +59,54 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     </script>
     <!-- SweetAlert2 CDN (Deferred) -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
+    <script>
+        // Restore sidebar collapse preference instantly before render
+        try {
+            if (localStorage.getItem('sidebar_collapsed') === '1' && window.innerWidth >= 768) {
+                document.addEventListener('DOMContentLoaded', () => {
+                    document.body.classList.add('sidebar-collapsed');
+                });
+            }
+        } catch(e) {}
+    </script>
     <style>
         html {
-            font-size: 16px;
+            font-size: 14.5px;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
         }
         @media (min-width: 640px) {
             html {
-                font-size: 16.5px;
+                font-size: 14.5px;
             }
         }
+        /* 19-inch monitors (1366x768, 1280x1024, laptops) */
         @media (min-width: 1024px) {
             html {
-                font-size: 16.75px;
+                font-size: 14.5px;
+            }
+        }
+        /* 24"+ FHD (1920x1080) and 2K/4K large screens */
+        @media (min-width: 1536px) {
+            html {
+                font-size: 15.5px;
             }
         }
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* Smooth Universal Collapsible Sidebar */
+        aside#mainSidebar, .print-full-width {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        body.sidebar-collapsed aside#mainSidebar {
+            transform: translateX(-100%) !important;
+        }
+        body.sidebar-collapsed .print-full-width {
+            padding-left: 0 !important;
         }
 
         /* Global clarity boost for micro-classes across entire system */
@@ -182,9 +210,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     </div>
                 </a>
 
-                <!-- Mobile Close Button -->
-                <button type="button" onclick="toggleSidebar()" class="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg focus:outline-none">
-                    <i class="fa-solid fa-xmark text-lg"></i>
+                <!-- Mobile Close / Desktop Collapse Button -->
+                <button type="button" onclick="toggleSidebar()" class="p-1.5 text-slate-400 hover:text-white rounded-lg focus:outline-none cursor-pointer" title="Collapse Sidebar (Maximize Workspace)">
+                    <i class="fa-solid fa-chevron-left text-sm hidden md:inline"></i>
+                    <i class="fa-solid fa-xmark text-lg md:hidden"></i>
                 </button>
             </div>
 
@@ -331,9 +360,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs no-print">
             <div class="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 
-                <!-- Left: Hamburger (Mobile) + Page Title -->
+                <!-- Left: Hamburger (Universal Desktop + Mobile) + Page Title -->
                 <div class="flex items-center space-x-3">
-                    <button type="button" onclick="toggleSidebar()" class="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none transition-colors">
+                    <button type="button" onclick="toggleSidebar()" title="Toggle Sidebar (Expand/Collapse Workspace)" class="p-2 rounded-xl text-slate-600 hover:text-cyan-600 hover:bg-slate-100 focus:outline-none transition-colors cursor-pointer flex items-center justify-center">
                         <i class="fa-solid fa-bars text-lg"></i>
                     </button>
 

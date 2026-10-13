@@ -68,18 +68,27 @@
     <script>
         window.CSRF_TOKEN = '<?= function_exists("getCsrfToken") ? getCsrfToken() : "" ?>';
 
-        // Toggle mobile slide-in sidebar
+        // Toggle mobile slide-in drawer OR desktop collapsible full-width workspace
         function toggleSidebar() {
-            const sidebar = document.getElementById('mainSidebar');
-            const backdrop = document.getElementById('sidebarBackdrop');
-            if (sidebar && backdrop) {
-                const isClosed = sidebar.classList.contains('-translate-x-full');
-                if (isClosed) {
-                    sidebar.classList.remove('-translate-x-full');
-                    backdrop.classList.remove('hidden');
-                } else {
-                    sidebar.classList.add('-translate-x-full');
-                    backdrop.classList.add('hidden');
+            const isDesktop = window.innerWidth >= 768;
+            if (isDesktop) {
+                document.body.classList.toggle('sidebar-collapsed');
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                try {
+                    localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+                } catch(e) {}
+            } else {
+                const sidebar = document.getElementById('mainSidebar');
+                const backdrop = document.getElementById('sidebarBackdrop');
+                if (sidebar && backdrop) {
+                    const isClosed = sidebar.classList.contains('-translate-x-full');
+                    if (isClosed) {
+                        sidebar.classList.remove('-translate-x-full');
+                        backdrop.classList.remove('hidden');
+                    } else {
+                        sidebar.classList.add('-translate-x-full');
+                        backdrop.classList.add('hidden');
+                    }
                 }
             }
         }

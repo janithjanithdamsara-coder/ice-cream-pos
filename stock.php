@@ -265,16 +265,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Action 4: Delete Single Product
+    // Action 4: Delete / Retire Single Product (Admin & Super Admin Only)
     if ($action === 'delete_product') {
         $pId = intval($_POST['product_id'] ?? 0);
-        if ($pId > 0 && hasRole(['super_admin', 'admin'])) {
+        if (!hasRole(['super_admin', 'admin'])) {
+            setFlash('danger', 'Unauthorized action: Only Administrators can delete products.');
+            header("Location: stock.php");
+            exit;
+        }
+
+        if ($pId > 0) {
             try {
-                $pdo->prepare("DELETE FROM branch_stock WHERE product_id = ?")->execute([$pId]);
-                $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$pId]);
-                setFlash('success', "Product removed from catalog.");
+                // Fetch product name and code
+                $pStmt = $pdo->prepare("SELECT id, name, code FROM products WHERE id = ?");
+                $pStmt->execute([$pId]);
+                $prodToDelete = $pStmt->fetch();
+
+                if (!$prodToDelete) {
+                    setFlash('warning', 'Product not found or already removed.');
+                    header("Location: stock.php");
+                    exit;
+                }
+
+                $pName = $prodToDelete['name'];
+                $pCode = $prodToDelete['code'];
+
+                // Check if product has historical transactions
+                $hasHistory = false;
+                $tablesToCheck = [
+                    'stock_invoice_items',
+                    'lorry_dispatch_items',
+                    'store_dispatch_items',
+                    'warehouse_loan_items'
+                ];
+
+                foreach ($tablesToCheck as $tbl) {
+                    try {
+                        $cnt = $pdo->prepare("SELECT COUNT(*) FROM `{$tbl}` WHERE product_id = ?");
+                        $cnt->execute([$pId]);
+                        if ($cnt->fetchColumn() > 0) {
+                            $hasHistory = true;
+                            break;
+                        }
+                    } catch (Exception $e) {
+                        // Table may not exist or not have product_id
+                    }
+                }
+
+                if ($hasHistory) {
+                    // Soft-delete / Deactivate: hides from active catalog, POS, and Lorry dispatch
+                    // but preserves historical audit trails and receipts intact!
+                    $pdo->prepare("UPDATE products SET status = 'inactive' WHERE id = ?")->execute([$pId]);
+                    // Reset current live stock to 0 so it doesn't inflate inventory counts
+                    $pdo->prepare("UPDATE branch_stock SET quantity = 0, box_qty = 0, pieces_qty = 0 WHERE product_id = ?")->execute([$pId]);
+                    logActivity('delete_product', 'product', "Archived product {$pCode} - {$pName} (historical receipts preserved)");
+                    setFlash('success', "Product '{$pName}' ({$pCode}) removed from active catalog and archived safely.");
+                } else {
+                    // Clean hard-delete: No historical transactions exist
+                    $pdo->prepare("DELETE FROM branch_stock WHERE product_id = ?")->execute([$pId]);
+                    $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$pId]);
+                    logActivity('delete_product', 'product', "Permanently deleted fresh product {$pCode} - {$pName}");
+                    setFlash('success', "Product '{$pName}' ({$pCode}) permanently deleted from catalog.");
+                }
             } catch (Exception $e) {
-                setFlash('danger', "Error deleting product: " . $e->getMessage());
+                setFlash('danger', "Error removing product: " . $e->getMessage());
             }
         }
         header("Location: stock.php");
@@ -451,14 +505,18 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
-                                    <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to permanently delete this product from inventory?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
-                                        <?= csrfField() ?>
-                                        <input type="hidden" name="action" value="delete_product">
-                                        <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
-                                        <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors cursor-pointer" title="Delete Product">
-                                            <i class="fa-solid fa-trash-can"></i>
-                                        </button>
-                                    </form>
+                                    <?php if (hasRole(['super_admin', 'admin'])): ?>
+                                        <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to remove this product from the inventory catalog?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
+                                            <?= csrfField() ?>
+                                            <input type="hidden" name="action" value="delete_product">
+                                            <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
+                                            <button type="submit" class="p-1.5 text-slate-300 hover:text-rose-600 transition-colors cursor-pointer" title="Delete Product">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span class="text-slate-300 text-xs" title="Only Administrators can delete products">&mdash;</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -554,14 +612,16 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
 
                         <div class="flex items-center space-x-1">
-                            <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to permanently delete this product from inventory?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="action" value="delete_product">
-                                <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
-                                <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer" title="Delete Product">
-                                    <i class="fa-solid fa-trash-can text-xs"></i>
-                                </button>
-                            </form>
+                            <?php if (hasRole(['super_admin', 'admin'])): ?>
+                                <form method="POST" action="stock.php" onsubmit="return confirmAction(event, this, { title: 'Delete Product?', text: 'Are you sure you want to remove this product from the inventory catalog?', confirmText: '<i class=\'fa-solid fa-trash-can mr-1.5\'></i> Yes, Delete', danger: true });" class="inline">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="action" value="delete_product">
+                                    <input type="hidden" name="product_id" value="<?= $prod['id'] ?>">
+                                    <button type="submit" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer" title="Delete Product">
+                                        <i class="fa-solid fa-trash-can text-xs"></i>
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
