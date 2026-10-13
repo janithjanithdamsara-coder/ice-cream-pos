@@ -375,16 +375,22 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <!-- Sidebar User Footer -->
         <div class="p-3 border-t border-slate-800 bg-slate-950/60">
             <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800">
-                <div class="flex items-center space-x-2.5 min-w-0 flex-1">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0">
-                        <?= strtoupper(substr($user['name'], 0, 1)) ?>
+                <button type="button" onclick="openProfileModal()" class="flex items-center space-x-2.5 min-w-0 flex-1 text-left group hover:opacity-95 transition cursor-pointer" title="Manage Profile & Credentials">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 text-white font-extrabold flex items-center justify-center text-xs shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+                        <span id="sidebarUserInitial"><?= strtoupper(substr($user['name'], 0, 1)) ?></span>
                     </div>
                     <div class="min-w-0 flex-1">
-                        <div class="text-xs font-bold text-white truncate"><?= htmlspecialchars($user['name']) ?></div>
-                        <div class="text-[10px] text-slate-400 capitalize truncate"><?= str_replace('_', ' ', $user['role']) ?></div>
+                        <div id="sidebarUserName" class="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors"><?= htmlspecialchars($user['name']) ?></div>
+                        <div class="text-[10px] text-slate-400 capitalize truncate flex items-center">
+                            <span><?= str_replace('_', ' ', $user['role']) ?></span>
+                            <i class="fa-solid fa-pen text-[8px] text-slate-500 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                        </div>
                     </div>
-                </div>
+                </button>
                 <div class="flex items-center space-x-1 shrink-0 ml-1">
+                    <button type="button" onclick="openProfileModal()" title="My Profile & Change Password" class="p-1.5 text-slate-400 hover:text-amber-300 rounded-lg transition-colors cursor-pointer bg-slate-800/60 hover:bg-slate-800">
+                        <i class="fa-solid fa-key text-xs"></i>
+                    </button>
                     <?php if (isImpersonating()): ?>
                         <a href="master.php?action=switch_back_to_master" title="Return to Master Portal" class="p-1.5 text-amber-400 hover:text-amber-300 rounded-lg transition-colors bg-amber-500/10">
                             <i class="fa-solid fa-crown text-xs"></i>
@@ -445,14 +451,17 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <span class="inline sm:hidden ml-1">Bill</span>
                     </a>
 
-                    <!-- User Pill -->
-                    <div class="hidden sm:flex items-center pl-3 border-l border-slate-200 space-x-2">
+                    <!-- User Pill (Click to open Profile & Password Modal) -->
+                    <button type="button" onclick="openProfileModal()" title="My Profile & Security (Click to edit)" class="hidden sm:flex items-center pl-3 border-l border-slate-200 space-x-2 text-left hover:opacity-80 transition cursor-pointer group">
                         <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <div class="text-left">
-                            <span class="text-xs text-slate-700 font-bold block leading-tight"><?= htmlspecialchars($user['name']) ?></span>
-                            <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block leading-none"><?= str_replace('_', ' ', $user['role']) ?></span>
+                            <span id="topNavUserName" class="text-xs text-slate-700 group-hover:text-cyan-700 font-bold block leading-tight transition-colors"><?= htmlspecialchars($user['name']) ?></span>
+                            <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block leading-none flex items-center">
+                                <span><?= str_replace('_', ' ', $user['role']) ?></span>
+                                <i class="fa-solid fa-pen text-[7px] text-slate-400 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                            </span>
                         </div>
-                    </div>
+                    </button>
                 </div>
 
             </div>

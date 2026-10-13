@@ -273,6 +273,129 @@
         </div>
     </div>
 
+    <!-- ==================== USER PROFILE & PASSWORD MODAL (ALL ROLES) ==================== -->
+    <div id="userProfileModal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-4 animate-in fade-in duration-200 no-print">
+        <div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+            
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg text-base">
+                        <i class="fa-solid fa-user-gear"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black tracking-tight">My Profile & Security</h3>
+                        <p class="text-xs text-slate-300 font-medium">Update username & password</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeProfileModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition cursor-pointer">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form onsubmit="handleProfileSubmit(event)" class="p-5 sm:p-6 space-y-4 text-slate-800">
+                <!-- User Role & Branch Badge -->
+                <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="font-bold text-slate-700 capitalize"><?= htmlspecialchars(str_replace('_', ' ', $user['role'] ?? 'Cashier')) ?></span>
+                    </div>
+                    <span class="text-[11px] text-slate-500 font-medium truncate max-w-[180px]"><?= htmlspecialchars($user['branch_name'] ?? 'Main Hub') ?></span>
+                </div>
+
+                <!-- Display Name -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Your Full Name (Display Name)</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="profileNameInput" required value="<?= htmlspecialchars($user['name'] ?? '') ?>"
+                               class="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+                    </div>
+                </div>
+
+                <!-- Username -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Login Username</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-at absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="profileUsernameInput" required value="<?= htmlspecialchars($user['username'] ?? '') ?>"
+                               class="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Use lowercase letters, numbers, and underscores only</p>
+                </div>
+
+                <!-- Change Password Accordion / Section -->
+                <div class="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                    <button type="button" onclick="togglePasswordSection()" class="w-full px-3.5 py-2.5 flex items-center justify-between text-left text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer">
+                        <span class="flex items-center">
+                            <i class="fa-solid fa-key mr-2 text-amber-500"></i>
+                            Change My Password (මුරපදය වෙනස් කරන්න)
+                        </span>
+                        <i id="passwordSectionChevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </button>
+                    
+                    <div id="passwordFieldsContainer" class="hidden px-3.5 pb-3.5 pt-2 space-y-2.5 border-t border-slate-200 bg-white">
+                        <!-- Current Password -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Current Password (දැනට තිබෙන Password එක)</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="password" id="profileCurrentPasswordInput" placeholder="Enter current password..."
+                                       class="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                <button type="button" onclick="togglePassField('profileCurrentPasswordInput', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- New Password -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">New Password (අලුත් Password එක)</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-key absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="password" id="profileNewPasswordInput" placeholder="Min 6 characters..."
+                                       class="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                <button type="button" onclick="togglePassField('profileNewPasswordInput', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">Confirm New Password (නැවත ඇතුළත් කරන්න)</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-check-double absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="password" id="profileConfirmPasswordInput" placeholder="Repeat new password..."
+                                       class="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                <button type="button" onclick="togglePassField('profileConfirmPasswordInput', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Alert Box -->
+                <div id="profileErrorMsg" class="hidden text-xs text-rose-700 font-bold bg-rose-50 border border-rose-200 p-2.5 rounded-xl flex items-start space-x-2">
+                    <i class="fa-solid fa-circle-exclamation text-rose-500 mt-0.5 shrink-0"></i>
+                    <span id="profileErrorText"></span>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-2 flex items-center justify-end space-x-2">
+                    <button type="button" onclick="closeProfileModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" id="profileSubmitBtn" class="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center cursor-pointer">
+                        <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- ==================== AUTO-LOCK INACTIVITY PRIVACY SCREEN ==================== -->
     <style>
         @keyframes lockShake {
@@ -355,6 +478,104 @@
             const modal = document.getElementById('mrLinkSupportModal');
             if (modal) {
                 modal.classList.toggle('hidden');
+            }
+        }
+
+        // ================= USER PROFILE & PASSWORD MODAL HANDLERS =================
+        function openProfileModal() {
+            const modal = document.getElementById('userProfileModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeProfileModal() {
+            const modal = document.getElementById('userProfileModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function togglePasswordSection() {
+            const container = document.getElementById('passwordFieldsContainer');
+            const chevron = document.getElementById('passwordSectionChevron');
+            if (container && chevron) {
+                const isHidden = container.classList.contains('hidden');
+                if (isHidden) {
+                    container.classList.remove('hidden');
+                    chevron.classList.add('rotate-180');
+                } else {
+                    container.classList.add('hidden');
+                    chevron.classList.remove('rotate-180');
+                }
+            }
+        }
+
+        function togglePassField(fieldId, btn) {
+            const input = document.getElementById(fieldId);
+            const icon = btn.querySelector('i');
+            if (input && icon) {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.className = 'fa-solid fa-eye-slash';
+                } else {
+                    input.type = 'password';
+                    icon.className = 'fa-solid fa-eye';
+                }
+            }
+        }
+
+        async function handleProfileSubmit(e) {
+            e.preventDefault();
+            const errBox = document.getElementById('profileErrorMsg');
+            const errText = document.getElementById('profileErrorText');
+            const btn = document.getElementById('profileSubmitBtn');
+            const nameInput = document.getElementById('profileNameInput');
+            const usernameInput = document.getElementById('profileUsernameInput');
+            const currentPass = document.getElementById('profileCurrentPasswordInput');
+            const newPass = document.getElementById('profileNewPasswordInput');
+            const confirmPass = document.getElementById('profileConfirmPasswordInput');
+            const passContainer = document.getElementById('passwordFieldsContainer');
+            const isChangingPass = passContainer && !passContainer.classList.contains('hidden');
+
+            errBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Saving...';
+
+            const formData = new FormData();
+            formData.append('csrf_token', window.CSRF_TOKEN || '');
+            formData.append('name', nameInput.value.trim());
+            formData.append('username', usernameInput.value.trim());
+            formData.append('change_password', isChangingPass ? '1' : '0');
+            if (isChangingPass) {
+                formData.append('current_password', currentPass.value);
+                formData.append('new_password', newPass.value);
+                formData.append('confirm_password', confirmPass.value);
+            }
+
+            try {
+                const res = await fetch('ajax_profile.php', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    closeProfileModal();
+                    showToast(data.message, 'success', 'Profile Updated');
+                    // Update user name in UI elements dynamically
+                    const elName = document.getElementById('sidebarUserName');
+                    if (elName) elName.innerText = data.user.name;
+                    const elTopName = document.getElementById('topNavUserName');
+                    if (elTopName) elTopName.innerText = data.user.name;
+                    const elInit = document.getElementById('sidebarUserInitial');
+                    if (elInit) elInit.innerText = data.user.name.charAt(0).toUpperCase();
+                    // Clear password fields for security
+                    if (currentPass) currentPass.value = '';
+                    if (newPass) newPass.value = '';
+                    if (confirmPass) confirmPass.value = '';
+                } else {
+                    errText.innerText = data.message || 'Error updating profile.';
+                    errBox.classList.remove('hidden');
+                }
+            } catch(err) {
+                errText.innerText = 'Network or server error. Please try again.';
+                errBox.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Changes';
             }
         }
 
