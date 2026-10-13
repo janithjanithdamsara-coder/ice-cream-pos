@@ -32,6 +32,59 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
 
+    <!-- Anti-Inspect & Console Silence Security System (Universal Protection) -->
+    <script>
+        (function() {
+            // Silence console logs and warnings completely
+            const noop = function() {};
+            window.console.log = noop;
+            window.console.warn = noop;
+            window.console.info = noop;
+            window.console.debug = noop;
+            window.console.error = noop;
+
+            // Block Right-Click Context Menu (Inspect Element)
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                return false;
+            });
+
+            // Block Developer Tools Keyboard Shortcuts
+            document.addEventListener('keydown', function(e) {
+                // F12
+                if (e.keyCode === 123) {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl + Shift + I (Inspect)
+                if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.key === 'I' || e.key === 'i')) {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl + Shift + J (Console)
+                if (e.ctrlKey && e.shiftKey && (e.keyCode === 74 || e.key === 'J' || e.key === 'j')) {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl + Shift + C (Inspect Element)
+                if (e.ctrlKey && e.shiftKey && (e.keyCode === 67 || e.key === 'C' || e.key === 'c')) {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl + U (View Source)
+                if (e.ctrlKey && (e.keyCode === 85 || e.key === 'U' || e.key === 'u')) {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl + S (Save Page)
+                if (e.ctrlKey && (e.keyCode === 83 || e.key === 'S' || e.key === 's')) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        })();
+    </script>
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
