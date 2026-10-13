@@ -72,7 +72,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 
     // Action 3: Admin Reset Any User's Password
-    if ($action === 'reset_user_password' && hasRole(['super_admin', 'master'])) {
+    if ($action === 'reset_user_password' && hasRole(['super_admin', 'admin', 'master'])) {
         $targetUserId = intval($_POST['target_user_id'] ?? 0);
         $newPass = trim($_POST['new_password'] ?? '');
 
@@ -81,7 +81,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         } elseif (strlen($newPass) < 6) {
             setFlash('danger', 'New password must be at least 6 characters long.');
         } else {
-            $stmtTarget = $pdo->prepare("SELECT username, role FROM users WHERE id = ?");
+            $stmtTarget = $pdo->prepare("SELECT username, role, name FROM users WHERE id = ?");
             $stmtTarget->execute([$targetUserId]);
             $targetUser = $stmtTarget->fetch();
 
@@ -89,13 +89,73 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 setFlash('danger', 'User account not found.');
             } elseif ($targetUser['role'] === 'master' && !isMaster()) {
                 setFlash('danger', 'Access denied: Master account cannot be modified.');
+            } elseif ($targetUser['role'] === 'super_admin' && !hasRole(['super_admin', 'master'])) {
+                setFlash('danger', 'Access denied: Only Super Admin can modify Super Admin accounts.');
             } else {
                 $newHash = password_hash($newPass, PASSWORD_DEFAULT);
                 $stmtUp = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
                 $stmtUp->execute([$newHash, $targetUserId]);
 
                 logActivity('password_reset', 'users', "Admin [{$user['username']}] reset password for user [{$targetUser['username']}]", $user['id']);
-                setFlash('success', "Password for user [{$targetUser['username']}] has been reset successfully!");
+                setFlash('success', "Password for user [{$targetUser['username']}] ({$targetUser['name']}) has been reset successfully!");
+            }
+        }
+        header("Location: users.php");
+        exit;
+    }
+
+    // Action 3.1: Admin Edit User Details & Password
+    if ($action === 'edit_user' && hasRole(['super_admin', 'admin', 'master'])) {
+        $targetUserId = intval($_POST['target_user_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $username = strtolower(trim($_POST['username'] ?? ''));
+        $phone = trim($_POST['phone'] ?? '');
+        $branchId = !empty($_POST['branch_id']) ? intval($_POST['branch_id']) : null;
+        $newPass = trim($_POST['new_password'] ?? '');
+
+        if ($targetUserId <= 0 || empty($name) || empty($username)) {
+            setFlash('danger', 'Please enter both full name and username.');
+        } elseif (strlen($username) < 3 || !preg_match('/^[a-z0-9_\.]+$/', $username)) {
+            setFlash('danger', 'Username must be at least 3 characters and use lowercase letters, numbers, and (_) only.');
+        } else {
+            $stmtTarget = $pdo->prepare("SELECT username, role, name FROM users WHERE id = ?");
+            $stmtTarget->execute([$targetUserId]);
+            $targetUser = $stmtTarget->fetch();
+
+            if (!$targetUser) {
+                setFlash('danger', 'User account not found.');
+            } elseif ($targetUser['role'] === 'master' && !isMaster()) {
+                setFlash('danger', 'Access denied: Master account cannot be modified.');
+            } elseif ($targetUser['role'] === 'super_admin' && !hasRole(['super_admin', 'master'])) {
+                setFlash('danger', 'Access denied: Only Super Admin can modify Super Admin accounts.');
+            } else {
+                // Check username uniqueness
+                $stmtCheck = $pdo->prepare("SELECT id FROM users WHERE LOWER(username) = ? AND id != ? LIMIT 1");
+                $stmtCheck->execute([$username, $targetUserId]);
+                if ($stmtCheck->fetch()) {
+                    setFlash('danger', "The username '{$username}' is already in use by another account.");
+                } else {
+                    try {
+                        if (!empty($newPass)) {
+                            if (strlen($newPass) < 6) {
+                                setFlash('danger', 'Password must be at least 6 characters long.');
+                                header("Location: users.php");
+                                exit;
+                            }
+                            $newHash = password_hash($newPass, PASSWORD_DEFAULT);
+                            $stmtUp = $pdo->prepare("UPDATE users SET name = ?, username = ?, branch_id = ?, phone = ?, password = ? WHERE id = ?");
+                            $stmtUp->execute([$name, $username, $branchId, $phone, $newHash, $targetUserId]);
+                            logActivity('edit_user', 'users', "Admin [{$user['username']}] updated details and password for user [{$username}]", $user['id']);
+                        } else {
+                            $stmtUp = $pdo->prepare("UPDATE users SET name = ?, username = ?, branch_id = ?, phone = ? WHERE id = ?");
+                            $stmtUp->execute([$name, $username, $branchId, $phone, $targetUserId]);
+                            logActivity('edit_user', 'users', "Admin [{$user['username']}] updated account details for user [{$username}]", $user['id']);
+                        }
+                        setFlash('success', "User account [{$username}] ({$name}) updated successfully!");
+                    } catch (Exception $e) {
+                        setFlash('danger', 'Error updating user: ' . $e->getMessage());
+                    }
+                }
             }
         }
         header("Location: users.php");
@@ -254,6 +314,16 @@ require_once __DIR__ . '/includes/header.php';
                         <td class="p-3 text-right">
                             <div class="flex items-center justify-end space-x-1.5">
                                 <?php if ($u['role'] !== 'master' || isMaster()): ?>
+                                    <button type="button" onclick="openEditUserModal(<?= htmlspecialchars(json_encode([
+                                        'id' => $u['id'],
+                                        'name' => $u['name'],
+                                        'username' => $u['username'],
+                                        'phone' => $u['phone'] ?? '',
+                                        'branch_id' => $u['branch_id'] ?? '',
+                                        'role' => $u['role']
+                                    ]), ENT_QUOTES, 'UTF-8') ?>)" class="px-2.5 py-1 bg-slate-100 hover:bg-cyan-100 text-slate-700 hover:text-cyan-800 rounded-lg text-xs font-bold transition flex items-center cursor-pointer" title="Edit user details & password">
+                                        <i class="fa-solid fa-pen text-cyan-600 mr-1.5"></i> Edit
+                                    </button>
                                     <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2.5 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 rounded-lg text-xs font-bold transition flex items-center cursor-pointer" title="Reset password for this user">
                                         <i class="fa-solid fa-key text-amber-500 mr-1.5"></i> Reset
                                     </button>
@@ -307,6 +377,16 @@ require_once __DIR__ . '/includes/header.php';
                 <span class="truncate max-w-[150px]"><?= htmlspecialchars($u['branch_name'] ?? 'All Branches') ?></span>
                 <div class="flex items-center space-x-1.5">
                     <?php if ($u['role'] !== 'master' || isMaster()): ?>
+                        <button type="button" onclick="openEditUserModal(<?= htmlspecialchars(json_encode([
+                            'id' => $u['id'],
+                            'name' => $u['name'],
+                            'username' => $u['username'],
+                            'phone' => $u['phone'] ?? '',
+                            'branch_id' => $u['branch_id'] ?? '',
+                            'role' => $u['role']
+                        ]), ENT_QUOTES, 'UTF-8') ?>)" class="px-2 py-1 bg-slate-100 hover:bg-cyan-100 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center">
+                            <i class="fa-solid fa-pen text-cyan-600 mr-1"></i> Edit
+                        </button>
                         <button type="button" onclick="openResetUserModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['username'])) ?>', '<?= htmlspecialchars(addslashes($u['name'])) ?>')" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center">
                             <i class="fa-solid fa-key text-amber-500 mr-1"></i> Reset
                         </button>
@@ -552,7 +632,85 @@ require_once __DIR__ . '/includes/header.php';
         document.getElementById('resetUserModal').classList.remove('hidden');
     }
     function closeResetUserModal() { document.getElementById('resetUserModal').classList.add('hidden'); }
+
+    function openEditUserModal(userObj) {
+        document.getElementById('editTargetUserId').value = userObj.id || '';
+        document.getElementById('editUserNameInput').value = userObj.name || '';
+        document.getElementById('editUserUsernameInput').value = userObj.username || '';
+        document.getElementById('editUserPhoneInput').value = userObj.phone || '';
+        document.getElementById('editUserBranchSelect').value = userObj.branch_id || '';
+        document.getElementById('editUserPasswordInput').value = '';
+        resetPasswordVisibility('editUserPasswordInput');
+        document.getElementById('editUserModal').classList.remove('hidden');
+    }
+    function closeEditUserModal() { document.getElementById('editUserModal').classList.add('hidden'); }
 </script>
+
+<!-- MODAL: Edit User Account (Admin Tool) -->
+<div id="editUserModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <h3 class="font-bold text-sm text-slate-800 flex items-center">
+                <i class="fa-solid fa-user-pen text-cyan-600 mr-2"></i> Edit User Account
+            </h3>
+            <button type="button" onclick="closeEditUserModal()" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="users.php" class="space-y-3.5 text-xs">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="edit_user">
+            <input type="hidden" name="target_user_id" id="editTargetUserId">
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Full Name *</label>
+                <input type="text" name="name" id="editUserNameInput" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Username *</label>
+                    <input type="text" name="username" id="editUserUsernameInput" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Contact Phone</label>
+                    <input type="text" name="phone" id="editUserPhoneInput" placeholder="077-xxxxxxx" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+                </div>
+            </div>
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">Assigned Branch</label>
+                <select name="branch_id" id="editUserBranchSelect" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white">
+                    <option value="">-- All Branches (Super Admin) --</option>
+                    <?php foreach ($branches as $b): ?>
+                        <option value="<?= $b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Optional Override Password -->
+            <div class="p-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl space-y-1.5">
+                <label class="block font-bold text-amber-900 text-[11px]">
+                    <i class="fa-solid fa-key mr-1 text-amber-600"></i> New Password (මුරපදය වෙනස් කිරීමට පමණක් පුරවන්න)
+                </label>
+                <div class="relative">
+                    <input type="password" name="new_password" id="editUserPasswordInput" minlength="6" placeholder="Leave blank to keep existing password..."
+                           class="w-full p-2 pr-10 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <button type="button" onclick="togglePasswordVisibility('editUserPasswordInput', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer" title="Toggle password visibility">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                </div>
+                <p class="text-[10px] text-amber-800">Keep blank if you only want to update name, username, or branch.</p>
+            </div>
+
+            <div class="pt-2 flex justify-end space-x-2">
+                <button type="button" onclick="closeEditUserModal()" class="px-4 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-xs">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
 
