@@ -21,8 +21,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' | ' : '' ?>Dhanesha Distributors - Ice Cream Logistics</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="alternate icon" href="favicon.svg">
+    <link rel="icon" type="image/png" href="assets/images/logo.png">
+    <link rel="alternate icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="assets/images/logo.png">
     <meta name="theme-color" content="#030712">
 
     <!-- Preconnect to external CDNs for lightning-fast handshake -->
@@ -171,9 +172,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <!-- Brand Logo & Header -->
             <div class="h-16 px-5 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40">
                 <a href="dashboard.php" class="flex items-center space-x-3 group">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-950/50 group-hover:scale-105 transition-transform">
-                        <i class="fa-solid fa-boxes-packing text-lg"></i>
-                    </div>
+                    <img src="assets/images/logo.png" alt="Magic Logo" class="w-10 h-10 rounded-full object-contain bg-white ring-2 ring-white/20 shadow-md shadow-cyan-950/50 group-hover:scale-105 transition-transform shrink-0 p-0.5">
                     <div>
                         <span class="text-base font-black tracking-tight text-white flex items-center">
                             Dhanesha

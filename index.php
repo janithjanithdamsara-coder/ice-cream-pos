@@ -70,8 +70,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     <title>Sign In | Dhanesha Distributors - Ice Cream Logistics</title>
     <meta name="description" content="Sign in to Dhanesha Distributors - Official portal for ice cream cold room warehousing, van sales distribution, inventory and POS operations.">
     <link rel="canonical" href="https://dhaneshadistributors.site/">
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="alternate icon" href="favicon.svg">
+    <link rel="icon" type="image/png" href="assets/images/logo.png">
+    <link rel="alternate icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="assets/images/logo.png">
     <meta name="theme-color" content="#030712">
 
     <!-- Preconnect to external CDNs for lightning-fast handshake -->
@@ -118,8 +119,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         
         <!-- Logo & Branding Header -->
         <div class="text-center mb-6 sm:mb-8">
-            <div class="inline-flex w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 items-center justify-center text-white shadow-2xl shadow-cyan-500/30 mb-3.5 transform hover:scale-105 active:scale-95 transition-all ring-4 ring-white/10">
-                <i class="fa-solid fa-ice-cream text-3xl sm:text-4xl text-cyan-200"></i>
+            <div class="inline-flex items-center justify-center mb-3.5 transform hover:scale-105 active:scale-95 transition-all">
+                <img src="assets/images/logo.png" alt="Magic Ice Cream Logo" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full shadow-2xl shadow-cyan-500/25 ring-4 ring-white/20 bg-white object-contain p-1">
             </div>
             <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center">
                 Dhanesha Distributors
