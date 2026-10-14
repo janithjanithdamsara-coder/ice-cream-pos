@@ -407,18 +407,34 @@ require_once __DIR__ . '/includes/header.php';
 <!-- TAB 1: Main Store Inventory -->
 <div id="inventoryTab" class="tab-content">
     <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div class="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
-            <div class="relative w-full sm:w-80">
-                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs pointer-events-none">
-                    <i class="fa-solid fa-search"></i>
-                </span>
-                <input type="text" id="stockSearch" oninput="filterStockTable()" onkeyup="filterStockTable()" onchange="filterStockTable()" placeholder="Search product code, name, flavor, size..." 
-                       class="w-full pl-8 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
-                <button type="button" id="stockSearchClear" onclick="document.getElementById('stockSearch').value=''; filterStockTable();" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
-                    <i class="fa-solid fa-circle-xmark"></i>
-                </button>
+        <div class="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-3">
+            <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                <div class="relative w-full sm:w-72">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs pointer-events-none">
+                        <i class="fa-solid fa-search"></i>
+                    </span>
+                    <input type="text" id="stockSearch" oninput="filterStockTable()" onkeyup="filterStockTable()" onchange="filterStockTable()" placeholder="Search product code, name, flavor..." 
+                           class="w-full pl-8 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium">
+                    <button type="button" id="stockSearchClear" onclick="document.getElementById('stockSearch').value=''; filterStockTable();" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Color Legend / Key -->
+                <div class="flex items-center gap-2 text-[11px] font-bold flex-wrap">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs" title="Stock > Alert Quantity (Units 15)">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Sufficient Stock (තොග ඇත)
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs" title="Stock <= Alert Quantity (Units 15)">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> Low Stock (අඩු වේ)
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-800 border border-rose-200/80 shadow-2xs" title="Stock = 0">
+                        <span class="w-2 h-2 rounded-full bg-rose-500"></span> Out of Stock (ඉවරයි - 0)
+                    </span>
+                </div>
             </div>
-            <div class="text-[11px] sm:text-xs text-slate-400 w-full sm:w-auto text-left sm:text-right">
+
+            <div class="text-[11px] sm:text-xs text-slate-400 w-full md:w-auto text-left md:text-right font-medium">
                 Physical counts in Cold Room warehouse
             </div>
         </div>
@@ -433,14 +449,13 @@ require_once __DIR__ . '/includes/header.php';
                         <th class="py-3 px-4">Size / Volume</th>
                         <th class="py-3 px-4 text-center">Box Qty</th>
                         <th class="py-3 px-4 text-center">Cold Room Stock (Units)</th>
-                        <th class="py-3 px-4 text-center">Stock Level</th>
                         <th class="py-3 px-4 text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-slate-700">
                     <?php if (empty($inventory)): ?>
                         <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-400">
+                            <td colspan="6" class="py-12 text-center text-slate-400">
                                 <i class="fa-solid fa-boxes-stacked text-3xl mb-2 text-slate-300"></i>
                                 <p class="font-bold text-slate-700 text-sm">No Products Found</p>
                                 <p class="text-xs text-slate-400 mt-1">Click "+ Add Product" above to create your ice cream flavors.</p>
@@ -456,10 +471,19 @@ require_once __DIR__ . '/includes/header.php';
                             $totCount = intval($prod['store_stock'] ?? 0);
                             $bCount = floor($totCount / $packSize);
                             $pCount = $totCount % $packSize;
-                            $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
                             $isZero = $prod['store_stock'] <= 0;
+                            $isLow = !$isZero && ($prod['store_stock'] <= $prod['alert_quantity']);
+
+                            // Dynamic row styling based on stock level
+                            if ($isZero) {
+                                $rowStyle = "bg-rose-50/40 hover:bg-rose-50/70 border-l-4 border-l-rose-500";
+                            } elseif ($isLow) {
+                                $rowStyle = "bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-500";
+                            } else {
+                                $rowStyle = "bg-white hover:bg-emerald-50/30 border-l-4 border-l-emerald-500";
+                            }
                         ?>
-                            <tr class="hover:bg-slate-50 transition-colors stock-desktop-row" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
+                            <tr class="<?= $rowStyle ?> transition-colors stock-desktop-row" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                                 <td class="py-3.5 px-4 font-bold text-slate-800">
                                     <div class="text-sm"><?= htmlspecialchars($prod['name']) ?></div>
                                     <div class="text-[10px] text-slate-400 font-mono"><?= htmlspecialchars($prod['code']) ?> &bull; <?= htmlspecialchars($prod['flavor'] ?? '') ?></div>
@@ -485,7 +509,7 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php if ($totCount > 0): ?>
                                         <div class="inline-flex flex-col items-center justify-center">
                                             <?php if ($packSize <= 1): ?>
-                                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
+                                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono <?= $isLow ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300' ?>">
                                                     🍦 <?= number_format($totCount) ?> Loose Tubs
                                                 </span>
                                             <?php elseif ($bCount > 0 && $pCount > 0): ?>
@@ -505,18 +529,9 @@ require_once __DIR__ . '/includes/header.php';
                                             <?php endif; ?>
                                         </div>
                                     <?php else: ?>
-                                        <span class="inline-block px-2.5 py-1 rounded-xl font-bold text-xs bg-rose-50 text-rose-600 border border-rose-200">
+                                        <span class="inline-block px-2.5 py-1 rounded-xl font-bold text-xs bg-rose-100 text-rose-700 border border-rose-300 font-mono">
                                             0 (Out of Stock)
                                         </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3.5 px-4 text-center">
-                                    <?php if ($isZero): ?>
-                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-600 border border-rose-200">Out of Stock (0)</span>
-                                    <?php elseif ($isLow): ?>
-                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">Low Stock Alert</span>
-                                    <?php else: ?>
-                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">Sufficient Stock</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-3.5 px-4 text-center">
@@ -536,7 +551,7 @@ require_once __DIR__ . '/includes/header.php';
                             </tr>
                         <?php endforeach; ?>
                         <tr id="stockDesktopNoResults" class="hidden">
-                            <td colspan="7" class="py-12 text-center text-slate-400 font-bold text-xs">
+                            <td colspan="6" class="py-12 text-center text-slate-400 font-bold text-xs">
                                 <i class="fa-solid fa-magnifying-glass text-slate-300 text-2xl mb-2 block"></i>
                                 No matching ice cream products found for this search.
                             </td>
@@ -556,10 +571,11 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             <?php else: ?>
                 <?php foreach ($inventory as $prod): 
-                    $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
                     $isZero = $prod['store_stock'] <= 0;
+                    $isLow = !$isZero && ($prod['store_stock'] <= $prod['alert_quantity']);
+                    $mobileRowClass = $isZero ? "border-l-4 border-l-rose-500 bg-rose-50/20" : ($isLow ? "border-l-4 border-l-amber-500 bg-amber-50/20" : "border-l-4 border-l-emerald-500");
                 ?>
-                <div class="p-3.5 hover:bg-slate-50 transition-colors stock-mobile-item" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
+                <div class="p-3.5 hover:bg-slate-50 transition-colors stock-mobile-item <?= $mobileRowClass ?>" data-search="<?= htmlspecialchars(strtolower($prod['name'] . ' ' . $prod['code'] . ' ' . ($prod['flavor'] ?? '') . ' ' . ($prod['category_name'] ?? '') . ' ' . ($prod['size'] ?? ''))) ?>">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0 flex-1">
                             <div class="text-sm font-extrabold text-slate-900 leading-snug">
