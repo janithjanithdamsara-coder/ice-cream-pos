@@ -204,7 +204,7 @@ $stmt = $pdo->prepare("SELECT p.id, p.code, p.name, p.flavor, p.size, COALESCE(p
     FROM products p
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ?
     WHERE p.status = 'active'
-    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.code ASC, p.name ASC");
+    ORDER BY p.category_id ASC, p.id ASC");
 $stmt->execute([$branchId]);
 $availableProducts = $stmt->fetchAll();
 
@@ -810,7 +810,9 @@ require_once __DIR__ . '/includes/header.php';
                             <td class="py-2.5 px-3 text-center whitespace-nowrap">
                                 <?php if ($hasStock): ?>
                                     <span class="inline-flex items-center gap-1 font-mono font-bold text-[11px]">
-                                        <?php if ($bCount > 0 && $pCount > 0): ?>
+                                        <?php if ($packSize <= 1): ?>
+                                            <span class="px-2 py-0.5 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200">🍦 <?= number_format($pStock) ?> Loose</span>
+                                        <?php elseif ($bCount > 0 && $pCount > 0): ?>
                                             <span class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">📦 <?= $bCount ?> Bx</span>
                                             <span class="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">🍦 <?= $pCount ?> Pcs</span>
                                         <?php elseif ($bCount > 0): ?>
@@ -827,21 +829,33 @@ require_once __DIR__ . '/includes/header.php';
                                 <?php endif; ?>
                             </td>
 
-                            <!-- Pack Size Input -->
+                            <!-- Pack Size Fixed Display -->
                             <td class="py-2.5 px-3 text-center">
-                                <input type="number" name="pack_size[<?= $pid ?>]" id="issue_pack_<?= $pid ?>" value="<?= $packSize ?>" min="1"
-                                       oninput="handleIssueInput(<?= $pid ?>)"
-                                       class="w-14 bg-slate-50 border border-slate-200 rounded-lg px-1 py-1 text-xs font-bold font-mono text-center text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                <?php if ($packSize > 1): ?>
+                                    <span class="inline-block px-2 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg font-mono font-black text-xs shadow-2xs select-none" title="Fixed Box Size: <?= $packSize ?> Units / Box">
+                                        📦 <?= $packSize ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg font-mono font-bold text-[10px] select-none" title="Single Tub / Loose Item (1 Unit)">
+                                        Loose (1)
+                                    </span>
+                                <?php endif; ?>
+                                <input type="hidden" name="pack_size[<?= $pid ?>]" id="issue_pack_<?= $pid ?>" value="<?= $packSize ?>">
                             </td>
 
                             <!-- Box Qty Input -->
                             <td class="py-2.5 px-3 text-center">
-                                <div class="relative max-w-[105px] mx-auto">
-                                    <span class="absolute left-2 top-1 text-[11px]">📦</span>
-                                    <input type="number" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" min="0" placeholder="0"
-                                           oninput="handleIssueInput(<?= $pid ?>)"
-                                           class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
-                                </div>
+                                <?php if ($packSize > 1): ?>
+                                    <div class="relative max-w-[105px] mx-auto">
+                                        <span class="absolute left-2 top-1 text-[11px]">📦</span>
+                                        <input type="number" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" min="0" placeholder="0"
+                                               oninput="handleIssueInput(<?= $pid ?>)"
+                                               class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1 text-xs font-bold font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right">
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-slate-300 font-mono text-xs select-none" title="Single tubs are issued as loose pieces">—</span>
+                                    <input type="hidden" name="box_qty[<?= $pid ?>]" id="issue_box_<?= $pid ?>" value="0">
+                                <?php endif; ?>
                             </td>
 
                             <!-- Pieces Qty Input -->

@@ -218,6 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category_id = !empty($_POST['category_id']) ? intval($_POST['category_id']) : 1;
         $flavor = trim($_POST['flavor'] ?? '');
         $size = trim($_POST['size'] ?? '');
+        $packSize = max(1, intval($_POST['pack_size'] ?? 1));
         $initialStock = intval($_POST['initial_stock'] ?? 0);
         $alertQty = intval($_POST['alert_quantity'] ?? 15);
 
@@ -226,12 +227,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Ensure categories exist
                 $catCount = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
                 if ($catCount == 0) {
-                    $pdo->exec("INSERT INTO categories (id, name) VALUES (1, 'General Ice Creams')");
+                    $pdo->exec("INSERT INTO categories (id, name) VALUES (1, 'STICK')");
                 }
 
-                $stmt = $pdo->prepare("INSERT INTO products (category_id, code, name, flavor, size, alert_quantity) 
-                    VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$category_id, $code, $name, $flavor, $size, $alertQty]);
+                $stmt = $pdo->prepare("INSERT INTO products (category_id, code, name, flavor, size, alert_quantity, pack_size) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$category_id, $code, $name, $flavor, $size, $alertQty, $packSize]);
                 $newId = $pdo->lastInsertId();
 
                 if ($initialStock > 0) {
@@ -351,7 +352,7 @@ $stmt = $pdo->prepare("SELECT p.*, c.name as category_name,
     LEFT JOIN categories c ON p.category_id = c.id 
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
     WHERE p.status = 'active'
-    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.code ASC, p.name ASC");
+    ORDER BY c.id ASC, p.id ASC");
 $stmt->execute([$branchId]);
 $inventory = $stmt->fetchAll();
 
@@ -430,6 +431,7 @@ require_once __DIR__ . '/includes/header.php';
                         <th class="py-3 px-4">Product Code & Name</th>
                         <th class="py-3 px-4">Category</th>
                         <th class="py-3 px-4">Size / Volume</th>
+                        <th class="py-3 px-4 text-center">Box Qty</th>
                         <th class="py-3 px-4 text-center">Cold Room Stock (Units)</th>
                         <th class="py-3 px-4 text-center">Stock Level</th>
                         <th class="py-3 px-4 text-center">Action</th>
@@ -438,7 +440,7 @@ require_once __DIR__ . '/includes/header.php';
                 <tbody class="divide-y divide-slate-100 text-slate-700">
                     <?php if (empty($inventory)): ?>
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-slate-400">
+                            <td colspan="7" class="py-12 text-center text-slate-400">
                                 <i class="fa-solid fa-boxes-stacked text-3xl mb-2 text-slate-300"></i>
                                 <p class="font-bold text-slate-700 text-sm">No Products Found</p>
                                 <p class="text-xs text-slate-400 mt-1">Click "+ Add Product" above to create your ice cream flavors.</p>
@@ -449,6 +451,11 @@ require_once __DIR__ . '/includes/header.php';
                         </tr>
                     <?php else: ?>
                         <?php foreach ($inventory as $prod): 
+                            $packSize = intval($prod['pack_size'] ?? 1);
+                            if ($packSize <= 0) $packSize = 1;
+                            $totCount = intval($prod['store_stock'] ?? 0);
+                            $bCount = floor($totCount / $packSize);
+                            $pCount = $totCount % $packSize;
                             $isLow = $prod['store_stock'] <= $prod['alert_quantity'];
                             $isZero = $prod['store_stock'] <= 0;
                         ?>
@@ -463,17 +470,25 @@ require_once __DIR__ . '/includes/header.php';
                                 <td class="py-3.5 px-4 text-slate-600 font-medium">
                                     <?= htmlspecialchars($prod['size'] ?? '-') ?>
                                 </td>
+                                <td class="py-3.5 px-4 text-center font-mono">
+                                    <?php if ($packSize > 1): ?>
+                                        <span class="inline-block px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 text-xs font-black select-none">
+                                            📦 <?= $packSize ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-block px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold select-none">
+                                            Loose (1)
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="py-3.5 px-4 text-center">
-                                    <?php
-                                    $packSize = intval($prod['pack_size'] ?? 24);
-                                    if ($packSize <= 0) $packSize = 24;
-                                    $totCount = intval($prod['store_stock'] ?? 0);
-                                    $bCount = floor($totCount / $packSize);
-                                    $pCount = $totCount % $packSize;
-                                    ?>
                                     <?php if ($totCount > 0): ?>
                                         <div class="inline-flex flex-col items-center justify-center">
-                                            <?php if ($bCount > 0 && $pCount > 0): ?>
+                                            <?php if ($packSize <= 1): ?>
+                                                <span class="inline-block px-2.5 py-1 rounded-xl font-black text-xs font-mono bg-cyan-100 text-cyan-900 border border-cyan-300">
+                                                    🍦 <?= number_format($totCount) ?> Loose Tubs
+                                                </span>
+                                            <?php elseif ($bCount > 0 && $pCount > 0): ?>
                                                 <div class="inline-flex items-center gap-1 flex-wrap justify-center font-mono">
                                                     <span class="px-2 py-0.5 rounded-lg font-black text-xs bg-amber-100 text-amber-900 border border-amber-300">📦 <?= number_format($bCount) ?> Bx</span>
                                                     <span class="px-2 py-0.5 rounded-lg font-black text-xs bg-cyan-100 text-cyan-900 border border-cyan-300">+ 🍦 <?= number_format($pCount) ?> Pcs</span>
@@ -521,7 +536,7 @@ require_once __DIR__ . '/includes/header.php';
                             </tr>
                         <?php endforeach; ?>
                         <tr id="stockDesktopNoResults" class="hidden">
-                            <td colspan="6" class="py-12 text-center text-slate-400 font-bold text-xs">
+                            <td colspan="7" class="py-12 text-center text-slate-400 font-bold text-xs">
                                 <i class="fa-solid fa-magnifying-glass text-slate-300 text-2xl mb-2 block"></i>
                                 No matching ice cream products found for this search.
                             </td>
@@ -901,7 +916,9 @@ require_once __DIR__ . '/includes/header.php';
                                 <td class="py-2 px-3 text-center whitespace-nowrap">
                                     <?php if ($tCur > 0): ?>
                                         <div class="text-center font-mono">
-                                            <?php if ($bCur > 0 && $pCur > 0): ?>
+                                            <?php if ($packSize <= 1): ?>
+                                                <span class="text-[10px] font-black text-cyan-900 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200">🍦 <?= $tCur ?> Loose</span>
+                                            <?php elseif ($bCur > 0 && $pCur > 0): ?>
                                                 <span class="text-[10px] font-black text-amber-900 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">📦<?= $bCur ?></span>
                                                 <span class="text-[10px] font-black text-cyan-900 bg-cyan-50 px-1 py-0.5 rounded border border-cyan-200">+<?= $pCur ?></span>
                                             <?php elseif ($bCur > 0): ?>
@@ -916,14 +933,26 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-2 text-center border-l border-slate-100 bg-slate-50/50">
-                                    <input type="number" name="pack_size[<?= $prod['id'] ?>]" id="pack_<?= $prod['id'] ?>" value="<?= $packSize ?>" min="1" 
-                                           class="grn-pack-field w-14 text-center py-1.5 px-1 bg-white border border-slate-300 rounded-lg font-mono font-black text-slate-800 text-xs focus:ring-1 focus:ring-cyan-500 shadow-2xs" 
-                                           oninput="handleGrnInput(<?= $prod['id'] ?>)">
+                                    <?php if ($packSize > 1): ?>
+                                        <span class="inline-block px-2 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg font-mono font-black text-xs shadow-2xs select-none" title="Fixed Box Size: <?= $packSize ?> Units / Box">
+                                            📦 <?= $packSize ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg font-mono font-bold text-[10px] select-none" title="Single Tub / Loose Item (1 Unit)">
+                                            Loose (1)
+                                        </span>
+                                    <?php endif; ?>
+                                    <input type="hidden" name="pack_size[<?= $prod['id'] ?>]" id="pack_<?= $prod['id'] ?>" value="<?= $packSize ?>" class="grn-pack-field">
                                 </td>
                                 <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
-                                    <input type="number" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" min="0" placeholder="0" 
-                                           class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
-                                           oninput="handleGrnInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                    <?php if ($packSize > 1): ?>
+                                        <input type="number" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" min="0" placeholder="0" 
+                                               class="grn-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs" 
+                                               oninput="handleGrnInput(<?= $prod['id'] ?>)" onkeydown="handleGrnNav(event, this)">
+                                    <?php else: ?>
+                                        <span class="text-slate-300 font-mono text-xs select-none" title="Single tubs are entered as loose pieces">—</span>
+                                        <input type="hidden" name="box_qty[<?= $prod['id'] ?>]" id="box_<?= $prod['id'] ?>" value="0" class="grn-box-field">
+                                    <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-3 text-center bg-cyan-50/30 border-l border-cyan-100/60">
                                     <input type="number" name="quantity[<?= $prod['id'] ?>]" id="qty_<?= $prod['id'] ?>" min="0" placeholder="0" 
@@ -1012,13 +1041,17 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Box Qty (Pck Sz)</label>
+                    <input type="number" name="pack_size" value="1" min="1" placeholder="e.g. 42" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-center text-amber-900" title="Units per Box (Set 1 for loose tubs)">
+                </div>
                 <div>
                     <label class="block font-bold text-slate-700 mb-1">Initial Stock (Units)</label>
                     <input type="number" name="initial_stock" value="0" min="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold">
                 </div>
                 <div>
-                    <label class="block font-bold text-slate-700 mb-1">Low Stock Warning Qty</label>
+                    <label class="block font-bold text-slate-700 mb-1">Alert Qty</label>
                     <input type="number" name="alert_quantity" value="15" min="1" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono">
                 </div>
             </div>

@@ -598,7 +598,7 @@ $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, COALESCE(bs.quantity
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = ? 
     WHERE p.status = 'active'
-    ORDER BY (COALESCE(bs.quantity, 0) > 0) DESC, COALESCE(bs.quantity, 0) DESC, p.code ASC, p.name ASC");
+    ORDER BY c.id ASC, p.id ASC");
 $stmt->execute([$branchId]);
 $products = $stmt->fetchAll();
 
@@ -1280,14 +1280,26 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-2 text-center bg-slate-50/50 border-l border-slate-200">
-                                    <input type="number" name="pack_size[<?= $p['id'] ?>]" id="disp_pack_<?= $p['id'] ?>" min="1" value="<?= $packSize ?>" 
-                                           <?= $isOut ? 'disabled class="disp-pack-field w-16 text-center py-1.5 px-1 bg-slate-100 border border-slate-200 rounded-xl font-mono text-xs text-slate-400 cursor-not-allowed opacity-40"' : 'class="disp-pack-field w-16 text-center py-1.5 px-1 bg-white border border-slate-300 rounded-xl font-mono text-xs font-bold text-slate-700 focus:ring-1 focus:ring-amber-500"' ?>
-                                           oninput="handleDispatchInput(<?= $p['id'] ?>)">
+                                    <?php if ($packSize > 1): ?>
+                                        <span class="inline-block px-2 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg font-mono font-black text-xs shadow-2xs select-none" title="Fixed Box Size: <?= $packSize ?> Units / Box">
+                                            📦 <?= $packSize ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg font-mono font-bold text-[10px] select-none" title="Single Tub / Loose Item (1 Unit)">
+                                            Loose (1)
+                                        </span>
+                                    <?php endif; ?>
+                                    <input type="hidden" name="pack_size[<?= $p['id'] ?>]" id="disp_pack_<?= $p['id'] ?>" value="<?= $packSize ?>" class="disp-pack-field">
                                 </td>
                                 <td class="py-2 px-3 text-center bg-amber-50/30 border-l border-amber-100/60">
-                                    <input type="number" name="box_qty[<?= $p['id'] ?>]" id="disp_box_<?= $p['id'] ?>" min="0" placeholder="0" 
-                                           <?= $isOut ? 'disabled class="disp-box-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="disp-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs"' ?>
-                                           oninput="handleDispatchInput(<?= $p['id'] ?>)" onkeydown="handleDispatchNav(event, this)">
+                                    <?php if ($packSize > 1): ?>
+                                        <input type="number" name="box_qty[<?= $p['id'] ?>]" id="disp_box_<?= $p['id'] ?>" min="0" placeholder="0" 
+                                               <?= $isOut ? 'disabled class="disp-box-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="disp-box-field w-20 text-center py-1.5 px-2 bg-white border border-amber-300 rounded-xl font-mono font-black text-amber-900 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all shadow-xs"' ?>
+                                               oninput="handleDispatchInput(<?= $p['id'] ?>)" onkeydown="handleDispatchNav(event, this)">
+                                    <?php else: ?>
+                                        <span class="text-slate-300 font-mono text-xs select-none" title="Single tubs are dispatched as loose pieces">—</span>
+                                        <input type="hidden" name="box_qty[<?= $p['id'] ?>]" id="disp_box_<?= $p['id'] ?>" value="0" class="disp-box-field">
+                                    <?php endif; ?>
                                 </td>
                                 <td class="py-2 px-3 text-center bg-sky-50/30 border-l border-sky-100/60">
                                     <input type="number" name="pieces_qty[<?= $p['id'] ?>]" id="disp_pcs_<?= $p['id'] ?>" min="0" placeholder="0" 
@@ -1498,20 +1510,32 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
 
                                 <td class="py-2 px-2 text-center bg-slate-50/50 border-l border-slate-200">
-                                    <input type="number" name="reload_pack_size[<?= $p['id'] ?>]" id="rld_pack_<?= $p['id'] ?>" min="1" value="<?= $packSize ?>" 
-                                           <?= $isOut ? 'disabled class="reload-pack-field w-16 text-center py-1.5 px-1 bg-slate-100 border border-slate-200 rounded-xl font-mono text-xs text-slate-400 cursor-not-allowed opacity-40"' : 'class="reload-pack-field w-16 text-center py-1.5 px-1 bg-white border border-slate-300 rounded-xl font-mono text-xs font-bold text-slate-700 focus:ring-1 focus:ring-orange-500"' ?>
-                                           oninput="handleReloadInput(<?= $p['id'] ?>)">
+                                    <?php if ($packSize > 1): ?>
+                                        <span class="inline-block px-2 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg font-mono font-black text-xs shadow-2xs select-none" title="Fixed Box Size: <?= $packSize ?> Units / Box">
+                                            📦 <?= $packSize ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg font-mono font-bold text-[10px] select-none" title="Single Tub / Loose Item (1 Unit)">
+                                            Loose (1)
+                                        </span>
+                                    <?php endif; ?>
+                                    <input type="hidden" name="reload_pack_size[<?= $p['id'] ?>]" id="rld_pack_<?= $p['id'] ?>" value="<?= $packSize ?>" class="reload-pack-field">
                                 </td>
 
                                 <td class="py-2 px-3 text-center bg-orange-50/30 border-l border-orange-100/60">
-                                    <input type="number" 
-                                           name="reload_box_qty[<?= $p['id'] ?>]" 
-                                           id="rld_box_<?= $p['id'] ?>"
-                                           min="0" 
-                                           placeholder="0" 
-                                           <?= $isOut ? 'disabled class="reload-box-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="reload-box-field w-20 text-center py-1.5 px-2 bg-white border border-orange-300 rounded-xl font-mono font-black text-orange-950 text-xs focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-xs"' ?>
-                                           oninput="handleReloadInput(<?= $p['id'] ?>)" 
-                                           onkeydown="handleReloadNav(event, this)">
+                                    <?php if ($packSize > 1): ?>
+                                        <input type="number" 
+                                               name="reload_box_qty[<?= $p['id'] ?>]" 
+                                               id="rld_box_<?= $p['id'] ?>"
+                                               min="0" 
+                                               placeholder="0" 
+                                               <?= $isOut ? 'disabled class="reload-box-field w-20 text-center py-1.5 px-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-400 text-xs cursor-not-allowed opacity-40"' : 'class="reload-box-field w-20 text-center py-1.5 px-2 bg-white border border-orange-300 rounded-xl font-mono font-black text-orange-950 text-xs focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-xs"' ?>
+                                               oninput="handleReloadInput(<?= $p['id'] ?>)" 
+                                               onkeydown="handleReloadNav(event, this)">
+                                    <?php else: ?>
+                                        <span class="text-slate-300 font-mono text-xs select-none" title="Single tubs are reloaded as loose pieces">—</span>
+                                        <input type="hidden" name="reload_box_qty[<?= $p['id'] ?>]" id="rld_box_<?= $p['id'] ?>" value="0" class="reload-box-field">
+                                    <?php endif; ?>
                                 </td>
 
                                 <td class="py-2 px-3 text-center bg-sky-50/30 border-l border-sky-100/60">
